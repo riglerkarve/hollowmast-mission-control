@@ -1,0 +1,207 @@
+/* Backlog panel.
+   Tokens only — --accent, --accent-soft, --ink, --muted, --bg, --card, --border,
+   --ring-bg, --short, --long — so both themes come out of the sheet rather than out of a
+   hardcoded fallback that only looks right in the one I happened to be testing.
+
+   Two colour rules held throughout, because they were both learned by measuring:
+     - Text is --ink or --muted. --accent, --short and --long are used for marks, borders
+       and bar fills only. --accent on --accent-soft measures 2.7:1 in the light theme,
+       which is fine for a badge and not fine for a sentence.
+     - Every bar has its number printed beside it. The bar shows the shape; the number is
+       the reading. Nothing here depends on telling two fills apart. */
+
+/* Wider than the shared 720px, scoped to this panel only — three specificity classes so
+   it wins over reports.css's .panel.panel-wide whichever order the sheets load in.
+   93 rows with their reasoning need the room. */
+.panel.panel-wide.td-panel { max-width: 1060px; }
+
+.td-h2 { margin: 0 0 0.6rem; font-size: 0.95rem; }
+.td-h3 { margin: 1.1rem 0 0.5rem; font-size: 0.78rem; font-weight: 600; color: var(--muted); text-transform: uppercase; letter-spacing: 0.05em; }
+.td-note { font-size: 0.82rem; color: var(--muted); line-height: 1.55; margin: 0.35rem 0 0.9rem; }
+.td-dim { color: var(--muted); }
+.td-error { color: var(--ink); background: var(--accent-soft); border-left: 3px solid var(--accent); padding: 0.7rem 0.85rem; border-radius: 8px; font-size: 0.85rem; line-height: 1.55; }
+
+.td-split { display: grid; grid-template-columns: minmax(0, 1.7fr) minmax(0, 1fr); gap: 1rem; align-items: start; }
+@media (max-width: 900px) { .td-split { grid-template-columns: minmax(0, 1fr); } }
+
+/* --- the constraint ------------------------------------------------------------- */
+.td-stats { flex-wrap: wrap; row-gap: 0.8rem; }
+.td-you { color: var(--accent); }        /* 1.6rem bold — large text, and it is the headline figure */
+
+.td-banner {
+  margin: 0 0 0.8rem;
+  padding: 0.7rem 0.85rem;
+  border-radius: 8px;
+  border-left: 3px solid var(--accent);
+  background: var(--accent-soft);
+  font-size: 0.84rem;
+  line-height: 1.55;
+}
+
+.td-blocked { display: flex; gap: 0.45rem; flex-wrap: wrap; margin-bottom: 0.6rem; }
+.td-count {
+  font-size: 0.76rem; padding: 0.22rem 0.55rem; border-radius: 6px;
+  background: var(--ring-bg); color: var(--ink); border-left: 3px solid var(--border);
+}
+
+/* --- priority marks -------------------------------------------------------------
+   The chip already says "P0" in words, so the colour is a second channel and never the
+   only one. A left mark rather than a fill: three tints of one hue could not be told
+   apart when that was last measured on the Money panel. */
+.pri-p0      { border-left-color: var(--accent); background: var(--accent-soft); }
+.pri-p1      { border-left-color: var(--long); }
+.pri-p2      { border-left-color: var(--muted); }
+.pri-p3      { border-left-color: var(--border); }
+.pri-done    { border-left-color: var(--short); }
+.pri-decline { border-left-color: var(--border); color: var(--muted); }
+
+/* --- shape ----------------------------------------------------------------------- */
+.td-shape { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 0.4rem; }
+.td-shape li { display: grid; grid-template-columns: 6.2rem minmax(0, 1fr) 4.2rem; gap: 0.5rem; align-items: center; font-size: 0.8rem; }
+
+.td-shape-name {
+  border: 0; background: transparent; color: var(--ink); font: inherit; font-size: 0.8rem;
+  text-align: left; padding: 0; cursor: pointer; border-bottom: 1px dotted var(--border);
+}
+.td-shape-name:hover { border-bottom-color: var(--accent); }
+
+.td-shape-track {
+  display: flex; height: 0.85rem; border-radius: 4px; overflow: hidden;
+  background: var(--ring-bg); border: 1px solid var(--border);
+}
+.td-shape-you   { background: var(--accent); }
+.td-shape-build { background: var(--long); }
+.td-shape-val   { text-align: right; font-variant-numeric: tabular-nums; color: var(--ink); }
+
+.td-legend { font-size: 0.74rem; color: var(--muted); margin: 0.6rem 0 0; display: flex; align-items: center; gap: 0.35rem; flex-wrap: wrap; }
+.td-key { display: inline-block; width: 0.7rem; height: 0.7rem; border-radius: 3px; border: 1px solid var(--border); }
+.td-key.you { background: var(--accent); }
+.td-key.build { background: var(--long); margin-left: 0.6rem; }
+
+.td-stale { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 0.4rem; font-size: 0.8rem; line-height: 1.45; }
+
+/* --- what is actionable now ------------------------------------------------------ */
+.td-next { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 0.45rem; }
+.td-next li { display: flex; gap: 0.5rem; align-items: baseline; font-size: 0.86rem; flex-wrap: wrap; }
+
+/* --- filters and the add form ---------------------------------------------------- */
+.td-filters { display: flex; gap: 0.45rem; flex-wrap: wrap; margin-bottom: 0.8rem; }
+.td-in {
+  padding: 0.45rem 0.6rem; border: 1px solid var(--border); border-radius: 8px;
+  background: var(--ring-bg); color: var(--ink); font: inherit; font-size: 0.82rem;
+  min-width: 0; max-width: 100%;
+}
+.td-filter { flex: 0 0 auto; }
+.td-sm { flex: 0 0 auto; width: auto; }
+.td-area { width: 100%; resize: vertical; line-height: 1.5; }
+
+.td-add { margin-top: 1rem; border-top: 1px solid var(--border); padding-top: 0.8rem; }
+.td-add > summary { cursor: pointer; font-size: 0.82rem; color: var(--muted); }
+.td-add-form { display: flex; flex-direction: column; gap: 0.5rem; margin-top: 0.7rem; }
+.td-add-row { display: flex; gap: 0.45rem; flex-wrap: wrap; align-items: center; }
+.td-add-form .td-in:not(.td-sm) { width: 100%; }
+
+/* --- the list -------------------------------------------------------------------- */
+.td-items { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 0.55rem; }
+
+.td-item {
+  padding: 0.6rem 0.7rem;
+  border: 1px solid var(--border);
+  border-left: 3px solid var(--border);
+  border-radius: 10px;
+  background: var(--bg);
+  display: flex; flex-direction: column; gap: 0.35rem;
+}
+.td-item.is-next    { border-left-color: var(--accent); }
+.td-item.is-started { border-left-color: var(--long); }
+.td-item.done       { border-left-color: var(--short); }
+.td-item.declined   { background: transparent; }
+.td-item.declined .td-title,
+.td-item.done .td-title { color: var(--muted); }
+
+.td-row { display: flex; gap: 0.5rem; align-items: baseline; }
+.td-title { font-size: 0.88rem; font-weight: 600; line-height: 1.4; flex: 1 1 auto; }
+.td-id { font-size: 0.72rem; color: var(--muted); font-variant-numeric: tabular-nums; flex: 0 0 auto; }
+
+.td-meta { display: flex; gap: 0.4rem; align-items: center; flex-wrap: wrap; font-size: 0.74rem; }
+/* Two adjacent dim spans read as one phrase without this — "3h today" looked like a
+   single value rather than an estimate and an age. */
+.td-meta .td-dim + .td-dim::before { content: '· '; color: var(--border); }
+
+.td-chip {
+  font-size: 0.72rem; padding: 0.15rem 0.45rem; border-radius: 5px;
+  background: var(--ring-bg); color: var(--ink);
+  border-left: 3px solid var(--border); white-space: nowrap;
+}
+.td-chip.you { background: var(--accent-soft); border-left-color: var(--accent); font-weight: 600; }
+.td-chip.bot { color: var(--muted); }
+
+.td-state { font-size: 0.68rem; text-transform: uppercase; letter-spacing: 0.05em; color: var(--muted); }
+.td-state.next { color: var(--ink); border-bottom: 2px solid var(--accent); }
+.td-state.in_progress { color: var(--ink); border-bottom: 2px solid var(--long); }
+.td-state.done { border-bottom: 2px solid var(--short); }
+
+/* --- the reasoning ---------------------------------------------------------------
+   Long, and the most valuable column in the whole store — it is the argument, and the
+   priorities are worthless without it. Collapsed to one teaser line so 93 rows still
+   scan, expanded in full on click. Never truncated with no way back to the whole text. */
+.td-why { font-size: 0.79rem; line-height: 1.55; }
+.td-why > summary { cursor: pointer; color: var(--muted); list-style-position: outside; }
+.td-why > summary::marker { color: var(--border); }
+.td-teaser { color: var(--muted); }
+.td-why[open] > summary .td-teaser { display: none; }
+.td-why[open] > summary::after { content: 'reasoning'; color: var(--muted); font-size: 0.74rem; text-transform: uppercase; letter-spacing: 0.05em; }
+.td-why-text { margin: 0.4rem 0 0; color: var(--ink); max-width: 62ch; }
+.td-why-label { margin: 0.35rem 0 0; font-size: 0.72rem; color: var(--muted); }
+.td-why-none { font-size: 0.76rem; margin: 0; }
+
+.td-notes { list-style: none; margin: 0.2rem 0 0; padding: 0.4rem 0 0 0.7rem; border-left: 2px solid var(--border); display: flex; flex-direction: column; gap: 0.25rem; font-size: 0.78rem; }
+
+/* --- actions --------------------------------------------------------------------- */
+.td-acts { display: flex; gap: 0.35rem; align-items: center; flex-wrap: wrap; margin-top: 0.15rem; }
+.td-act { font-size: 0.74rem; padding: 0.25rem 0.6rem; border-radius: 8px; }
+.td-pri { padding: 0.2rem 0.35rem; font-size: 0.74rem; }
+
+.td-note-btn {
+  border: 0; background: transparent; color: var(--muted); font: inherit; font-size: 0.74rem;
+  cursor: pointer; padding: 0.25rem 0.3rem;
+}
+.td-note-btn:hover { color: var(--ink); }
+
+.td-del {
+  margin-left: auto; border: 0; background: transparent; color: var(--muted);
+  cursor: pointer; font-size: 1rem; line-height: 1; padding: 0 0.25rem;
+}
+.td-del:hover { color: var(--accent); }
+
+@media (max-width: 560px) {
+  .td-shape li { grid-template-columns: minmax(0, 1fr) 4rem; }
+  .td-shape-track { grid-column: 1 / -1; }
+  .td-del { margin-left: 0; }
+}
+
+/* Export lives beside the badge. .panel-header is flex/space-between and shared with
+   every other panel, so a third child there would spread all three — hence the wrapper
+   rather than a change to the shared rule. */
+.td-head-right {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.td-export {
+  font-size: 0.8125rem;
+  font-weight: 600;
+  color: var(--muted);
+  text-decoration: none;
+  padding: 5px 11px;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  white-space: nowrap;
+}
+
+.td-export:hover,
+.td-export:focus-visible {
+  color: var(--accent);
+  border-color: var(--accent);
+}

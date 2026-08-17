@@ -1,0 +1,217 @@
+/* Shared building blocks used by every panel: cards, buttons, segmented
+   tabs, badges, stat blocks, and the bar-chart component. Panel-specific
+   CSS files hold only what's unique to that panel. */
+
+.panel-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 24px;
+}
+
+.panel-header h1 {
+  font-size: 1.5rem;
+  font-weight: 700;
+  margin: 0;
+  letter-spacing: -0.02em;
+}
+
+.card {
+  background: var(--card);
+  border-radius: 20px;
+  padding: 24px;
+  box-shadow: var(--shadow);
+  margin-bottom: 20px;
+  border: 1px solid var(--border);
+}
+
+.card h2 {
+  margin: 0 0 16px;
+  font-size: 1.05rem;
+  font-weight: 700;
+}
+
+.badge {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  background: var(--accent-soft);
+  padding: 6px 12px;
+  border-radius: 999px;
+  font-size: 0.85rem;
+  font-weight: 600;
+  color: var(--accent);
+  white-space: nowrap;
+}
+
+.badge-icon { font-size: 1rem; }
+.badge-label { font-weight: 500; color: var(--muted); margin-left: 2px; }
+
+.btn {
+  padding: 10px 20px;
+  border-radius: 12px;
+  border: 1px solid var(--border);
+  background: var(--card);
+  color: var(--ink);
+  font-size: 0.9rem;
+  font-weight: 600;
+  cursor: pointer;
+  transition: transform 0.1s ease, opacity 0.2s ease, background 0.2s ease;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  text-decoration: none;
+}
+
+.btn:hover { opacity: 0.85; }
+.btn:active { transform: scale(0.96); }
+
+.btn.primary {
+  background: var(--accent);
+  border-color: var(--accent);
+  color: #fff;
+  min-width: 96px;
+}
+
+.mode-tabs {
+  display: flex;
+  gap: 6px;
+  background: var(--bg);
+  padding: 4px;
+  border-radius: 12px;
+  margin-bottom: 24px;
+}
+
+.mode-tab {
+  flex: 1;
+  padding: 8px 4px;
+  border: none;
+  background: transparent;
+  color: var(--muted);
+  font-size: 0.82rem;
+  font-weight: 600;
+  border-radius: 9px;
+  cursor: pointer;
+  transition: all 0.2s ease;
+}
+
+.mode-tab.active {
+  background: var(--card);
+  color: var(--ink);
+  box-shadow: 0 1px 3px rgba(0,0,0,0.08);
+}
+
+.stats-summary {
+  display: flex;
+  gap: 24px;
+  margin-bottom: 20px;
+}
+
+.stat-block {
+  display: flex;
+  flex-direction: column;
+}
+
+.stat-value {
+  font-size: 1.6rem;
+  font-weight: 700;
+  letter-spacing: -0.02em;
+  font-variant-numeric: tabular-nums;
+}
+
+.stat-label {
+  font-size: 0.78rem;
+  color: var(--muted);
+  font-weight: 500;
+}
+
+.empty-hint {
+  text-align: center;
+  color: var(--muted);
+  font-size: 0.85rem;
+  margin: 12px 0 0;
+}
+
+.bar-chart {
+  display: flex;
+  align-items: flex-end;
+  gap: 8px;
+  height: 120px;
+  padding-top: 20px;
+}
+
+.bar-col {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  height: 100%;
+  position: relative;
+}
+
+.bar-track {
+  flex: 1;
+  width: 100%;
+  display: flex;
+  align-items: flex-end;
+  justify-content: center;
+}
+
+.bar-fill {
+  position: relative;
+  width: 60%;
+  min-width: 10px;
+  min-height: 4px;
+  background: var(--accent);
+  border-radius: 4px 4px 0 0;
+  transition: height 0.3s ease, opacity 0.15s ease;
+}
+
+.bar-col.is-today .bar-fill {
+  box-shadow: 0 0 0 2px var(--accent-soft);
+}
+
+.bar-col.is-zero .bar-fill {
+  background: var(--ring-bg);
+}
+
+.bar-label {
+  margin-top: 8px;
+  font-size: 0.72rem;
+  font-weight: 600;
+  color: var(--muted);
+}
+
+.bar-col.is-today .bar-label {
+  color: var(--accent);
+}
+
+.bar-tooltip {
+  position: absolute;
+  top: -8px;
+  left: 50%;
+  transform: translate(-50%, -100%);
+  background: var(--ink);
+  color: var(--bg);
+  font-size: 0.72rem;
+  font-weight: 600;
+  padding: 3px 7px;
+  border-radius: 6px;
+  white-space: nowrap;
+  opacity: 0;
+  pointer-events: none;
+  transition: opacity 0.15s ease;
+  z-index: 5;
+}
+
+.bar-col:hover .bar-tooltip {
+  opacity: 1;
+}
+
+.bar-chart.compact {
+  gap: 3px;
+}
+
+.bar-chart.compact .bar-label {
+  display: none;
+}

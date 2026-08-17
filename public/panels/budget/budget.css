@@ -1,0 +1,143 @@
+.bg-h2 { margin: 0 0 0.6rem; font-size: 0.95rem; opacity: 0.85; }
+.bg-h3 { margin: 1rem 0 0.5rem; font-size: 0.8rem; opacity: 0.7; font-weight: 600; }
+.bg-note { font-size: 0.8rem; opacity: 0.72; line-height: 1.5; margin: 0.3rem 0 0.9rem; }
+.bg-dim { opacity: 0.5; }
+.bg-error { color: var(--accent); font-size: 0.85rem; }
+.bg-pos { color: var(--short); }
+.bg-neg { color: var(--accent); }
+.bg-warn-text { color: var(--accent); opacity: 0.9; }
+
+.bg-warn {
+  margin: 0 0 0.9rem;
+  padding: 0.65rem 0.8rem;
+  border-radius: 8px;
+  border-left: 3px solid var(--accent);
+  background: var(--accent-soft);
+  font-size: 0.82rem;
+  line-height: 1.5;
+}
+
+.bg-split { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); gap: 1rem; align-items: start; }
+@media (max-width: 900px) { .bg-split { grid-template-columns: minmax(0, 1fr); } }
+
+/* --- budget lines --------------------------------------------------------------- */
+.bg-lines { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 0.5rem; }
+.bg-line { display: grid; grid-template-columns: 9rem minmax(0, 1fr) 9.5rem; gap: 0.7rem; align-items: center; font-size: 0.82rem; }
+@media (max-width: 560px) {
+  .bg-line { grid-template-columns: minmax(0, 1fr) auto; }
+  .bg-l-cat { order: 1; } .bg-l-val { order: 2; text-align: right; } .bg-l-track { order: 3; grid-column: 1 / -1; }
+}
+
+.bg-l-cat { opacity: 0.85; display: flex; gap: 0.35rem; align-items: baseline; flex-wrap: wrap; }
+.bg-ess { font-size: 0.62rem; text-transform: uppercase; letter-spacing: 0.04em; opacity: 0.5; }
+
+.bg-l-track { position: relative; height: 1.2rem; border-radius: 5px; background: var(--ring-bg); overflow: hidden; }
+.bg-l-spent { position: absolute; inset: 0 auto 0 0; background: var(--accent); opacity: 0.85; border-radius: 5px; }
+
+/* The budget is a TICK, not a second bar. Three tints of one hue could not be told apart
+   when this was measured on the Money panel; a mark changes the instrument instead. */
+.bg-l-budget { position: absolute; top: 0; bottom: 0; width: 2px; background: var(--ink); opacity: 0.9; z-index: 1; }
+
+.bg-line.over .bg-l-spent { background: var(--accent); opacity: 1; }
+.bg-l-val { text-align: right; font-variant-numeric: tabular-nums; }
+
+/* --- wishlist ------------------------------------------------------------------- */
+.bg-add { display: flex; gap: 0.5rem; margin-bottom: 0.8rem; flex-wrap: wrap; }
+.bg-in {
+  flex: 1 1 8rem; min-width: 0; padding: 0.5rem 0.7rem;
+  border: 1px solid var(--border); border-radius: 8px;
+  background: var(--ring-bg); color: inherit; font: inherit; font-size: 0.85rem;
+}
+.bg-price { flex: 0 0 6rem; }
+
+.bg-wish { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 0.6rem; }
+.bg-wish li { display: flex; flex-direction: column; gap: 0.25rem; padding-bottom: 0.6rem; border-bottom: 1px solid var(--border); }
+.bg-w-top { display: flex; justify-content: space-between; gap: 0.7rem; align-items: baseline; }
+.bg-w-name { font-size: 0.88rem; font-weight: 600; }
+.bg-w-price { font-variant-numeric: tabular-nums; font-size: 0.85rem; }
+.bg-w-aff { font-size: 0.78rem; opacity: 0.75; }
+.bg-w-note { font-size: 0.76rem; opacity: 0.55; }
+.bg-w-acts { display: flex; gap: 0.4rem; align-items: center; margin-top: 0.2rem; flex-wrap: wrap; }
+.bg-act { font-size: 0.76rem; padding: 0.25rem 0.6rem; }
+
+.bg-del { margin-left: auto; border: 0; background: transparent; color: inherit; opacity: 0.3; cursor: pointer; font-size: 1rem; line-height: 1; padding: 0 0.2rem; }
+.bg-del:hover { opacity: 1; color: var(--accent); }
+
+.bg-headroom {
+  display: flex;
+  gap: 1.1rem;
+  flex-wrap: wrap;
+  font-size: 0.84rem;
+  margin-bottom: 0.6rem;
+}
+.bg-headroom b { font-variant-numeric: tabular-nums; }
+
+/* Business / personal scope.
+   Colour is REINFORCEMENT, never the signal: each chip carries its own word, because a
+   tint alone cannot be relied on. The first pairing tried here was --accent on
+   --accent-soft, which measures 2.73:1 in light mode and fails AA outright; --muted on
+   --ring-bg is 3.97:1, which is large-text-only and these chips are small. Both chips
+   therefore use --ink and differ by background: worst case across both themes 11.04:1. */
+.bg-scope {
+  display: inline-block;
+  margin-left: 0.45rem;
+  padding: 0.05rem 0.4rem;
+  border-radius: 5px;
+  font-size: 0.66rem;
+  font-weight: 600;
+  letter-spacing: 0.02em;
+  text-transform: uppercase;
+  vertical-align: 0.06em;
+  color: var(--ink);
+  background: var(--ring-bg);
+}
+
+.bg-scope-business { background: var(--accent-soft); }
+
+.bg-scope-sel {
+  flex: 0 0 auto;
+  padding: 0.4rem 0.5rem;
+  font-size: 0.82rem;
+}
+
+.bg-scope-split {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.4rem 1.4rem;
+  margin: 0.5rem 0 0.35rem;
+  font-size: 0.82rem;
+}
+
+.bg-scope-split b { font-variant-numeric: tabular-nums; }
+.bg-scope-split i { opacity: 0.6; font-style: normal; font-size: 0.76rem; }
+
+/* Inline budget editing. The panel has always claimed "edit any of them"; until now
+   PUT /lines/:category existed and nothing called it. */
+.bg-l-edit {
+  width: 5.2rem;
+  padding: 0.1rem 0.3rem;
+  font-size: 0.8rem;
+  font-variant-numeric: tabular-nums;
+  color: var(--ink);
+  background: var(--bg);
+  border: 1px solid var(--border);
+  border-radius: 6px;
+}
+
+.bg-l-edit:focus-visible { outline: 2px solid var(--accent); outline-offset: 1px; }
+
+/* Which figures are yours and which the ledger derived. --ink on both tints, same
+   reasoning as the wishlist scope chips: measured 12.26:1 / 11.04:1 rather than tinting
+   the text, and the word carries the meaning so colour is only reinforcement. */
+.bg-l-src {
+  font-size: 0.62rem;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.02em;
+  padding: 0.05rem 0.3rem;
+  border-radius: 4px;
+  color: var(--ink);
+  background: var(--ring-bg);
+}
+
+.bg-l-src-manual { background: var(--accent-soft); }

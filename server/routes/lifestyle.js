@@ -1,0 +1,473 @@
+const express = require('express');
+const db = require('../db');
+
+// ------------------------------------------------------------------------------------
+// LIFESTYLE. Two capture surfaces for the same day: household chores, and whether the
+// one-proper-meal floor was met. One module rather than two because both are answered in
+// the same ten seconds, and a second panel to visit is a second panel you stop visiting.
+//
+// THE CHORE HALF — the schedule is DERIVED, never stored.
+//
+//   You record one thing only: "did it", with a date. Nothing in this module holds a list
+//   of what is outstanding, because a checklist you maintain is a chore with a nice font
+//   and the workspace gate rejects it. What is due is arithmetic on (last done + interval)
+//   every time it is asked for, so it cannot go stale and there is nothing to tick off.
+//
+//   'never done' is its own state and is never folded into 'due' or 'ok'. A chore with no
+//   history has no last-done date to count from — that is ABSENCE, and absence must not
+//   look like the failure state or the fine state. It is reported with a reason attached.
+//
+// THE INTAKE HALF — read this before changing a word of it.
+//
+//   The constraints the wellbeing module works under apply here too, and they are not
+//   style preferences:
+//
+//     - Nothing is scored, weighted, ranked, streaked, trended or interpreted. Every
+//       figure below is a COUNT of rows you wrote yourself.
+//     - No nudge, no encouragement, no reaction to a bad week, no calorie judgement, and
+//       nothing that reads as advice about the user's body or eating.
+//     - The local model never touches this module. Not for tagging, not for prose.
+//     - A day with NO RECORD is "not recorded". It is never counted as a day below the
+//       floor. Nothing here knows what happened on a day that was not written down, and
+//       inferring a miss from silence would be inventing data about someone's eating.
+//
+//   `floorMeals` is 1 because that is the user's own stated goal, stored as a number so
+//   the comparison is checkable. This module did not choose it and does not defend it.
+// ------------------------------------------------------------------------------------
+
+db.migrate('lifestyle', [
+  (d) => {
+    d.exec(`
+      CREATE TABLE lifestyle_chores (
+        id            INTEGER PRIMARY KEY AUTOINCREMENT,
+        name          TEXT NOT NULL,
+        interval_days INTEGER NOT NULL,      -- how often you want it done. The ONLY input
+                                             -- to the schedule other than the last-done date.
+        active        INTEGER NOT NULL DEFAULT 1,
+        created_at    TEXT NOT NULL DEFAULT (datetime('now', 'localtime'))
+      );
+
+      CREATE TABLE lifestyle_done (
+        id          INTEGER PRIMARY KEY AUTOINCREMENT,
+        chore_id    INTEGER NOT NULL REFERENCES lifestyle_chores(id) ON DELETE CASCADE,
+        done_on     TEXT NOT NULL,           -- ISO date it was done, not when it was typed
+        recorded_at TEXT NOT NULL DEFAULT (datetime('now', 'localtime'))
+      );
+
+      CREATE INDEX idx_lf_done_chore ON lifestyle_done(chore_id, done_on);
+
+      CREATE TABLE lifestyle_intake (
+        date        TEXT PRIMARY KEY,        -- one row per day; upserted, never appended
+        meals       INTEGER NOT NULL,
+        note        TEXT,
+        recorded_at TEXT NOT NULL DEFAULT (datetime('now', 'localtime'))
+      );
+    `);
+
+    // A starter set, so the first render is a working thing rather than an empty form.
+    // Seeding is not the same as making you maintain a list: every row here is editable,
+    // pausable and deletable, and nothing re-adds them.
+    const ins = d.prepare('INSERT INTO lifestyle_chores (name, interval_days) VALUES (?, ?)');
+    [
+      ['Laundry', 7],
+      ['Bins out', 7],
+      ['Change bedding', 14],
+      ['Clean bathroom', 7],
+      ['Hoover', 7],
+    ].forEach(([name, every]) => ins.run(name, every));
+  },
+]);
+
+const router = express.Router();
+
+// The boundary between 'soon' and 'ok'. It is a GROUPING for the panel, not a weight and
+// not a score: `dueInDays` is returned raw on every chore, and this number is returned
+// alongside it as `soonWithinDays`, so any grouping decision can be checked by hand.
+const SOON_WITHIN_DAYS = 2;
+
+// The user's stated floor: one proper meal a day. Stored as a number, disclosed in every
+// intake response, and never turned into a percentage or a grade.
+const FLOOR_MEALS = 1;
+
+// The median gap is only shown once there are this many gaps to take a median OF. Below
+// it the answer is null WITH A REASON — a "typical gap" off one or two observations is a
+// forecast from thin data dressed as a measurement.
+const MIN_GAPS_FOR_TYPICAL = 3;
+
+// ONE CLOCK. Every date in this module comes from SQLite's localtime, including "today".
+// `new Date().toISOString()` is UTC: during BST it names the previous day for the first
+// hour after local midnight, which would silently shift every daysSince by one.
+const localToday = () => db.prepare("SELECT date('now','localtime') AS d").get().d;
+
+const isISODate = (s) => /^\d{4}-\d{2}-\d{2}$/.test(String(s || ''));
+
+// Both operands are 'YYYY-MM-DD', which Date.parse reads as UTC midnight, so the
+// difference is an exact whole number of days with no DST term.
+const dayDiff = (later, earlier) => Math.round((Date.parse(later) - Date.parse(earlier)) / 86400000);
+const addDays = (date, n) => new Date(Date.parse(date) + n * 86400000).toISOString().slice(0, 10);
+
+// ---------------------------------------------------------------------------- chores
+// Everything derived about a chore is derived HERE, once, from these two columns plus the
+// done table. No panel recomputes it and nothing stores the result.
+const CHORE_SQL = `
+  SELECT
+    c.id, c.name, c.interval_days, c.active, c.created_at,
+    MAX(d.done_on)                  AS last_done,
+    COUNT(DISTINCT d.done_on)       AS days_recorded,
+    CAST(julianday(date('now','localtime')) - julianday(MAX(d.done_on)) AS INTEGER) AS days_since
+  FROM lifestyle_chores c
+  LEFT JOIN lifestyle_done d ON d.chore_id = c.id
+  GROUP BY c.id
+`;
+
+// Median gap between consecutive recorded days, per chore. This is the one thing the
+// module tells you that you did not type: how often a chore ACTUALLY comes round, against
+// the interval you set for it. Median rather than mean, for the same reason the budget
+// uses one — a single eight-week gap should not redefine "typical".
+function typicalGaps() {
+  const rows = db.prepare('SELECT DISTINCT chore_id, done_on FROM lifestyle_done ORDER BY chore_id, done_on').all();
+  const byChore = new Map();
+  for (const r of rows) {
+    if (!byChore.has(r.chore_id)) byChore.set(r.chore_id, []);
+    byChore.get(r.chore_id).push(r.done_on);
+  }
+
+  const out = new Map();
+  for (const [choreId, dates] of byChore) {
+    const gaps = [];
+    for (let i = 1; i < dates.length; i += 1) gaps.push(dayDiff(dates[i], dates[i - 1]));
+    if (gaps.length < MIN_GAPS_FOR_TYPICAL) {
+      // Not "no data" — not ENOUGH data, and the difference is stated rather than left as
+      // a blank the reader has to interpret.
+      out.set(choreId, {
+        medianDays: null,
+        gapsCounted: gaps.length,
+        note: `Needs ${MIN_GAPS_FOR_TYPICAL + 1} recorded days to have ${MIN_GAPS_FOR_TYPICAL} gaps to take a median of; there are ${dates.length}.`,
+      });
+      continue;
+    }
+    const sorted = [...gaps].sort((a, b) => a - b);
+    const mid = Math.floor(sorted.length / 2);
+    out.set(choreId, {
+      medianDays: sorted.length % 2 ? sorted[mid] : Math.round((sorted[mid - 1] + sorted[mid]) / 2),
+      gapsCounted: gaps.length,
+      note: null,
+    });
+  }
+  return out;
+}
+
+function decorate(r, gaps) {
+  const base = {
+    id: r.id,
+    name: r.name,
+    intervalDays: r.interval_days,
+    active: !!r.active,
+    addedOn: String(r.created_at).slice(0, 10),
+    daysRecorded: r.days_recorded,
+    lastDone: r.last_done,
+  };
+
+  if (!r.days_recorded) {
+    // ABSENCE. Distinct from both 'due' and 'ok', carries nulls rather than a fabricated
+    // zero, and says why it is null. A chore added today and a chore ignored for a year
+    // look identical from the done table alone, so `daysSinceAdded` is given as the one
+    // real fact available — as a fact, not as a stand-in due date.
+    return {
+      ...base,
+      daysSinceDone: null,
+      dueInDays: null,
+      overdueByDays: null,
+      nextDueOn: null,
+      state: 'never done',
+      why: 'No "did it" has ever been recorded, so there is no date to count an interval from. '
+        + 'This is not the same as "not due" — nothing here knows when it was last done.',
+      daysSinceAdded: dayDiff(localToday(), base.addedOn),
+      typical: gaps.get(r.id) || { medianDays: null, gapsCounted: 0, note: 'Nothing recorded yet.' },
+    };
+  }
+
+  const dueIn = r.interval_days - r.days_since;
+  return {
+    ...base,
+    daysSinceDone: r.days_since,
+    dueInDays: dueIn,                                  // negative = overdue
+    overdueByDays: dueIn < 0 ? -dueIn : 0,
+    nextDueOn: addDays(r.last_done, r.interval_days),
+    state: dueIn <= 0 ? 'due' : (dueIn <= SOON_WITHIN_DAYS ? 'soon' : 'ok'),
+    why: null,
+    typical: gaps.get(r.id) || { medianDays: null, gapsCounted: 0, note: 'Nothing recorded yet.' },
+  };
+}
+
+function allChores() {
+  const gaps = typicalGaps();
+  return db.prepare(CHORE_SQL).all().map((r) => decorate(r, gaps));
+}
+
+const STATE_ORDER = { due: 0, 'never done': 1, soon: 2, ok: 3 };
+const byUrgency = (a, b) => (STATE_ORDER[a.state] - STATE_ORDER[b.state])
+  || ((b.overdueByDays || 0) - (a.overdueByDays || 0))
+  || ((a.dueInDays ?? 1e9) - (b.dueInDays ?? 1e9))
+  || a.name.localeCompare(b.name);
+
+router.get('/chores', (req, res) => {
+  const chores = allChores().sort(byUrgency);
+  if (!chores.length) {
+    // Empty and broken must not read the same. This is a 200 saying "there are none",
+    // which is a different sentence from a fetch that threw.
+    return res.json({ state: 'empty', today: localToday(), chores: [], message: 'No chores. Add one and the schedule starts working from the first time you record it.' });
+  }
+  res.json({
+    state: 'ok',
+    today: localToday(),
+    soonWithinDays: SOON_WITHIN_DAYS,
+    derived: 'daysSinceDone, dueInDays, nextDueOn and state are computed from last-done + interval on every request. Nothing about the schedule is stored.',
+    chores,
+  });
+});
+
+router.post('/chores', (req, res) => {
+  const { name, intervalDays } = req.body || {};
+  const n = String(name || '').trim();
+  const every = Number(intervalDays);
+  if (!n) return res.status(400).json({ error: 'name is required' });
+  if (!Number.isInteger(every) || every < 1 || every > 365) {
+    return res.status(400).json({ error: 'intervalDays must be a whole number of days between 1 and 365' });
+  }
+
+  const info = db.prepare('INSERT INTO lifestyle_chores (name, interval_days) VALUES (?, ?)').run(n, every);
+  res.status(201).json({
+    id: Number(info.lastInsertRowid),
+    name: n,
+    intervalDays: every,
+    state: 'never done',
+    note: 'Added. It will stay "never done" until the first time you record it — the interval counts from a real date, not from today.',
+  });
+});
+
+// Not in the original endpoint list, but `active` is otherwise a write-once column: this
+// is how a chore gets paused without deleting its history. Reported as an addition.
+router.put('/chores/:id', (req, res) => {
+  const id = Number(req.params.id);
+  const row = db.prepare('SELECT * FROM lifestyle_chores WHERE id = ?').get(id);
+  if (!row) return res.status(404).json({ error: 'no such chore' });
+
+  const { name, intervalDays, active } = req.body || {};
+  const n = name === undefined ? row.name : String(name || '').trim();
+  const every = intervalDays === undefined ? row.interval_days : Number(intervalDays);
+  const act = active === undefined ? row.active : (active ? 1 : 0);
+
+  if (!n) return res.status(400).json({ error: 'name cannot be empty' });
+  if (!Number.isInteger(every) || every < 1 || every > 365) {
+    return res.status(400).json({ error: 'intervalDays must be a whole number of days between 1 and 365' });
+  }
+
+  db.prepare('UPDATE lifestyle_chores SET name = ?, interval_days = ?, active = ? WHERE id = ?').run(n, every, act, id);
+  const gaps = typicalGaps();
+  const fresh = db.prepare(`${CHORE_SQL} HAVING c.id = ?`).get(id);
+  res.json(decorate(fresh, gaps));
+});
+
+router.delete('/chores/:id', (req, res) => {
+  const id = Number(req.params.id);
+  // Counted BEFORE the delete, because the cascade makes it uncountable afterwards and
+  // "deleted" should not quietly mean "deleted, plus two years of history".
+  const history = db.prepare('SELECT COUNT(*) c FROM lifestyle_done WHERE chore_id = ?').get(id).c;
+  const r = db.prepare('DELETE FROM lifestyle_chores WHERE id = ?').run(id);
+  if (!r.changes) return res.status(404).json({ error: 'no such chore' });
+  res.json({
+    deleted: id,
+    deletedHistoryRows: history,
+    note: history ? `${history} recorded day${history === 1 ? '' : 's'} went with it — that is what ON DELETE CASCADE does here.` : undefined,
+  });
+});
+
+// The only write the chore half ever takes: "did it".
+router.post('/chores/:id/done', (req, res) => {
+  const id = Number(req.params.id);
+  const chore = db.prepare('SELECT * FROM lifestyle_chores WHERE id = ?').get(id);
+  if (!chore) return res.status(404).json({ error: 'no such chore' });
+
+  const today = localToday();
+  const when = isISODate(req.body && req.body.date) ? req.body.date : today;
+  if (when > today) {
+    // A future date makes daysSince negative and every derived figure nonsense. Refuse it
+    // rather than deriving from it.
+    return res.status(400).json({ error: `cannot record a chore as done on ${when} — that is in the future (today is ${today})` });
+  }
+
+  const already = db.prepare('SELECT id FROM lifestyle_done WHERE chore_id = ? AND done_on = ?').get(id, when);
+  if (!already) db.prepare('INSERT INTO lifestyle_done (chore_id, done_on) VALUES (?, ?)').run(id, when);
+
+  const gaps = typicalGaps();
+  const fresh = decorate(db.prepare(`${CHORE_SQL} HAVING c.id = ?`).get(id), gaps);
+
+  // The capture returns a value immediately, as the gate requires — and the value is the
+  // derived one, so recording is also how you find out when it next comes round.
+  res.status(201).json({
+    ...fresh,
+    recordedOn: when,
+    // Said out loud rather than silently no-oping: a second press on the same day is not
+    // an error, and it is not a second recording either.
+    duplicate: !!already,
+    duplicateNote: already ? `Already recorded for ${when}; nothing was added.` : undefined,
+  });
+});
+
+// ---------------------------------------------------------------------------- intake
+// Counts only. Read the block at the top of this file before adding anything here: if a
+// figure cannot be checked by counting rows by hand, it does not belong in this module.
+function intakeWindow(days) {
+  const today = localToday();
+  const dates = [];
+  for (let i = days - 1; i >= 0; i -= 1) dates.push(addDays(today, -i));
+
+  const rows = new Map(
+    db.prepare('SELECT * FROM lifestyle_intake WHERE date >= ? AND date <= ? ORDER BY date').all(dates[0], today)
+      .map((r) => [r.date, r])
+  );
+
+  // THREE states per day, never two. "recorded, below the floor" and "no record at all"
+  // are different facts, and collapsing them would turn every day you did not write down
+  // into a day you are told you fell short of something.
+  const series = dates.map((date) => {
+    const r = rows.get(date);
+    if (!r) return { date, recorded: false, meals: null, atOrAboveFloor: null, note: null };
+    return { date, recorded: true, meals: r.meals, atOrAboveFloor: r.meals >= FLOOR_MEALS, note: r.note };
+  });
+
+  const recorded = series.filter((s) => s.recorded);
+  return {
+    days,
+    from: dates[0],
+    to: today,
+    floorMeals: FLOOR_MEALS,
+    series,
+    counts: {
+      daysInWindow: days,
+      daysRecorded: recorded.length,
+      daysAtOrAboveFloor: recorded.filter((s) => s.atOrAboveFloor).length,
+      daysBelowFloor: recorded.filter((s) => !s.atOrAboveFloor).length,
+      daysNotRecorded: days - recorded.length,
+    },
+    todayRecorded: series[series.length - 1].recorded,
+    note: 'Counts of what you wrote down. A day with no record is counted as "not recorded" and never as a day below the floor.',
+  };
+}
+
+router.get('/intake', (req, res) => {
+  const days = Math.min(90, Math.max(1, Number(req.query.days) || 14));
+  const total = db.prepare('SELECT COUNT(*) c FROM lifestyle_intake').get().c;
+  const w = intakeWindow(days);
+  // Empty and broken must not read the same, here as everywhere else.
+  res.json({ state: total ? 'ok' : 'empty', totalDaysEverRecorded: total, ...w });
+});
+
+router.post('/intake', (req, res) => {
+  const { date, meals, note } = req.body || {};
+  const today = localToday();
+  const d = isISODate(date) ? date : today;
+  if (d > today) return res.status(400).json({ error: `cannot record ${d} — that is in the future (today is ${today})` });
+
+  const m = Number(meals);
+  if (!Number.isInteger(m) || m < 0 || m > 20) {
+    return res.status(400).json({ error: 'meals must be a whole number between 0 and 20' });
+  }
+
+  db.prepare(
+    `INSERT INTO lifestyle_intake (date, meals, note) VALUES (?, ?, ?)
+     ON CONFLICT(date) DO UPDATE SET meals = excluded.meals, note = excluded.note,
+       recorded_at = datetime('now','localtime')`
+  ).run(d, m, String(note || '').trim() || null);
+
+  // What comes back is RECALL — counts of rows already in the table, over the last seven
+  // days. Not a verdict on the day, not a streak, and no sentence about how it is going.
+  const last7 = intakeWindow(7).counts;
+  res.status(201).json({
+    date: d,
+    meals: m,
+    floorMeals: FLOOR_MEALS,
+    atOrAboveFloor: m >= FLOOR_MEALS,
+    recall: {
+      daysRecordedInLast7: last7.daysRecorded,
+      daysAtOrAboveFloorInLast7: last7.daysAtOrAboveFloor,
+      daysBelowFloorInLast7: last7.daysBelowFloor,
+      daysNotRecordedInLast7: last7.daysNotRecorded,
+    },
+  });
+});
+
+// ---------------------------------------------------------------------------- overview
+router.get('/', (req, res) => {
+  const today = localToday();
+  const all = allChores();
+  const active = all.filter((c) => c.active).sort(byUrgency);
+  const paused = all.filter((c) => !c.active);
+  const intake = intakeWindow(14);
+  const totalIntakeRows = db.prepare('SELECT COUNT(*) c FROM lifestyle_intake').get().c;
+
+  const grouped = {
+    due: active.filter((c) => c.state === 'due'),
+    neverDone: active.filter((c) => c.state === 'never done'),
+    soon: active.filter((c) => c.state === 'soon'),
+    ok: active.filter((c) => c.state === 'ok'),
+  };
+
+  res.json({
+    // 'no-chores' is a real answer with a message. A failed request is an HTTP error. The
+    // panel must be able to tell them apart without guessing.
+    state: all.length ? 'ok' : 'no-chores',
+    message: all.length ? undefined : 'No chores. Add one and the schedule starts working from the first time you record it.',
+    today,
+    soonWithinDays: SOON_WITHIN_DAYS,
+    chores: grouped,
+    counts: {
+      total: all.length,
+      active: active.length,
+      // The filter reports its residue: paused chores are excluded from every group above,
+      // so the count of what was dropped is returned with them.
+      paused: paused.length,
+      due: grouped.due.length,
+      neverDone: grouped.neverDone.length,
+      soon: grouped.soon.length,
+      ok: grouped.ok.length,
+    },
+    paused,
+    intake: { ...intake, state: totalIntakeRows ? 'ok' : 'empty', totalDaysEverRecorded: totalIntakeRows },
+    derived: 'Chore states are computed from last-done + interval at request time and are never stored. '
+      + '"never done" means no recording exists, which is not the same as "not due".',
+  });
+});
+
+// Express 4 wildcard — a bare '*', with the matched remainder in req.params[0].
+// (Express 5's '/*splat' form throws on this version.) It exists so a mistyped endpoint
+// answers with a named failure in JSON, instead of falling through to the static handler
+// and returning an HTML 404 that a panel would read as a parse error of unknown origin.
+router.all('*', (req, res) => {
+  const attempted = req.params[0] ? `/${String(req.params[0]).replace(/^\/+/, '')}` : req.path;
+  res.status(404).json({
+    error: `no such lifestyle endpoint: ${req.method} ${attempted}`,
+    endpoints: [
+      'GET    /               what is due, what is coming, and 14 days of intake',
+      'GET    /chores         every chore with its computed due state',
+      'POST   /chores         { name, intervalDays }',
+      'PUT    /chores/:id     { name?, intervalDays?, active? }',
+      'DELETE /chores/:id',
+      'POST   /chores/:id/done  { date? }',
+      'GET    /intake?days=N',
+      'POST   /intake         { date?, meals, note? }',
+    ],
+  });
+});
+
+// Asked for by the briefing. Counts of recorded rows only — never a state, never a
+// judgement about whether the week was good.
+function activitySince(sinceDate) {
+  const chores = db.prepare('SELECT COUNT(*) c FROM lifestyle_done WHERE done_on >= ?').get(sinceDate).c;
+  const intake = db.prepare('SELECT COUNT(*) c FROM lifestyle_intake WHERE date >= ?').get(sinceDate).c;
+  return { choresRecorded: chores, intakeDaysRecorded: intake };
+}
+
+module.exports = router;
+module.exports.activitySince = activitySince;

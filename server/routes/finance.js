@@ -1,0 +1,502 @@
+const express = require('express');
+const db = require('../db');
+
+// This module owns these tables and their migrations. Append-only: never edit a shipped
+// migration, add the next one. See ARCHITECTURE.md.
+db.migrate('finance', [
+  // v1 — accounts, transactions, and the deterministic rules table.
+  (d) => {
+    d.exec(`
+      CREATE TABLE finance_accounts (
+        id         TEXT PRIMARY KEY,          -- 'starling-personal'
+        label      TEXT NOT NULL,
+        kind       TEXT NOT NULL,             -- 'personal' | 'business'
+        created_at TEXT NOT NULL DEFAULT (datetime('now', 'localtime'))
+      );
+
+      CREATE TABLE finance_transactions (
+        id           INTEGER PRIMARY KEY AUTOINCREMENT,
+        account_id   TEXT NOT NULL REFERENCES finance_accounts(id),
+
+        -- source file + row ordinal. Re-importing the same export updates rather than
+        -- duplicates. Content cannot be the key: 15 of the 4,133 rows in the five-year
+        -- Starling history are byte-identical to another row, balance included.
+        import_key   TEXT NOT NULL UNIQUE,
+
+        date         TEXT NOT NULL,           -- ISO 8601, always YYYY-MM-DD
+        counterparty TEXT NOT NULL,
+        reference    TEXT NOT NULL DEFAULT '',
+        type         TEXT NOT NULL,           -- FASTER PAYMENT, ATM, CONTACTLESS, ...
+
+        -- Money is INTEGER PENCE, everywhere, forever. A float total of five years of
+        -- transactions is wrong by an amount you cannot predict and will not notice.
+        amount_pence  INTEGER NOT NULL,
+        balance_pence INTEGER,
+
+        -- What the bank called it. Kept as provenance and NEVER treated as our category:
+        -- measured over the real history, 41.8% of rows are "PAYMENTS" and 25.8% are
+        -- "INCOME", which describe direction and mechanism, not purpose.
+        bank_category TEXT,
+
+        category        TEXT,                 -- ours; NULL until decided
+        category_source TEXT,                 -- 'rule' | 'model' | 'manual'
+        reviewed        INTEGER NOT NULL DEFAULT 0,
+
+        imported_at TEXT NOT NULL DEFAULT (datetime('now', 'localtime'))
+      );
+
+      CREATE INDEX idx_fin_tx_date     ON finance_transactions(date);
+      CREATE INDEX idx_fin_tx_cat      ON finance_transactions(category);
+      CREATE INDEX idx_fin_tx_cp       ON finance_transactions(counterparty);
+      CREATE INDEX idx_fin_tx_review   ON finance_transactions(reviewed) WHERE reviewed = 0;
+
+      -- Deterministic, auditable, and exact. Measured on the real history: keying on
+      -- counterparty alone leaves 51.1% of rows unambiguous; adding direction lifts it
+      -- to 73.7%, because for a person "PAYMENTS" vs "INCOME" is the sign of the amount.
+      CREATE TABLE finance_rules (
+        id         INTEGER PRIMARY KEY AUTOINCREMENT,
+        match_type TEXT NOT NULL,             -- 'counterparty_exact' | 'counterparty_contains' | 'reference_contains'
+        pattern    TEXT NOT NULL,
+        direction  TEXT,                      -- 'in' | 'out' | NULL for either
+        category   TEXT NOT NULL,
+        note       TEXT,
+        created_at TEXT NOT NULL DEFAULT (datetime('now', 'localtime')),
+        UNIQUE (match_type, pattern, direction)
+      );
+    `);
+  },
+
+  // v2 — the business flag. Independent of category, because "Argos, business" and
+  // "Argos, personal" are the same category and different tax treatment, and folding the
+  // split into the category list would double it.
+  (d) => {
+    d.exec(`
+      ALTER TABLE finance_transactions ADD COLUMN business INTEGER;         -- 1 | 0 | NULL unknown
+      ALTER TABLE finance_transactions ADD COLUMN business_source TEXT;     -- 'account' | 'rule' | 'manual'
+      ALTER TABLE finance_rules ADD COLUMN business INTEGER;                -- a rule may set it too
+
+      CREATE INDEX idx_fin_tx_business ON finance_transactions(business);
+    `);
+
+    // The account is the default and the strongest available evidence: money out of the
+    // business account is business spending unless someone says otherwise. Recorded as
+    // source 'account' so a later manual decision can be told apart from this assumption.
+    d.exec(`
+      UPDATE finance_transactions
+         SET business = CASE WHEN account_id = 'starling-business' THEN 1 ELSE 0 END,
+             business_source = 'account'
+       WHERE category <> 'Own transfer' OR category IS NULL;
+    `);
+  },
+]);
+
+const router = express.Router();
+
+const pounds = (pence) => (pence == null ? null : pence / 100);
+
+router.get('/accounts', (req, res) => {
+  res.json(db.prepare('SELECT * FROM finance_accounts ORDER BY label').all());
+});
+
+// Deliberately paged. Five years is 4,133 rows and a panel that fetches all of them
+// teaches you nothing you could not learn from a smaller, faster page.
+router.get('/transactions', (req, res) => {
+  const limit = Math.min(500, Math.max(1, Number(req.query.limit) || 100));
+  const offset = Math.max(0, Number(req.query.offset) || 0);
+
+  const where = [];
+  const params = [];
+  if (req.query.from) { where.push('date >= ?'); params.push(req.query.from); }
+  if (req.query.to) { where.push('date <= ?'); params.push(req.query.to); }
+  if (req.query.uncategorised === '1') where.push('category IS NULL');
+
+  const clause = where.length ? `WHERE ${where.join(' AND ')}` : '';
+  const rows = db.prepare(
+    `SELECT * FROM finance_transactions ${clause} ORDER BY date DESC, id DESC LIMIT ? OFFSET ?`
+  ).all(...params, limit, offset);
+  const total = db.prepare(`SELECT COUNT(*) AS c FROM finance_transactions ${clause}`).get(...params).c;
+
+  res.json({
+    total,
+    limit,
+    offset,
+    transactions: rows.map((r) => ({ ...r, amount: pounds(r.amount_pence), balance: pounds(r.balance_pence) })),
+  });
+});
+
+// The import summary is the one number the panel shows before anything else: how much of
+// the ledger is actually categorised. An empty ledger and a broken importer must not
+// produce the same screen, so `imported` is reported separately from `categorised`.
+router.get('/summary', (req, res) => {
+  const row = db.prepare(
+    `SELECT COUNT(*) AS imported,
+            COUNT(category) AS categorised,
+            SUM(CASE WHEN category IS NULL THEN 1 ELSE 0 END) AS uncategorised,
+            -- Only MODEL suggestions await review. A rule is deterministic, auditable and
+            -- inspectable in finance_rules; putting its 6,221 rows in a review queue makes
+            -- the queue unusable and hides the handful of rows that genuinely need a human.
+            SUM(CASE WHEN reviewed = 0 AND category_source = 'model' THEN 1 ELSE 0 END) AS awaiting_review,
+            SUM(CASE WHEN category_source = 'rule' THEN 1 ELSE 0 END) AS by_rule,
+            SUM(CASE WHEN category_source = 'manual' THEN 1 ELSE 0 END) AS by_hand,
+            MIN(date) AS first_date, MAX(date) AS last_date
+     FROM finance_transactions`
+  ).get();
+  res.json(row);
+});
+
+// Months that actually have data, newest first. The panel picks its default from this
+// rather than from today's date — the ledger is an import and ends when the last
+// statement ended, so "this month" and "the latest month with data" are different things.
+router.get('/months', (req, res) => {
+  res.json(db.prepare(
+    `SELECT substr(date, 1, 7) AS month, COUNT(*) AS n, MAX(date) AS last_day
+       FROM finance_transactions GROUP BY month ORDER BY month DESC`
+  ).all());
+});
+
+// Where the money went. Own transfers are excluded everywhere — with two accounts each
+// one appears twice, so including them would inflate the total by nearly a third. Cash is
+// reported SEPARATELY rather than as a category of spending, because the ledger genuinely
+// does not know what it bought and folding it in would imply otherwise.
+router.get('/spending', (req, res) => {
+  const account = req.query.account && req.query.account !== 'all' ? req.query.account : null;
+  const latest = db.prepare('SELECT MAX(substr(date, 1, 7)) AS m FROM finance_transactions').get().m;
+  const month = /^\d{4}-\d{2}$/.test(req.query.month || '') ? req.query.month : latest;
+
+  const prevDate = new Date(`${month}-01T00:00:00Z`);
+  prevDate.setUTCMonth(prevDate.getUTCMonth() - 1);
+  const prev = prevDate.toISOString().slice(0, 7);
+
+  // Is this month complete? If the ledger stops mid-month, comparing 11 days against a
+  // full previous month would show a fake collapse in every category. So the comparison
+  // is clipped to the same day-of-month on both sides, and the panel is told it is.
+  const ledgerEnd = db.prepare('SELECT MAX(date) AS d FROM finance_transactions').get().d;
+  const monthEnd = new Date(Date.UTC(prevDate.getUTCFullYear(), prevDate.getUTCMonth() + 2, 0))
+    .toISOString().slice(0, 10);
+  const partial = ledgerEnd < monthEnd && ledgerEnd.slice(0, 7) === month;
+  const throughDay = partial ? Number(ledgerEnd.slice(8, 10)) : 31;
+
+  const spend = (m) => {
+    const params = [m];
+    let sql = `SELECT category, COUNT(*) n, SUM(-amount_pence) p
+                 FROM finance_transactions
+                WHERE amount_pence < 0 AND substr(date, 1, 7) = ?
+                  AND category IS NOT 'Own transfer'
+                  AND CAST(substr(date, 9, 2) AS INTEGER) <= ?`;
+    params.push(throughDay);
+    if (account) { sql += ' AND account_id = ?'; params.push(account); }
+    sql += ' GROUP BY category';
+    return db.prepare(sql).all(...params);
+  };
+
+  const income = (m) => {
+    const params = [m, throughDay];
+    let sql = `SELECT SUM(amount_pence) p FROM finance_transactions
+                WHERE amount_pence > 0 AND substr(date, 1, 7) = ?
+                  AND category IS NOT 'Own transfer'
+                  AND CAST(substr(date, 9, 2) AS INTEGER) <= ?`;
+    if (account) { sql += ' AND account_id = ?'; params.push(account); }
+    return db.prepare(sql).get(...params).p || 0;
+  };
+
+  const now = spend(month);
+  const was = new Map(spend(prev).map((r) => [r.category, r.p]));
+
+  const CASH = 'Cash withdrawn';
+  const categories = now
+    .filter((r) => r.category !== CASH)
+    .map((r) => ({ category: r.category, n: r.n, pence: r.p, wasPence: was.get(r.category) || 0 }))
+    .map((r) => ({ ...r, deltaPence: r.pence - r.wasPence }))
+    .sort((a, b) => b.pence - a.pence);
+
+  // A category that dropped to zero disappears from `now` entirely. Reporting only what
+  // is present would silently hide the largest possible change there is.
+  for (const [cat, p] of was) {
+    if (cat !== CASH && !categories.some((c) => c.category === cat)) {
+      categories.push({ category: cat, n: 0, pence: 0, wasPence: p, deltaPence: -p });
+    }
+  }
+
+  const cashNow = now.find((r) => r.category === CASH) || { n: 0, p: 0 };
+
+  // Each account's own last day. The business account stops at 2026-05-31 while the
+  // personal one runs to August, so "no spending in August" is true for it and the
+  // REASON is that its statements end in May. An empty month and an account with no
+  // data yet must not render the same sentence.
+  const accountEnd = account
+    ? db.prepare('SELECT MAX(date) AS d FROM finance_transactions WHERE account_id = ?').get(account).d
+    : ledgerEnd;
+
+  res.json({
+    month,
+    prev,
+    account: account || 'all',
+    accountEnd,
+    partial,
+    throughDay,
+    ledgerEnd,
+    totalPence: categories.reduce((s, c) => s + c.pence, 0),
+    prevTotalPence: categories.reduce((s, c) => s + c.wasPence, 0),
+    incomePence: income(month),
+    prevIncomePence: income(prev),
+    cash: { n: cashNow.n, pence: cashNow.p },
+    categories,
+  });
+});
+
+// ------------------------------------------------------------------------------------
+// ITEM 36 — "spot a pattern in income and correctly predict a forecast".
+//
+// The standing rule is "never present a forecast from thin data". 63 months is not thin,
+// so a forecast is defensible — but only for income that is actually REGULAR and still
+// ARRIVING. Projecting a contract that ended two years ago would be arithmetic on a
+// corpse, and it would look exactly as confident as a real projection.
+//
+// So each source is tested on two things before it may be projected:
+//   regularity  distinct months with a payment / months in its span, inclusive
+//   still alive  something arrived within the last 45 days
+//
+// Everything excluded is reported, with the reason. A forecast that quietly drops
+// two-thirds of the history looks far more certain than it is.
+// ------------------------------------------------------------------------------------
+const MIN_MONTHS = 6;
+const MIN_REGULARITY = 0.75;
+const ALIVE_DAYS = 45;
+
+function monthsBetween(a, b) {
+  const [ay, am] = a.slice(0, 7).split('-').map(Number);
+  const [by, bm] = b.slice(0, 7).split('-').map(Number);
+  return (by - ay) * 12 + (bm - am) + 1;
+}
+
+router.get('/income-outlook', (req, res) => {
+  const today = new Date().toISOString().slice(0, 10);
+
+  const sources = db.prepare(
+    `SELECT counterparty, COUNT(*) n, COUNT(DISTINCT substr(date,1,7)) months,
+            MIN(date) first, MAX(date) last, SUM(amount_pence) total
+       FROM finance_transactions
+      WHERE amount_pence > 0 AND category IS NOT NULL AND category <> 'Own transfer'
+      GROUP BY counterparty`
+  ).all();
+
+  const judged = sources.map((s) => {
+    const span = monthsBetween(s.first, s.last);
+    const regularity = Math.min(1, s.months / span);
+    const quietDays = Math.round((new Date(today) - new Date(s.last)) / 86400000);
+    const alive = quietDays <= ALIVE_DAYS;
+
+    // The per-month figure is the MEDIAN of months it actually paid — a mean is dragged
+    // by a single large arrears payment into a monthly figure that never occurs.
+    const perMonth = db.prepare(
+      `SELECT SUM(amount_pence) p FROM finance_transactions
+        WHERE counterparty = ? AND amount_pence > 0 AND category <> 'Own transfer'
+        GROUP BY substr(date,1,7) ORDER BY p`
+    ).all(s.counterparty).map((r) => r.p);
+    const median = perMonth.length ? perMonth[Math.floor(perMonth.length / 2)] : 0;
+
+    let excluded = null;
+    if (s.months < MIN_MONTHS) excluded = `only ${s.months} month(s) of history, needs ${MIN_MONTHS}`;
+    else if (regularity < MIN_REGULARITY) excluded = `paid in ${s.months} of ${span} months (${Math.round(regularity * 100)}%), too irregular`;
+    else if (!alive) excluded = `nothing for ${quietDays} days — it has stopped`;
+
+    return {
+      source: s.counterparty,
+      payments: s.n, months: s.months, span,
+      regularity: Math.round(regularity * 100),
+      first: s.first, last: s.last, quietDays, alive,
+      totalPence: s.total, medianMonthlyPence: median,
+      projectable: !excluded, excluded,
+    };
+  }).sort((a, b) => b.totalPence - a.totalPence);
+
+  const projectable = judged.filter((j) => j.projectable);
+  const monthlyPence = projectable.reduce((s, j) => s + j.medianMonthlyPence, 0);
+
+  // What the projection leaves out, in money. This is the residue, and it is the number
+  // that stops a small forecast reading as a small income.
+  const stoppedTotal = judged.filter((j) => !j.projectable).reduce((s, j) => s + j.totalPence, 0);
+
+  res.json({
+    generatedAt: today,
+    method: {
+      regularity: `distinct paying months / months in span, must be at least ${MIN_REGULARITY * 100}%`,
+      history: `at least ${MIN_MONTHS} paying months`,
+      alive: `something received within ${ALIVE_DAYS} days`,
+      perMonth: 'median of the months it actually paid, not the mean — one arrears payment would otherwise set a monthly figure that never occurs',
+    },
+    projectable: projectable.map((p) => ({ source: p.source, monthlyPence: p.medianMonthlyPence, regularity: p.regularity, months: p.months })),
+    projectedMonthlyPence: monthlyPence,
+    projectedAnnualPence: monthlyPence * 12,
+    excluded: judged.filter((j) => !j.projectable).map((j) => ({ source: j.source, totalPence: j.totalPence, why: j.excluded })),
+    excludedHistoricalTotalPence: stoppedTotal,
+    caveat: projectable.length
+      ? `Projects ${projectable.length} source(s) only. GBP ${(stoppedTotal / 100).toFixed(2)} of historical income comes from sources that have stopped and is deliberately NOT projected.`
+      : 'Nothing qualifies. No source is both regular enough and still paying, so there is no forecast to give — which is itself the finding.',
+  });
+});
+
+router.get('/rules', (req, res) => {
+  res.json(db.prepare('SELECT * FROM finance_rules ORDER BY category, pattern').all());
+});
+
+// The review queue: model suggestions only, biggest first. A suggestion is a proposal,
+// never a decision — nothing here has been accepted.
+router.get('/review', (req, res) => {
+  const limit = Math.min(200, Math.max(1, Number(req.query.limit) || 50));
+  const rows = db.prepare(
+    `SELECT id, date, counterparty, reference, type, amount_pence, category
+     FROM finance_transactions
+     WHERE category_source = 'model' AND reviewed = 0
+     ORDER BY ABS(amount_pence) DESC LIMIT ?`
+  ).all(limit);
+  const total = db.prepare(
+    `SELECT COUNT(*) AS c FROM finance_transactions WHERE category_source = 'model' AND reviewed = 0`
+  ).get().c;
+  res.json({ total, transactions: rows.map((r) => ({ ...r, amount: pounds(r.amount_pence) })) });
+});
+
+// Accept a suggestion as-is, or replace it. Either way the row becomes 'manual' and is
+// then immune to re-running the rules or the model — a human decision is the top of the
+// precedence order, not another input to it.
+router.post('/transactions/:id/category', (req, res) => {
+  const id = Number(req.params.id);
+  const { category } = req.body || {};
+  if (!Number.isInteger(id)) return res.status(400).json({ error: 'bad id' });
+
+  const known = db.prepare('SELECT 1 FROM finance_rules WHERE category = ? LIMIT 1').get(category);
+  if (!category || (!known && category !== 'Other')) {
+    return res.status(400).json({ error: `unknown category "${category}"` });
+  }
+
+  const r = db.prepare(
+    `UPDATE finance_transactions SET category = ?, category_source = 'manual', reviewed = 1 WHERE id = ?`
+  ).run(category, id);
+
+  if (!r.changes) return res.status(404).json({ error: 'no such transaction' });
+  res.json(db.prepare('SELECT * FROM finance_transactions WHERE id = ?').get(id));
+});
+
+// ------------------------------------------------------------------------------------
+// Accessors for other modules. The module contract says a module never reads another's
+// TABLES — it asks the owner. These are that asking, in-process. Finance remains the one
+// owner of every spending figure; budget calls this rather than writing its own SQL, so
+// the two can never disagree.
+//
+// Own transfer is excluded in both, always: with two accounts each transfer appears
+// twice, so including it inflates the total by nearly a third.
+// ------------------------------------------------------------------------------------
+
+function monthlySpend(month, { includeCash = false } = {}) {
+  const exclude = includeCash ? "('Own transfer')" : "('Own transfer', 'Cash withdrawn')";
+  return db.prepare(
+    `SELECT category, SUM(-amount_pence) AS pence
+       FROM finance_transactions
+      WHERE amount_pence < 0 AND substr(date, 1, 7) = ?
+        AND category IS NOT NULL AND category NOT IN ${exclude}
+      GROUP BY category`
+  ).all(month);
+}
+
+function monthlyIncome(month) {
+  return db.prepare(
+    `SELECT COALESCE(SUM(amount_pence), 0) AS pence
+       FROM finance_transactions
+      WHERE amount_pence > 0 AND substr(date, 1, 7) = ?
+        AND category IS NOT NULL AND category <> 'Own transfer'`
+  ).get(month).pence;
+}
+
+// Typical spend per category, as the MEDIAN of the last n complete months. Median, not
+// mean: one Christmas or one laptop drags a mean into a budget you would never hit, and
+// a budget you cannot hit gets ignored within a fortnight.
+function typicalMonthly(months = 12, { includeCash = false } = {}) {
+  const exclude = includeCash ? "('Own transfer')" : "('Own transfer', 'Cash withdrawn')";
+  const last = db.prepare('SELECT MAX(substr(date, 1, 7)) AS m FROM finance_transactions').get().m;
+
+  // The final month of an import is usually partial and would pull every median down.
+  const rows = db.prepare(
+    `SELECT substr(date, 1, 7) AS month, category, SUM(-amount_pence) AS pence
+       FROM finance_transactions
+      WHERE amount_pence < 0 AND category IS NOT NULL AND category NOT IN ${exclude}
+        AND substr(date, 1, 7) < ? AND substr(date, 1, 7) >= ?
+      GROUP BY month, category`
+  ).all(last, `${new Date(new Date(`${last}-01T00:00:00Z`).setUTCMonth(new Date(`${last}-01T00:00:00Z`).getUTCMonth() - months)).toISOString().slice(0, 7)}`);
+
+  const byCat = new Map();
+  const monthsSeen = new Set();
+  for (const r of rows) {
+    monthsSeen.add(r.month);
+    if (!byCat.has(r.category)) byCat.set(r.category, []);
+    byCat.get(r.category).push(r.pence);
+  }
+
+  const n = monthsSeen.size;
+  return [...byCat].map(([category, vals]) => {
+    // A category absent in a month is a ZERO for that month, not a missing sample.
+    // Without this, something bought twice a year looks like a monthly commitment.
+    const full = [...vals, ...Array(Math.max(0, n - vals.length)).fill(0)].sort((a, b) => a - b);
+    return {
+      category,
+      medianPence: full[Math.floor(full.length / 2)],
+      monthsPresent: vals.length,
+      monthsConsidered: n,
+    };
+  }).sort((a, b) => b.medianPence - a.medianPence);
+}
+
+// Income, spend and last activity for one ACCOUNT KIND ('personal' | 'business').
+//
+// Added for the wishlist scope split. It deliberately does NOT return a headroom: for a
+// sole trader there is no second wallet, so a per-purse headroom would be a separation
+// the law does not grant. This answers "is the business purse actually active", which is
+// a fact, and leaves the judgement to the caller.
+function accountKindSummary(kind, { months = 12 } = {}) {
+  const row = db.prepare(
+    `SELECT COALESCE(SUM(CASE WHEN t.amount_pence > 0 THEN t.amount_pence END), 0) AS income_pence,
+            COALESCE(SUM(CASE WHEN t.amount_pence < 0 THEN -t.amount_pence END), 0) AS spend_pence,
+            COUNT(*) AS n,
+            MAX(t.date) AS last_activity
+       FROM finance_transactions t
+       JOIN finance_accounts a ON a.id = t.account_id
+      WHERE a.kind = ?
+        AND t.category IS NOT NULL AND t.category <> 'Own transfer'
+        AND t.date >= date((SELECT MAX(date) FROM finance_transactions), '-' || ? || ' months')`
+  ).get(kind, months);
+
+  return {
+    kind,
+    months,
+    incomePence: row.income_pence,
+    spendPence: row.spend_pence,
+    transactions: row.n,
+    // null means no qualifying rows in the window, which is different from £0 of activity
+    // in a window that does have rows. The caller must be able to tell those apart.
+    lastActivity: row.last_activity,
+  };
+}
+
+// How far the ledger actually reaches, and how stale it is.
+//
+// THE LEDGER IS AN IMPORT, NOT A FEED: it ends when the last statement ended. Anything
+// that reports "recent" spending has to know that, or an empty window reads as "you spent
+// nothing" rather than "not imported yet". asOf defaults to today and is injectable so a
+// caller generating a briefing for a past date gets that date's staleness, not today's.
+function ledgerSpan(asOf) {
+  const r = db.prepare('SELECT MIN(date) a, MAX(date) b, COUNT(*) n FROM finance_transactions').get();
+  if (!r || !r.n) return { first: null, last: null, rows: 0, staleDays: null };
+  const ref = /^\d{4}-\d{2}-\d{2}$/.test(String(asOf || '')) ? asOf : new Date().toISOString().slice(0, 10);
+  return {
+    first: r.a,
+    last: r.b,
+    rows: r.n,
+    staleDays: Math.floor((new Date(ref) - new Date(r.b)) / 86400000),
+  };
+}
+
+module.exports = router;
+module.exports.monthlySpend = monthlySpend;
+module.exports.monthlyIncome = monthlyIncome;
+module.exports.typicalMonthly = typicalMonthly;
+module.exports.accountKindSummary = accountKindSummary;
+module.exports.ledgerSpan = ledgerSpan;

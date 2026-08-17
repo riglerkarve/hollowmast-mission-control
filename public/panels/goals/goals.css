@@ -1,0 +1,165 @@
+/* Goals panel.
+   Tokens only — --accent, --accent-soft, --ink, --muted, --bg, --card, --border,
+   --ring-bg, --short, --long — so both themes come out of the sheet rather than out of a
+   hardcoded fallback that only looks right in the one I happened to be testing.
+   --accent is ORANGE in this theme, not blue; --long is the blue.
+
+   Two colour rules, both held throughout:
+     - Sentences are --ink or --muted. --accent, --short and --long are used for marks,
+       borders, chips and fills only. Accent-on-accent-soft measures fine for a small
+       label and does not measure fine for a paragraph.
+     - The next-action block gets its emphasis from a border and a ground, never from
+       coloured body text. It is the one thing on the card you must be able to read. */
+
+/* Wider than the shared 720px, scoped to this panel with three classes so it wins over
+   reports.css's .panel.panel-wide whichever order the sheets load in. Step lists with a
+   cost, a blocker and a note per row need the room. */
+.panel.panel-wide.gl-panel { max-width: 900px; }
+
+.gl-h2 { margin: 0 0 0.5rem; font-size: 0.95rem; }
+.gl-note { font-size: 0.82rem; color: var(--muted); line-height: 1.55; margin: 0.35rem 0 0.9rem; }
+.gl-note:last-child { margin-bottom: 0; }
+
+/* Failure and emptiness are drawn differently on purpose: a broken fetch gets a hard
+   accent border, an empty table gets the quiet shared .empty-hint. If they looked the
+   same, a parse error would read as good news. */
+.gl-error {
+  margin: 0 0 0.9rem;
+  padding: 0.7rem 0.85rem;
+  border-radius: 10px;
+  border: 1px solid var(--accent);
+  background: var(--accent-soft);
+  color: var(--ink);
+  font-size: 0.85rem;
+  line-height: 1.5;
+}
+.gl-error b { font-weight: 700; }
+
+/* --- header counts ---------------------------------------------------------------- */
+.gl-counts { display: flex; gap: 1.6rem; flex-wrap: wrap; margin-bottom: 0.5rem; }
+.gl-count { display: flex; flex-direction: column; }
+.gl-count-v { font-size: 1.5rem; font-weight: 700; letter-spacing: -0.02em; font-variant-numeric: tabular-nums; }
+.gl-count-l { font-size: 0.76rem; color: var(--muted); font-weight: 500; }
+
+/* --- one goal --------------------------------------------------------------------- */
+.gl-goals { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 1rem; }
+
+.gl-goal {
+  background: var(--card);
+  border: 1px solid var(--border);
+  border-radius: 14px;
+  padding: 1rem 1.1rem;
+}
+/* The only thing distinguishing a blocked goal from an actionable one is a marker on the
+   edge and a line of text. No red card, no shading of the whole thing — a goal that is
+   waiting on the post is not a problem, it is a state. */
+.gl-goal.is-blocked { border-left: 3px solid var(--accent); }
+.gl-goal.is-actionable { border-left: 3px solid var(--short); }
+.gl-goal.is-empty { border-left: 3px solid var(--border); }
+
+.gl-top { display: flex; justify-content: space-between; align-items: baseline; gap: 0.8rem; flex-wrap: wrap; }
+.gl-top-chips { display: flex; gap: 0.4rem; flex-wrap: wrap; align-items: baseline; }
+.gl-tally { font-size: 0.78rem; color: var(--muted); }
+.gl-title { margin: 0; font-size: 1rem; font-weight: 700; }
+.gl-why { font-size: 0.8rem; color: var(--muted); line-height: 1.55; margin: 0.35rem 0 0.7rem; }
+
+.gl-chip {
+  font-size: 0.66rem; text-transform: uppercase; letter-spacing: 0.05em; font-weight: 600;
+  padding: 0.16rem 0.45rem; border-radius: 5px;
+  border: 1px solid var(--border); color: var(--muted); background: var(--ring-bg);
+  white-space: nowrap;
+}
+.gl-chip.on-target { border-color: var(--long); color: var(--ink); }
+.gl-chip.overdue { border-color: var(--accent); background: var(--accent-soft); color: var(--ink); }
+
+/* --- the next action: the reason the panel exists --------------------------------- */
+.gl-next {
+  margin: 0 0 0.7rem;
+  padding: 0.7rem 0.85rem;
+  border-radius: 10px;
+  background: var(--accent-soft);
+  border-left: 3px solid var(--accent);
+  color: var(--ink);
+  font-size: 0.9rem;
+  line-height: 1.5;
+}
+.gl-next.none { background: var(--ring-bg); border-left-color: var(--border); color: var(--muted); }
+.gl-next-do { display: block; margin-top: 0.55rem; }
+
+.gl-blockline { font-size: 0.8rem; color: var(--muted); margin: 0 0 0.7rem; line-height: 1.5; }
+
+/* --- the facts row ---------------------------------------------------------------- */
+/* Counts, not a percentage bar. "3 of 6" says what happened; a bar at 50% implies a
+   schedule that nothing in this data supports. */
+.gl-facts { display: flex; gap: 1.1rem; flex-wrap: wrap; font-size: 0.8rem; color: var(--muted); margin-bottom: 0.6rem; }
+.gl-facts b { color: var(--ink); font-weight: 600; font-variant-numeric: tabular-nums; }
+.gl-unpriced { color: var(--ink); }
+
+/* --- steps ------------------------------------------------------------------------ */
+.gl-steps { margin-top: 0.4rem; }
+.gl-steps > summary {
+  cursor: pointer; font-size: 0.8rem; color: var(--muted); padding: 0.25rem 0;
+  list-style: revert;
+}
+.gl-steps > summary:hover { color: var(--ink); }
+
+.gl-step-list { list-style: none; margin: 0.5rem 0 0; padding: 0; display: flex; flex-direction: column; }
+.gl-step {
+  display: grid;
+  grid-template-columns: 1.6rem minmax(0, 1fr) auto;
+  gap: 0.5rem 0.6rem;
+  align-items: baseline;
+  padding: 0.55rem 0;
+  border-top: 1px solid var(--border);
+  font-size: 0.84rem;
+}
+@media (max-width: 600px) {
+  .gl-step { grid-template-columns: 1.6rem minmax(0, 1fr); }
+  .gl-step-acts { grid-column: 2 / -1; }
+}
+.gl-step-pos { color: var(--muted); font-variant-numeric: tabular-nums; font-size: 0.78rem; }
+.gl-step-body { min-width: 0; }
+.gl-step-title { display: block; }
+.gl-step.done .gl-step-title { color: var(--muted); text-decoration: line-through; }
+.gl-step-meta { display: flex; gap: 0.5rem; flex-wrap: wrap; align-items: baseline; margin-top: 0.2rem; }
+.gl-step-note { display: block; font-size: 0.76rem; color: var(--muted); line-height: 1.5; margin-top: 0.25rem; }
+
+/* "cost not set" is printed, never blank. A missing number that renders as nothing looks
+   like a number of zero. */
+.gl-cost { font-size: 0.76rem; color: var(--muted); font-variant-numeric: tabular-nums; }
+.gl-cost.set { color: var(--ink); }
+
+.gl-blockchip {
+  font-size: 0.7rem; padding: 0.1rem 0.4rem; border-radius: 5px;
+  border: 1px solid var(--accent); background: var(--accent-soft); color: var(--ink);
+}
+.gl-donechip { font-size: 0.7rem; color: var(--short); font-weight: 600; }
+
+.gl-step-acts { display: flex; gap: 0.35rem; align-items: center; flex-wrap: wrap; }
+
+/* --- controls --------------------------------------------------------------------- */
+.gl-in {
+  padding: 0.4rem 0.6rem; min-width: 0;
+  border: 1px solid var(--border); border-radius: 8px;
+  background: var(--ring-bg); color: var(--ink); font: inherit; font-size: 0.82rem;
+}
+.gl-in::placeholder { color: var(--muted); }
+.gl-in.wide { flex: 1 1 12rem; }
+.gl-in.money { flex: 0 0 5.5rem; width: 5.5rem; }
+.gl-in.date { flex: 0 0 9.5rem; }
+
+.gl-mini { font-size: 0.74rem; padding: 0.25rem 0.55rem; border-radius: 8px; min-width: 0; }
+.gl-row { display: flex; gap: 0.45rem; flex-wrap: wrap; align-items: center; margin-top: 0.6rem; }
+.gl-row.tight { margin-top: 0.35rem; }
+
+.gl-x {
+  border: 0; background: transparent; color: var(--muted); cursor: pointer;
+  font-size: 0.95rem; line-height: 1; padding: 0 0.25rem;
+}
+.gl-x:hover { color: var(--accent); }
+
+.gl-add { display: flex; gap: 0.5rem; flex-wrap: wrap; align-items: center; }
+.gl-select {
+  padding: 0.35rem 0.5rem; border: 1px solid var(--border); border-radius: 8px;
+  background: var(--ring-bg); color: var(--ink); font: inherit; font-size: 0.78rem;
+}

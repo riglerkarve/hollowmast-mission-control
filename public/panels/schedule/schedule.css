@@ -1,0 +1,184 @@
+/* Schedule panel. Every colour here is a token that exists in shell.css and has both a
+   light and a dark value: --accent (ORANGE in this theme, not blue), --accent-soft, --ink,
+   --muted, --bg, --card, --border, --ring-bg, --short, --long. No hex anywhere, and no
+   hardcoded fallback second argument on any custom property: a fallback for a token that
+   does not exist is invisible in whichever theme you happen to be testing in, which is how
+   five invented token names once shipped dark input boxes onto a white card. */
+
+.sc-h2 { margin: 0 0 0.3rem; font-size: 0.95rem; opacity: 0.85; }
+.sc-h3 { margin: 1.2rem 0 0.5rem; font-size: 0.82rem; opacity: 0.7; font-weight: 600; }
+.sc-hint { font-size: 0.8rem; opacity: 0.7; line-height: 1.5; margin: 0.5rem 0 0; }
+.sc-dim { opacity: 0.55; font-weight: 400; }
+.sc-quiet { font-size: 0.85rem; color: var(--muted); margin: 0; }
+.sc-error { color: var(--accent); font-size: 0.85rem; line-height: 1.5; margin: 0; }
+.sc-beyond { color: var(--muted); }
+
+/* Reserves its line whether or not it is speaking, so the strip below does not jump up the
+   page every time a message clears. */
+.sc-echo { font-size: 0.82rem; opacity: 0.8; line-height: 1.45; margin: 0.7rem 0 0; min-height: 1.2em; }
+.sc-echo.ok  { color: var(--short); opacity: 1; }
+.sc-echo.bad { color: var(--accent); opacity: 1; }
+
+.sc-warn {
+  margin: 0 0 0.8rem;
+  padding: 0.6rem 0.75rem;
+  border-radius: 8px;
+  border-left: 3px solid var(--accent);
+  background: var(--accent-soft);
+  font-size: 0.82rem;
+  line-height: 1.5;
+}
+
+.sc-split { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); gap: 1rem; align-items: start; }
+@media (max-width: 860px) { .sc-split { grid-template-columns: minmax(0, 1fr); } }
+
+/* The overdue card is the only thing on this panel that raises its voice, and it only does
+   so when there is something overdue. When there is not, the card stays — quietly — because
+   a card that disappears is indistinguishable from a card that failed to render. */
+#scDecideCard.sc-alarm { border-color: var(--accent); }
+
+/* --- events ---------------------------------------------------------------------- */
+.sc-events { list-style: none; margin: 0 0 0.4rem; padding: 0; display: flex; flex-direction: column; gap: 0.45rem; }
+
+.sc-event {
+  display: flex;
+  gap: 0.7rem;
+  align-items: center;
+  justify-content: space-between;
+  padding: 0.5rem 0.65rem;
+  border-left: 3px solid var(--border);
+  border-radius: 0 8px 8px 0;
+  background: var(--ring-bg);
+}
+
+.sc-e-main { display: flex; flex-direction: column; gap: 0.15rem; min-width: 0; }
+.sc-e-title { font-size: 0.88rem; font-weight: 600; display: flex; gap: 0.4rem; align-items: baseline; flex-wrap: wrap; }
+.sc-e-when { font-size: 0.78rem; opacity: 0.75; }
+.sc-e-rel  { font-size: 0.78rem; opacity: 0.8; }
+.sc-e-lead { font-size: 0.74rem; opacity: 0.65; line-height: 1.4; }
+.sc-e-note { font-size: 0.74rem; opacity: 0.55; line-height: 1.4; }
+.sc-tag { font-size: 0.62rem; text-transform: uppercase; letter-spacing: 0.04em; opacity: 0.5; font-weight: 600; }
+.sc-tag-status { opacity: 0.75; }
+
+.sc-e-acts { display: flex; gap: 0.3rem; align-items: center; flex: 0 0 auto; flex-wrap: wrap; justify-content: flex-end; }
+.sc-act { font-size: 0.74rem; padding: 0.22rem 0.55rem; }
+
+/* FIVE states. Only 'overdue' takes the accent, because it is the only one that wants
+   something from you — spending the loud colour on "today" as well would make both of them
+   ordinary. 'past' is a decision you already made, so it recedes; and it differs from the
+   quiet future states by border STYLE as well as hue, which survives a colour-blind reader
+   and both themes. */
+.sc-event.sc-overdue   { border-left-color: var(--accent); background: var(--accent-soft); }
+.sc-event.sc-today     { border-left-color: var(--long); }
+.sc-event.sc-this-week { border-left-color: var(--border); }
+.sc-event.sc-later     { border-left-color: var(--border); }
+.sc-event.sc-past      { border-left-style: dashed; border-left-color: var(--muted); background: transparent; }
+
+/* Resolved rows sit down, whatever day they are on — a cancelled appointment next Tuesday
+   should not read like one you are still going to. Struck through as well as faded: opacity
+   alone is a shade, and shades were measured indistinguishable elsewhere here. */
+.sc-event.sc-resolved .sc-e-title { text-decoration: line-through; text-decoration-thickness: 1px; opacity: 0.7; }
+.sc-event.sc-resolved:not(.sc-past) { background: transparent; border-left-style: dashed; border-left-color: var(--muted); }
+
+.sc-del {
+  border: 0;
+  background: transparent;
+  color: inherit;
+  opacity: 0.3;
+  cursor: pointer;
+  font-size: 1rem;
+  line-height: 1;
+  padding: 0 0.2rem;
+}
+.sc-del:hover { opacity: 1; color: var(--accent); }
+
+/* --- day headings ---------------------------------------------------------------- */
+.sc-day-head {
+  display: flex;
+  gap: 0.5rem;
+  align-items: baseline;
+  flex-wrap: wrap;
+  margin: 1rem 0 0.45rem;
+  font-size: 0.8rem;
+  font-weight: 600;
+  opacity: 0.75;
+}
+.sc-day-head:first-child { margin-top: 0; }
+.sc-day-rel { text-transform: uppercase; letter-spacing: 0.04em; font-size: 0.72rem; }
+.sc-day-head.sc-is-today { opacity: 1; color: var(--long); }
+
+/* --- add form -------------------------------------------------------------------- */
+.sc-add { display: flex; gap: 0.5rem; margin: 0.6rem 0 0; flex-wrap: wrap; }
+.sc-in {
+  flex: 1 1 8rem; min-width: 0; padding: 0.5rem 0.7rem;
+  border: 1px solid var(--border); border-radius: 8px;
+  background: var(--ring-bg); color: inherit; font: inherit; font-size: 0.85rem;
+}
+.sc-title { flex: 1 1 100%; }
+.sc-date  { flex: 0 0 9.5rem; }
+.sc-time  { flex: 0 0 7rem; }
+.sc-kind  { flex: 0 0 8rem; }
+.sc-where { flex: 1 1 8rem; }
+
+/* --- the 14-day shape ------------------------------------------------------------ */
+.sc-strip { display: flex; gap: 4px; flex-wrap: wrap; margin-bottom: 0.6rem; }
+
+.sc-day-col {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 2px;
+  padding-bottom: 4px;
+  position: relative;
+  flex: 0 0 auto;
+}
+
+.sc-day-cell {
+  width: 1.35rem;
+  height: 1.35rem;
+  flex: 0 0 auto;
+  box-sizing: border-box;
+  display: block;
+  border-radius: 4px;
+}
+
+/* TWO states, separated by fill AND by border style — not by two tints of one hue. */
+.sc-d-busy { background: var(--long); border: 1px solid var(--long); }
+.sc-d-free { background: transparent; border: 1px dashed var(--border); }
+
+/* The weekday initial sits UNDER the cell rather than inside it. Measured: inside a filled
+   cell it is --bg on --long, 4.69:1 light but 3.41:1 dark, which is below AA for text this
+   small. Under the cell it is --muted on --card — 4.96:1 light, 5.66:1 dark. */
+.sc-d-wd {
+  font-size: 0.62rem;
+  font-weight: 600;
+  line-height: 1;
+  color: var(--muted);
+  pointer-events: none;
+}
+
+/* Today is a MARK, not a third shade: a rule under the whole column, plus a weight and
+   colour change on the label. It composes with either state above, so "today and free" and
+   "today and busy" both stay legible, and it does not rely on colour alone. */
+.sc-day-col.sc-d-today::after {
+  content: '';
+  position: absolute;
+  left: 0; right: 0;
+  bottom: 0;
+  height: 2px;
+  background: var(--accent);
+  border-radius: 1px;
+}
+.sc-day-col.sc-d-today .sc-d-wd { color: var(--ink); font-weight: 700; }
+
+.sc-legend {
+  list-style: none; margin: 0.9rem 0 0.8rem; padding: 0;
+  display: flex; gap: 0.9rem; flex-wrap: wrap;
+  font-size: 0.76rem; opacity: 0.75;
+}
+.sc-legend li { display: flex; gap: 0.4rem; align-items: center; }
+.sc-legend .sc-day-cell { width: 0.95rem; height: 0.95rem; }
+.sc-legend .sc-day-col { padding-bottom: 3px; }
+
+.sc-facts { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 0.3rem; font-size: 0.85rem; }
+.sc-facts b { font-variant-numeric: tabular-nums; }

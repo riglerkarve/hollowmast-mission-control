@@ -1,0 +1,109 @@
+/* Safety panel.
+   Every class here is sf- prefixed; nothing shared is redefined. The panel reuses
+   .card, .panel-header, .badge, .btn, .stat-block and .empty-hint from shared.css. */
+
+.sf-split {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+  gap: 1rem;
+  align-items: start;
+}
+
+@media (max-width: 900px) {
+  .sf-split { grid-template-columns: minmax(0, 1fr); }
+}
+
+.sf-h2 { font-size: 0.95rem; font-weight: 700; margin: 0 0 0.4rem; }
+.sf-note { font-size: 0.78rem; opacity: 0.75; margin: 0.3rem 0; }
+.sf-dim { opacity: 0.55; }
+
+/* The unconfigured banner. --ink on --accent-soft measures 12.26:1 light and 11.04:1
+   dark; the tint is the emphasis and the text carries the meaning. */
+.sf-banner {
+  margin: 0 0 0.6rem;
+  padding: 0.6rem 0.75rem;
+  border-radius: 9px;
+  border-left: 3px solid var(--accent);
+  background: var(--accent-soft);
+  color: var(--ink);
+  font-size: 0.84rem;
+}
+
+.sf-stats { display: flex; flex-wrap: wrap; gap: 1.5rem; margin-bottom: 0.5rem; }
+
+.sf-form { display: flex; flex-wrap: wrap; gap: 0.6rem; align-items: flex-end; margin: 0.5rem 0; }
+.sf-form-row { align-items: center; }
+.sf-label { display: flex; flex-direction: column; gap: 0.25rem; font-size: 0.76rem; opacity: 0.8; }
+
+.sf-in {
+  padding: 0.45rem 0.55rem;
+  font-size: 0.85rem;
+  color: var(--ink);
+  background: var(--bg);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  min-width: 8rem;
+}
+
+.sf-in:focus-visible { outline: 2px solid var(--accent); outline-offset: 1px; }
+
+.sf-payees { list-style: none; margin: 0.5rem 0 0; padding: 0; display: flex; flex-wrap: wrap; gap: 0.4rem; }
+
+.sf-payees li {
+  display: flex;
+  align-items: center;
+  gap: 0.4rem;
+  padding: 0.2rem 0.35rem 0.2rem 0.6rem;
+  border: 1px solid var(--border);
+  border-radius: 999px;
+  font-size: 0.8rem;
+}
+
+.sf-del {
+  border: 0;
+  background: none;
+  color: var(--ink);
+  opacity: 0.5;
+  cursor: pointer;
+  font-size: 0.95rem;
+  line-height: 1;
+  padding: 0 0.15rem;
+}
+
+.sf-del:hover, .sf-del:focus-visible { opacity: 1; color: var(--accent); }
+
+/* The log.
+   COLOUR IS NOT THE SIGNAL — the word "allowed" / "refused" is. Measured on --card,
+   --short is 4.01:1 light and 3.93:1 dark, and --accent is 3.55:1 light: all three fail
+   AA for small text, so tinting the label would have made the one thing you must read
+   the least readable thing in the row. The outcome word is therefore --ink (15.91:1
+   light, 12.98:1 dark) and the colour moves to a left border, which carries no text. */
+.sf-log { list-style: none; margin: 0.4rem 0 0; padding: 0; display: flex; flex-direction: column; gap: 0.5rem; }
+
+.sf-log li {
+  display: flex;
+  flex-direction: column;
+  gap: 0.1rem;
+  padding: 0.5rem 0.65rem;
+  border: 1px solid var(--border);
+  border-left-width: 3px;
+  border-radius: 8px;
+}
+
+.sf-log-allowed { border-left-color: var(--short); }
+.sf-log-refused { border-left-color: var(--accent); }
+
+.sf-log-top { display: flex; justify-content: space-between; gap: 1rem; align-items: baseline; }
+
+.sf-log-out {
+  font-size: 0.72rem;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  color: var(--ink);
+}
+
+.sf-log-amt { font-variant-numeric: tabular-nums; font-size: 0.85rem; font-weight: 600; }
+.sf-log-what { font-size: 0.82rem; }
+.sf-log-why { font-size: 0.76rem; opacity: 0.8; }
+.sf-log-at { font-size: 0.72rem; opacity: 0.55; font-variant-numeric: tabular-nums; }

@@ -1,0 +1,51 @@
+# Mission Control — what must never enter git history.
+#
+# This file is a security control, not housekeeping. The repo has no remote today, but
+# private-to-public is a decision someone can make later and history is not editable in
+# practice: anything committed once is committed for good. So the rule is to exclude by
+# CATEGORY (anything holding real money, health or credential data) rather than by
+# filename, and to re-check when a new directory appears.
+
+# --- credentials -----------------------------------------------------------------
+# The LAN access key. Minted on first boot; committing it would publish the gate.
+data/gate-key.txt
+
+# --- real financial and personal data ----------------------------------------------
+# dashboard.db holds ten account-years — 6,839 real bank transactions — plus health
+# metrics and the wellbeing journal. The -wal and -shm files hold the same data mid-write.
+data/*.db
+data/*.db-shm
+data/*.db-wal
+
+# 41 MB of VACUUM INTO copies of exactly the same thing.
+backups/
+
+# Runtime state, rewritten every 30s. Noise in a diff and useless in history.
+data/heartbeat.json
+data/watchdog-state.json
+
+# Generated output that quotes the ledger: the daily briefing carries real spending
+# figures and the tax reports carry five years of turnover. Both regenerate from the
+# database on demand, so nothing is lost by keeping them out.
+reports/
+
+# --- logs --------------------------------------------------------------------------
+# Request and error logs can echo query strings and data values.
+logs/
+*.log
+
+# --- restorable ---------------------------------------------------------------------
+# package-lock.json is committed; node_modules is not. One dependency, no native builds.
+node_modules/
+
+# --- os / editor ---------------------------------------------------------------------
+.DS_Store
+Thumbs.db
+*.swp
+.vscode/
+.idea/
+
+# NOT ignored, deliberately:
+#   data/seed/     — the backlog seeder is code, and carries no transaction data
+#   package-lock.json — pins the one dependency
+#   CLAUDE.md, ARCHITECTURE.md — the reasoning is the most valuable thing here

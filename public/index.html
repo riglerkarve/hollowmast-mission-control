@@ -1,0 +1,75 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Mission Control</title>
+<link rel="stylesheet" href="/shell.css">
+<link rel="stylesheet" href="/shared.css">
+<link rel="stylesheet" href="/panels/focus/focus.css">
+<link rel="stylesheet" href="/panels/reports/reports.css">
+<link rel="stylesheet" href="/panels/finance/finance.css">
+<link rel="stylesheet" href="/panels/budget/budget.css">
+<link rel="stylesheet" href="/panels/todo/todo.css">
+<link rel="stylesheet" href="/panels/income/income.css">
+<link rel="stylesheet" href="/panels/lifestyle/lifestyle.css">
+<link rel="stylesheet" href="/panels/wellbeing/wellbeing.css">
+<link rel="stylesheet" href="/panels/brain/brain.css">
+<link rel="stylesheet" href="/panels/safety/safety.css">
+<link rel="stylesheet" href="/panels/goals/goals.css">
+<link rel="stylesheet" href="/panels/schedule/schedule.css">
+</head>
+<body>
+  <div class="shell">
+    <nav class="sidebar">
+      <div class="brand">Mission Control</div>
+      <ul class="nav-list" id="navList">
+        <li><button class="nav-item active" data-panel="focus">
+          <span class="nav-icon">⏱️</span> Focus
+        </button></li>
+        <li><button class="nav-item" data-panel="reports">
+          <span class="nav-icon">📊</span> Reports
+        </button></li>
+        <li><button class="nav-item" data-panel="finance">
+          <span class="nav-icon">£</span> Money
+        </button></li>
+        <li><button class="nav-item" data-panel="budget">
+          <span class="nav-icon">◷</span> Budget
+        </button></li>
+        <li><button class="nav-item" data-panel="safety">
+          <span class="nav-icon">⛔</span> Safety
+        </button></li>
+        <li><button class="nav-item" data-panel="schedule">
+          <span class="nav-icon">▤</span> Schedule
+        </button></li>
+        <li><button class="nav-item" data-panel="goals">
+          <span class="nav-icon">◎</span> Goals
+        </button></li>
+        <li><button class="nav-item" data-panel="todo">
+          <span class="nav-icon">☑</span> Backlog
+        </button></li>
+        <li><button class="nav-item" data-panel="income">
+          <span class="nav-icon">↗</span> Income
+        </button></li>
+        <li><button class="nav-item" data-panel="lifestyle">
+          <span class="nav-icon">◱</span> Lifestyle
+        </button></li>
+        <li><button class="nav-item" data-panel="wellbeing">
+          <span class="nav-icon">✎</span> Wellbeing
+        </button></li>
+        <li><button class="nav-item" data-panel="brain">
+          <span class="nav-icon">🧠</span> Second brain
+        </button></li>
+        <li><a class="nav-item nav-link" href="/garage/">
+          <span class="nav-icon">🔧</span> The Garage
+        </a></li>
+      </ul>
+    </nav>
+    <main class="content">
+      <div id="panelRoot"></div>
+    </main>
+  </div>
+
+  <script type="module" src="/shell.js"></script>
+</body>
+</html>

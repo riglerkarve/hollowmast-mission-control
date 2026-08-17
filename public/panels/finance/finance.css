@@ -1,0 +1,113 @@
+.fin-toolbar {
+  display: flex;
+  gap: 1rem;
+  align-items: center;
+  flex-wrap: wrap;
+}
+
+.fin-select {
+  padding: 0.5rem 0.7rem;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  background: var(--ring-bg);
+  color: inherit;
+  font: inherit;
+}
+
+.fin-h2 { margin: 0 0 0.8rem; font-size: 0.95rem; opacity: 0.85; }
+
+.fin-note { font-size: 0.8rem; opacity: 0.7; line-height: 1.5; margin: 0.4rem 0 0.9rem; }
+.fin-dim { opacity: 0.45; margin-top: 0.8rem; }
+
+.fin-warn {
+  margin: 0.9rem 0 0;
+  padding: 0.7rem 0.85rem;
+  border-radius: 8px;
+  border-left: 3px solid var(--accent);
+  background: var(--accent-soft);
+  font-size: 0.82rem;
+  line-height: 1.5;
+}
+
+.fin-error { color: var(--accent); font-size: 0.86rem; }
+
+.fin-up   { color: var(--accent); }   /* spending up is not good news */
+.fin-down { color: var(--short); }
+.fin-flat { opacity: 0.5; }
+.fin-gone { opacity: 0.55; font-style: italic; }
+.fin-neg  { color: var(--accent); }
+
+.fin-bars { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 0.5rem; }
+
+.fin-bar-row {
+  display: grid;
+  grid-template-columns: 10rem minmax(0, 1fr) 11rem;
+  gap: 0.8rem;
+  align-items: center;
+  font-size: 0.85rem;
+}
+
+/* On a phone the label and value stack above a full-width bar — the server binds
+   0.0.0.0 precisely so this gets opened from the LAN. */
+@media (max-width: 700px) {
+  .fin-bar-row { grid-template-columns: minmax(0, 1fr) auto; }
+  /* Explicit order, because the track sits between the label and the value in the DOM:
+     left alone it lands on row 2 and pushes the amount down to a third row. Category and
+     amount belong on one line with the bar beneath them. */
+  .fin-bar-label { order: 1; }
+  .fin-bar-value { order: 2; text-align: right; }
+  .fin-bar-track { order: 3; grid-column: 1 / -1; }
+}
+
+.fin-bar-label { opacity: 0.85; }
+
+.fin-bar-track {
+  position: relative;
+  height: 1.35rem;
+  border-radius: 6px;
+  background: var(--ring-bg);
+  overflow: hidden;
+}
+
+/* Previous month sits behind as a pale reference; this month is drawn over it. Both are
+   scaled to the same maximum, so the two bars are directly comparable. */
+.fin-bar-prev,
+.fin-bar-now {
+  position: absolute;
+  inset: 0 auto 0 0;
+  border-radius: 6px;
+}
+/* Three surfaces have to be tellable apart: empty track, last month, this month. Measured,
+   three TINTS of one hue cannot be — the best single-opacity choice still only separated
+   them by 2.05:1, under the 3:1 WCAG asks of a graphical object, because the luminance
+   range simply is not there. So last month is a different TREATMENT rather than a
+   different shade: an outline, not a fill. Shape survives any palette. */
+.fin-bar-now {
+  background: var(--accent);
+  opacity: 0.9;
+}
+
+/* Last month is a TICK at the point it reached, not a second bar. Two reasons, both
+   measured. Three tints of one hue could not be separated (best case 2.05:1, under the
+   3:1 a graphical object needs). An outlined box fixed that against the empty track
+   (4.97:1) but scored 1.15:1 where it crossed the solid fill — invisible in exactly the
+   case that matters, which was 7 rows out of 7. A tick in --ink is 11.2:1 on the track
+   and 2.6:1 on the fill, is never painted over, and carries the only fact the reference
+   actually holds: where last month got to. */
+.fin-bar-prev {
+  background: var(--ink);
+  width: 2px !important;
+  border-radius: 0;
+  z-index: 1;
+  opacity: 0.9;
+}
+
+.fin-bar-value { display: flex; gap: 0.5rem; justify-content: flex-end; align-items: baseline; }
+.fin-bar-delta { font-size: 0.76rem; }
+
+.fin-cash-figure {
+  font-size: 1.6rem;
+  font-weight: 600;
+  margin: 0;
+  letter-spacing: -0.01em;
+}

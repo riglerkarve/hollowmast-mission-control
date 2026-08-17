@@ -1,0 +1,25 @@
+# Line endings, pinned deliberately.
+#
+# Without this, git's autocrlf converts on checkout and the next session sees every file
+# as modified without having touched one — a diff that hides the real change among 70
+# phantom ones.
+
+* text=auto
+
+# PowerShell stays CRLF. These run under Windows PowerShell 5.1 via Task Scheduler and
+# are the ops backbone; keep them in the form the platform expects. Note the separate,
+# stricter rule that already applies to them: they must be pure ASCII, because 5.1 reads
+# a BOM-less .ps1 as ANSI and a UTF-8 dash breaks the parse with no log output at all.
+*.ps1 text eol=crlf
+
+# Shell scripts stay LF even on Windows — CRLF breaks the shebang line.
+*.sh  text eol=lf
+
+# Databases and archives are binary; never try to convert or diff them. Belt and braces:
+# these are already excluded by .gitignore, and this stops a mistake there corrupting one.
+*.db     binary
+*.db-wal binary
+*.db-shm binary
+*.ods    binary
+*.png    binary
+*.jpg    binary

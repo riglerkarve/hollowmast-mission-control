@@ -315,6 +315,45 @@ having kinds at all.
 
 ---
 
+## Version control — and why .gitignore is a security control here
+
+`git init` on 18 Aug 2026. Two commits, no remote. Until then everything in this
+directory existed in exactly one copy: the nightly backup covers `data/dashboard.db`,
+not a single line of code.
+
+**`.gitignore` is not housekeeping in this repo.** Excluded, and each for a reason:
+
+| Excluded | Why |
+|---|---|
+| `data/*.db`, `-wal`, `-shm` | ten account-years, 6,839 real bank transactions, plus health and wellbeing data |
+| `data/gate-key.txt` | the LAN access secret — committing it publishes the gate |
+| `backups/` | 41 MB of copies of the same database |
+| `reports/` | the daily briefing and the tax reports quote real spending figures; both regenerate on demand |
+| `logs/`, `*.log` | can echo query strings and data values |
+| `node_modules/` | one dependency, no native builds |
+
+**Verified by VALUE, not by filename.** The live gate key was searched for as a string
+across all 70 staged files before the first commit, along with bank counterparties and
+sort-code patterns. The only hits were the categorisation rules table in
+`tools/seed-rules.cjs` — generic UK retailer names used as matching patterns, which is
+the feature itself — and `86400000`, milliseconds per day. Checking that
+`data/dashboard.db` is listed in `.gitignore` proves the rule exists; searching for the
+key's actual characters proves no copy leaked somewhere else.
+
+**There is no remote, deliberately.** Private-to-public stays available; history does not
+in practice, so the exclusions are set before anything could be pushed. If a remote is
+ever added, re-run the by-value scan first.
+
+`.gitattributes` pins line endings. Without it autocrlf converts on checkout and the next
+session opens to 70 files marked modified without having touched one, which buries a real
+change. `.ps1` is pinned CRLF (and separately must stay pure ASCII — PowerShell 5.1 reads
+a BOM-less file as ANSI); `.sh` is pinned LF, because CRLF breaks a shebang.
+
+**Still unversioned elsewhere in the workspace:** `thin-air`, `emberfall`, `Fallow`,
+`SecondBrain`. `Survive`, `income-portfolio` and `Mini Games` are repos.
+
+---
+
 ## Backups — do not break these
 
 `scripts/backup.js` runs nightly at **23:55 local** via the **MissionControl-Backup**

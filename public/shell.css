@@ -13,6 +13,17 @@
                           it has its own --sidebar-muted. Re-check with /tools/contrast.html. */
   --accent: #d9663d;
   --accent-soft: #f6ddd0;
+  /* THE ACCENT PLAYS TWO ROLES THAT PULL OPPOSITE WAYS, so it is two tokens.
+     --accent is the accent as INK -- text, borders, bar fills. On the DARK theme it sits on
+     dark grounds, so it must stay light: darkening it there took accent-on---bg from 6.49:1
+     to 3.95:1 and accent-on---card from 5.75 to 3.50, breaking three pairs that passed.
+     --accent-fill is the accent as a GROUND UNDER WHITE TEXT, and wants the opposite.
+     Measured 18 Aug: white on --accent was 3.55:1 light and 2.74:1 dark, failing AA on every
+     primary button and the active nav item -- 30 elements per theme. These values are the
+     smallest darkening along the same hue that clears 4.5:1 (light 4.54, dark 4.51).
+     Use --accent-fill ONLY where white text sits on it. Two rules do: .btn.primary and
+     .nav-item.active. */
+  --accent-fill: #bb5834;
   --work: #d9663d;
   --short: #4d8b6f;
   --long: #3f6fa6;
@@ -33,6 +44,7 @@
     --muted: #9a9c94;
     --accent: #e58259;
     --accent-soft: #3a2c26;
+    --accent-fill: #ac6243;
     --ring-bg: #2c2e32;
     --border: #2e3034;
     --sidebar-bg: #0f1011;
@@ -104,7 +116,7 @@ body {
 }
 
 .nav-item.active {
-  background: var(--accent);
+  background: var(--accent-fill);
   color: #fff;
 }
 

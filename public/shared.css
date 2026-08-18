@@ -84,8 +84,11 @@
 .btn:active { transform: scale(0.96); }
 
 .btn.primary {
-  background: var(--accent);
-  border-color: var(--accent);
+  /* --accent-fill, not --accent: white on the plain accent measures 3.55:1 light and
+     2.74:1 dark. See the token definition in shell.css for why this is a separate token
+     rather than a darker --accent. */
+  background: var(--accent-fill);
+  border-color: var(--accent-fill);
   color: #fff;
   min-width: 96px;
 }

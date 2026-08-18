@@ -144,3 +144,60 @@
 .fin-more { margin-top: 0.8rem; }
 .fin-more summary { font-size: 0.8rem; cursor: pointer; opacity: 0.8; }
 .fin-more summary:hover { opacity: 1; }
+
+/* ---------------------------------------------------------------------------------------
+   Who has read this ledger — backlog #14.
+
+   Appended at the end of the sheet, which is where a later rule WINS. That is exactly how
+   .bg-split silently broke the budget page grid on 17 Aug, so every class below is prefixed
+   .fin-a- / .fin-access- and was grepped against public/ before being written.
+
+   Colours come only from tokens that exist in shell.css. Five invented ones on a previous
+   pass rendered as nothing at all.
+   --------------------------------------------------------------------------------------- */
+.fin-access-list { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 0.5rem; }
+
+.fin-access-list li {
+  display: grid;
+  grid-template-columns: minmax(5rem, auto) minmax(7rem, auto) 1fr;
+  gap: 0.25rem 1rem;
+  align-items: baseline;
+  padding: 0.5rem 0.7rem;
+  background: var(--bg);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+}
+
+.fin-a-who { font-weight: 700; }
+/* Digits line up down the column, so a big number reads as big without being re-read. */
+.fin-a-counts { font-variant-numeric: tabular-nums; color: var(--ink); }
+/* break-word, NOT anywhere. `anywhere` split finance_transactions into "finance_transacti
+   / ons" mid-token at 664px, which reads as a different table name. break-word only breaks
+   a word that cannot fit on a line of its own. */
+.fin-a-tables { color: var(--muted); font-size: 0.85em; overflow-wrap: break-word; }
+.fin-a-since { color: var(--muted); font-size: 0.85em; margin: 0.6rem 0 0; }
+
+/* The caveat is rendered at full size and full contrast, NOT as fine print. A reader who
+   takes the counts above as a complete record of exposure has been misled by this panel,
+   so the limitation gets the same visual weight as the data it qualifies. --ink on
+   --accent-soft rather than --accent on it: the accent pairing measured 2.73:1 and failed
+   AA, this one clears it comfortably. */
+.fin-a-floor {
+  margin-top: 0.9rem;
+  padding: 0.8rem 0.9rem;
+  background: var(--accent-soft);
+  color: var(--ink);
+  border-radius: 8px;
+  font-size: 0.9em;
+}
+
+.fin-a-floor ul { margin: 0.4rem 0 0; padding-left: 1.1rem; display: flex; flex-direction: column; gap: 0.25rem; }
+
+/* 820px, not 640px. The breakpoint has to fire on the width of the PANEL, and the panel
+   sits inside a fixed 240px sidebar — so a 900px window leaves it about 660px, which is
+   where the three-column row started squeezing the table names into an unreadable wrap.
+   Measured at the width it actually breaks, not guessed from a device size. */
+@media (max-width: 820px) {
+  .fin-access-list li { grid-template-columns: 1fr; gap: 0.15rem; }
+  .fin-a-tables { font-size: 0.8em; }
+}

@@ -25,6 +25,7 @@ const scheduleRouter = require('./routes/schedule');
 const heartbeat = require('./heartbeat');
 const gate = require('./gate');
 const provenance = require('./provenance');
+const db = require('./db');
 
 const PORT = process.env.PORT || 3000;
 const HOST = '0.0.0.0';
@@ -46,6 +47,12 @@ app.use(express.json());
 
 // Who wrote this? Default unknown, never guessed. See server/provenance.js.
 app.use(provenance.middleware);
+
+// Carry that identity down into the database layer, so a read of a sensitive table is
+// attributed to whoever made the request rather than to the process. Backlog #14.
+// Mounted immediately after provenance and BEFORE the gate, so a request that is about to
+// be refused is still attributed — a rejected probe is exactly the access worth recording.
+app.use((req, res, next) => db.runAs(req.by, next));
 
 // The unlock page must be reachable before the gate, or there is no way through it.
 gate.mount(app);

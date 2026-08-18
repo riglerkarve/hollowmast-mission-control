@@ -811,3 +811,46 @@ function incomeForecast({ months = 12 } = {}) {
 
 router.get('/forecast', (req, res) => res.json(incomeForecast()));
 module.exports.incomeForecast = incomeForecast;
+
+// ---------------------------------------------------------------------------------------
+// WHO HAS READ THE LEDGER — backlog #14. The owner's decision on 17 Aug was that personal
+// finance data is ALLOWED to a frontier model, kept under review. This is the "under
+// review" half: without it, that decision can only ever be revisited from memory.
+//
+// The counting is db.js's, not this module's — it instruments every caller of the shared
+// database module, which is the only place that sees the server AND the tools alike. This
+// route only asks for the finance slice and shapes it for the panel. A second count here
+// would be a second owner for the same figure.
+router.get('/access-log', (req, res) => {
+  const days = Math.min(365, Math.max(1, Number(req.query.days) || 30));
+  const log = db.accessLog({ days, prefix: 'finance_' });
+
+  // Folded to one row per actor, since "who" is the question the item actually asks.
+  const byActor = new Map();
+  for (const r of log.rows) {
+    const a = byActor.get(r.actor) || { actor: r.actor, reads: 0, writes: 0, tables: new Set(), lastAt: null };
+    if (r.op === 'read') a.reads += r.n; else a.writes += r.n;
+    a.tables.add(r.table_name);
+    if (!a.lastAt || r.last_at > a.lastAt) a.lastAt = r.last_at;
+    byActor.set(r.actor, a);
+  }
+
+  const actors = [...byActor.values()]
+    .map((a) => ({ ...a, tables: [...a.tables].sort() }))
+    .sort((x, y) => (y.reads + y.writes) - (x.reads + x.writes));
+
+  res.json({
+    days,
+    actors,
+    rows: log.rows,
+    watching: log.watching,
+    // Absence and failure must not render the same: an empty log because nothing was read
+    // is a different statement from an empty log because logging only started today.
+    startedAt: db.prepare('SELECT MIN(day) AS d FROM data_access_log').get().d || null,
+    isFloor: log.isFloor,
+    blindTo: log.blindTo,
+    caveat: 'This is a FLOOR, never a total. Real exposure is at least this and cannot be '
+      + 'less. Anything that opens the database file without going through server/db.js is '
+      + 'invisible here, and no in-process log can change that.',
+  });
+});

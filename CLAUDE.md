@@ -240,6 +240,47 @@ Grep the stylesheet for a class name before adding one.
 
 ---
 
+## Who has read the ledger — the access log, and why it is instrumented in `db.js`
+
+`GET /api/finance/access-log`, shown as "Who has read this ledger" in the Money panel.
+Backlog #14. Your decision on 17 Aug was that personal finance data is **allowed** to a
+frontier model, kept under review. This is the "under review" half — the item's own words
+were that it means nothing without a log, or it is only a good intention.
+
+**Instrumented in `server/db.js`, not on the routes, and that choice is the whole point.**
+A route-level log would have looked immaculate and been mostly wrong. On 18 Aug I read this
+ledger three ways in one session:
+
+| How | Would a route log see it? |
+|---|---|
+| `GET /api/finance/*` | yes |
+| `require('../server/db')` in `tools/tax-year-report.cjs` | **no** |
+| a bare `node -e` script | **no** |
+
+Everything in this repo that touches the database goes through `db.js`, so that is the
+chokepoint that sees the server and every tool alike. Proven, not assumed: running the tax
+tool as a separate process moved `claude` from 6 reads to 17.
+
+**It is a floor, never a total, and the panel says so at full size.** Verified by doing the
+thing it claims not to see — a direct `new DatabaseSync` read of all 6,839 rows left the
+counter at 17, unchanged. A governance log that quietly under-reports is worse than none,
+because it manufactures confidence. So the caveat gets the same visual weight as the
+numbers, at 11.04:1 measured.
+
+**Two design details worth keeping.** Aggregated to one row per (day, table, actor, op),
+because a row per query would be a write for every read. And recorded at `prepare()` rather
+than execution, which slightly **over**-counts — the safe direction for an egress log.
+
+**It exposed a real gap in provenance.** `X-MC-By` was built to answer "who wrote this row",
+so panels send it on POST/PATCH only. Measured: **13 panels define their own `api()`
+wrapper and not one sent it on a GET.** Every time you opened the Money panel it was logged
+as `unknown` — precisely the actor the log exists to isolate. Fixed in the finance panel
+only; the other twelve still under-attribute their reads, which is harmless while
+`SENSITIVE_PREFIXES` is just `finance_` and becomes a bug the moment it is not.
+
+`unknown` is a real value and is never assumed to be you — same rule as the rest of
+provenance.
+
 ## The Backlog module, and the one-writer rule
 
 `/api/todo` + `public/panels/todo/` hold the 93-item backlog that used to live in

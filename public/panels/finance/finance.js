@@ -36,6 +36,11 @@ const TEMPLATE = `
       <h2 class="fin-h2">Services still charging you</h2>
       <div id="finRecurring"></div>
     </section>
+
+    <section class="card">
+      <h2 class="fin-h2">Who has read this ledger</h2>
+      <div id="finAccess"></div>
+    </section>
   </div>
 `;
 
@@ -47,7 +52,18 @@ const esc = (s) => String(s ?? '').replace(/[&<>"]/g, (c) => ({ '&': '&amp;', '<
 const gbp = (p) => `£${(Math.abs(p) / 100).toLocaleString('en-GB', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
 
 async function api(p) {
-  const res = await fetch(`/api/finance${p}`);
+  // The header goes on READS too, not just writes. Provenance was built to answer "who
+  // wrote this row", so panels send x-mc-by only on POST/PATCH — measured 18 Aug: 13 panels
+  // define their own api() wrapper and NOT ONE sends it on a GET. That was harmless while
+  // only writes were attributed. The access log (#14) reads it as well, and without this
+  // every time you opened this panel it was recorded as `unknown` — which is precisely the
+  // actor the log exists to isolate. A browser read looking identical to an unidentified
+  // caller makes the whole log unreadable.
+  //
+  // Fixed here only. The other twelve panels still under-attribute their reads, and that
+  // stays true until either a shared fetch helper exists or the watched-table list grows
+  // past finance_. Recorded rather than silently half-fixed.
+  const res = await fetch(`/api/finance${p}`, { headers: { 'x-mc-by': 'you' } });
   const body = await res.json().catch(() => null);
   if (!res.ok) throw new Error((body && body.error) || `HTTP ${res.status}`);
   return body;
@@ -203,6 +219,52 @@ async function loadRecurring() {
     <p class="fin-note fin-dim">${esc(d.basis)}</p>`;
 }
 
+// Backlog #14 — the "kept under review" half of allowing finance data to a frontier model.
+// The panel's job here is NOT to reassure. A reader who takes this as a complete record of
+// exposure has been misled, so the floor caveat is rendered at full size next to the
+// numbers rather than tucked under them.
+async function loadAccessLog() {
+  const box = root.querySelector('#finAccess');
+  let d;
+  try {
+    d = await api('/access-log');
+  } catch (err) {
+    // Could-not-look must not read like nothing-happened.
+    box.innerHTML = `<p class="fin-error">Could not read the access log: ${esc(err.message)}
+      — that is a failure to look, not a report that nothing read the ledger.</p>`;
+    return;
+  }
+
+  const total = d.actors.reduce((n, a) => n + a.reads + a.writes, 0);
+
+  // Three distinguishable states, not two. "Logging has not started" and "logging is on and
+  // saw nothing" are different facts and only one of them is reassuring.
+  const body = !d.startedAt
+    ? `<p class="empty-hint">Access logging has not recorded anything yet. It began with the
+         server it is running under — this is not a statement that the ledger was never read.</p>`
+    : !total
+      ? `<p class="empty-hint">Logging active since ${esc(d.startedAt)} and no reads of the
+           finance tables recorded in the last ${d.days} days.</p>`
+      : `<ul class="fin-access-list">${d.actors.map((a) => `
+          <li>
+            <span class="fin-a-who">${esc(a.actor)}</span>
+            <span class="fin-a-counts">${a.reads} read${a.reads === 1 ? '' : 's'}${
+              a.writes ? ` · ${a.writes} write${a.writes === 1 ? '' : 's'}` : ''}</span>
+            <span class="fin-a-tables">${esc(a.tables.join(', '))}</span>
+          </li>`).join('')}</ul>
+         <p class="fin-a-since">Since ${esc(d.startedAt)}, last ${d.days} days.
+           <b>unknown</b> means a caller that did not say who it was — never assumed to be you.</p>`;
+
+  box.innerHTML = `
+    ${body}
+    <div class="fin-a-floor">
+      <b>This is a floor, not a total.</b> Real access is at least this and cannot be less.
+      It counts every read that goes through the shared database module — the server and
+      every tool in this project — and it cannot see:
+      <ul>${d.blindTo.map((b) => `<li>${esc(b)}</li>`).join('')}</ul>
+    </div>`;
+}
+
 async function load() {
   const notice = root.querySelector('#finNotice');
   let d;
@@ -233,6 +295,9 @@ async function load() {
   // The services audit does not depend on the month or account selectors — it reads the
   // whole ledger — but it is loaded here so it can never be defined and left uncalled.
   loadRecurring();
+  // Same reason, same place. `loadRecurring` was itself shipped once defined-and-uncalled,
+  // which is a bug with no error message and no visible symptom beyond an empty box.
+  loadAccessLog();
 }
 
 export default {

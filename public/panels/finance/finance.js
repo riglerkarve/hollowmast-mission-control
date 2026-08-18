@@ -38,6 +38,11 @@ const TEMPLATE = `
     </section>
 
     <section class="card">
+      <h2 class="fin-h2">What comes in</h2>
+      <div id="finForecast"></div>
+    </section>
+
+    <section class="card">
       <h2 class="fin-h2">What you have</h2>
       <div id="finWorth"></div>
       <details class="fin-nw-add">
@@ -243,6 +248,71 @@ async function loadRecurring() {
     <p class="fin-note fin-dim">${esc(d.basis)}</p>`;
 }
 
+// Backlog #36. The route has existed and returned 200 since it was written, and was shown
+// NOWHERE — the sixth built-and-unconnected capability found in this project. The work here
+// is displaying it.
+//
+// The item's own rationale set the constraint: "forecast only what is regular, and show the
+// residual." So the projection and the residual are rendered at the SAME visual weight. A
+// projection shown large with its residual in small print is the failure mode — it invites
+// reading the projection as income, which is exactly what it is not.
+async function loadForecast() {
+  const box = root.querySelector('#finForecast');
+  let d;
+  try {
+    d = await api('/forecast');
+  } catch (err) {
+    box.innerHTML = `<p class="fin-error">Could not compute the forecast: ${esc(err.message)}
+      — a failure to compute, not a report that nothing comes in.</p>`;
+    return;
+  }
+
+  if (d.state && d.state !== 'ok') {
+    box.innerHTML = `<p class="empty-hint">Not enough complete months to say anything yet.</p>`;
+    return;
+  }
+
+  // A VARIABILITY FIGURE IS SUPPRESSED BELOW THE MONTH MINIMUM, not just noted elsewhere.
+  // Gambling has one observation, so its coefficient of variation is 0.000 — mathematically
+  // correct and read as "±0%, perfectly predictable", which made it look like the steadiest
+  // income on the card. One point cannot vary. The count is the honest thing to show, and
+  // the reason it is held back belongs in the row rather than only in the basis text below.
+  const MIN_MONTHS = 6;
+  const vary = (r) => {
+    if (r.months < MIN_MONTHS) return `too few months to judge how much it varies`;
+    if (r.cv === null) return 'variability unmeasurable';
+    return `varies ±${Math.round(r.cv * 100)}%`;
+  };
+
+  const row = (r, kind) => `
+    <li class="fin-fc-${kind}">
+      <span class="fin-fc-cat">${esc(r.category)}</span>
+      <span class="fin-fc-amt">${gbp(r.mean)}<span class="fin-fc-per">/mo</span></span>
+      <span class="fin-fc-var">${r.months} month${r.months === 1 ? '' : 's'} · ${esc(vary(r))}</span>
+    </li>`;
+
+  box.innerHTML = `
+    <div class="fin-fc-heads">
+      <div class="fin-fc-head">
+        <span class="fin-fc-label">Regular enough to project</span>
+        <b class="fin-fc-big">${gbp(d.projectedMonthlyPence)}<span class="fin-fc-per">/mo</span></b>
+      </div>
+      <div class="fin-fc-head">
+        <span class="fin-fc-label">Arrives, but not predictably</span>
+        <b class="fin-fc-big fin-fc-residual">${gbp(d.residualMonthlyPence)}<span class="fin-fc-per">/mo</span></b>
+      </div>
+    </div>
+
+    <ul class="fin-fc-list">
+      ${d.projected.map((r) => row(r, 'proj')).join('')}
+      ${d.residual.map((r) => row(r, 'res')).join('')}
+    </ul>
+
+    ${d.warning ? `<p class="fin-fc-warn"><b>${esc(d.warning)}</b></p>` : ''}
+    <p class="fin-note">${esc(d.basis)}</p>
+    <p class="fin-note fin-dim">${esc(d.excludedNote)}</p>`;
+}
+
 // Backlog #77. Two halves that are never merged into one undated figure: cash derived from
 // the ledger, and holdings you typed. The staleness of each is shown, because a total
 // assembled from figures dated across three months is not a figure about today.
@@ -387,6 +457,7 @@ async function load() {
   // which is a bug with no error message and no visible symptom beyond an empty box.
   loadAccessLog();
   loadWorth();
+  loadForecast();
 }
 
 export default {

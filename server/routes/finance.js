@@ -760,11 +760,16 @@ module.exports.EXPOSURE_ROUTES = EXPOSURE_ROUTES;
 // The standing rule is never to present a forecast from thin data. 63 months is not thin —
 // but thinness was never the only risk. The measured position on 18 Aug:
 //
-//   Benefits         coefficient of variation 0.226   near-deterministic
-//   Income - people  coefficient of variation 1.538   seven times more variable
+//   Benefits         coefficient of variation 0.147   near-deterministic
+//   Income - people  coefficient of variation 1.539   ten times more variable
 //
 // So benefits are projected and nothing else is. The residual is reported beside it, at its
 // full size, so the projection can never be mistaken for total income.
+//
+// Those two figures were 0.226 and 1.538 in this comment and in the `basis` string until
+// 18 Aug, when the route was finally displayed and the prose was checked against the
+// output it describes. The string now computes them; this comment is a snapshot and says
+// so. If they disagree again, the string is right.
 //
 // PARTIAL MONTHS ARE EXCLUDED, and this is the trap that would have made it wrong. The
 // ledger is an import: its final month is always incomplete. August 2026 shows £394.65 from
@@ -820,10 +825,20 @@ function incomeForecast({ months = 12 } = {}) {
     residual,
     projectedMonthlyPence: projectedTotal,
     residualMonthlyPence: residualTotal,
+    // COMPUTED, not typed. This sentence carried "Benefits 0.226" and "Income - people
+    // 1.538" as literals; the live figures are 0.147 and 1.539, so the prose describing the
+    // rule disagreed with the rule's own output — by a third, on the number that decides
+    // whether a category is projected at all. A figure written into a sentence is accurate
+    // exactly once. Same defect as the hard-coded GBP 22,628 in the MTD check, same day.
     basis: `Only categories with 6+ complete months and a coefficient of variation at or `
-      + `below ${CV_REGULAR} are projected. Measured now: Benefits 0.226 (near-deterministic), `
-      + 'Income - people 1.538 — seven times more variable, so it is reported as residual and '
-      + 'never added to the projection.',
+      + `below ${CV_REGULAR} are projected. Measured now: `
+      + (projected.length
+        ? projected.map((p) => `${p.category} ${p.cv.toFixed(3)}`).join(', ')
+        : 'nothing qualifies')
+      + (residual.length
+        ? `. Held back as residual: ${residual.map((r) => `${r.category} ${r.cv === null ? 'cv unmeasurable' : r.cv.toFixed(3)}${r.months < 6 ? ` (only ${r.months} month${r.months === 1 ? '' : 's'})` : ''}`).join(', ')}`
+        : '')
+      + '. Residual is never added to the projection.',
     excludedNote: `${lastMonth} is EXCLUDED because the ledger ends ${span.last}, mid-month. `
       + 'Its partial total would drag the mean down by hundreds of pounds and the projection '
       + 'with it — plausibly, and without erroring.',

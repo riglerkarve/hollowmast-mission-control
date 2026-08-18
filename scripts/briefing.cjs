@@ -302,7 +302,33 @@ function render(facts, prose) {
   return L.join('\n');
 }
 
+
+// Pull new mail as part of the ONE daily pass, rather than adding a sixth scheduled task.
+// Five already exist and every one added is another thing that can silently stop.
+//
+// Run as a CHILD PROCESS, not require()d: tools/import-gmail.cjs is both a CLI and a
+// library, so requiring it executes the CLI. And it is wrapped so that no mail failure can
+// take the briefing down -- an expired token must cost you the mail figures, never the
+// morning report. A failure is LOGGED rather than swallowed, because a sync that silently
+// stopped and a mailbox with no new mail produce the same row count.
+async function syncGmail() {
+  const { execFile } = require('node:child_process');
+  const script = path.join(ROOT, 'tools', 'import-gmail.cjs');
+  if (!fs.existsSync(script)) { console.log('gmail: importer absent, skipped'); return; }
+  await new Promise((resolve) => {
+    execFile(process.execPath, [script, '--max', '1500'], { timeout: 240000, cwd: ROOT },
+      (err, stdout, stderr) => {
+        const nl = String.fromCharCode(10);
+        const tail = String(stdout || '').trim().split(nl).filter((l) => l.indexOf('new,') >= 0);
+        if (err) console.log(`gmail: FAILED -- ${String(err.message).slice(0, 120)}`);
+        else if (tail.length) tail.forEach((l) => console.log(`gmail: ${l.trim()}`));
+        else console.log(`gmail: ran but reported nothing -- ${String(stderr || '').slice(0, 100)}`);
+        resolve();
+      });
+  });
+}
 async function main() {
+  await syncGmail();          // before gatherFacts, so today's figures include today's mail
   const facts = gatherFacts();
   const prose = await writeProse(facts);
   const md = render(facts, prose);

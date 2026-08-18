@@ -143,6 +143,9 @@ async function importAccount(account) {
     if (p.ok) { const pb = await p.json(); estimate = pb.messagesTotal ?? null; }
   }
 
+  const heldIds = new Set(db.prepare('SELECT id FROM gmail_messages WHERE account = ?')
+    .all(account).map((r) => r.id));
+  let stoppedEarly = false;
   const ids = [];
   let pageToken = null;
   do {
@@ -152,8 +155,21 @@ async function importAccount(account) {
     const r = await fetch(u, { headers: { authorization: `Bearer ${token}` } });
     if (!r.ok) return { account, ok: false, why: `list ${r.status}: ${(await r.text()).slice(0, 160)}` };
     const b = await r.json();
-    (b.messages || []).forEach((m) => ids.push(m.id));
+    const page = (b.messages || []).map((m) => m.id);
+    page.forEach((id) => ids.push(id));
     pageToken = b.nextPageToken;
+    // STOP ONCE A WHOLE PAGE IS ALREADY HELD. Gmail lists newest first, so a page with no
+    // unknown id means everything past it is known too.
+    //
+    // This is the high-water mark the comment above USED to claim while the code did not
+    // have it: stopAt was computed and then only reported. Every incremental run re-listed
+    // and re-fetched a full --max and let INSERT ... ON CONFLICT discard the duplicates,
+    // which is invisible because the row count still comes out right. Measured before the
+    // fix: listed 300, wrote 11.
+    //
+    // It keys on IDS rather than dates because this token holds the gmail.metadata scope,
+    // and Gmail rejects a `q` search parameter under it with 403 -- verified, not assumed.
+    if (stopAt && page.length && page.every((id) => heldIds.has(id))) { stoppedEarly = true; break; }
   } while (pageToken && ids.length < MAX);
 
   if (DRY) {
@@ -229,7 +245,13 @@ async function importAccount(account) {
     account, ok: true, listed: ids.length, alreadyHeld: held0, written, failed, held,
     mailboxEstimate: estimate,
     coverage: estimate ? +(100 * held / estimate).toFixed(1) : null,
-    stoppedBecause: ids.length >= MAX ? `hit the --max ${MAX} budget for this run` : 'listed everything Gmail offered',
+    // THREE outcomes, not two. 'Hit the budget' was printed for a run that fetched 7
+    // messages, because ids.length >= MAX was true of the LISTING while the writes were
+    // almost all duplicates -- a true statement about the wrong quantity, and it reads as
+    // a backlog that is not there.
+    stoppedBecause: stoppedEarly ? 'stopped: a whole page was already held, so everything past it is too'
+      : ids.length >= MAX ? `hit the --max ${MAX} budget for this run`
+      : 'listed everything Gmail offered',
     priorHighWater: stopAt || null,
   };
 }

@@ -157,3 +157,11 @@ body {
   align-items: center;
   text-decoration: none;
 }
+
+/* Quiet hours (backlog #29). Plain and calm — no dimming, no countdown, no persuasion.
+   The override button is the same primary button as everywhere else, at full size and
+   full contrast: a dismissal that is hard to find is a lock wearing a friendly label. */
+.quiet-card { max-width: 30rem; text-align: left; }
+.quiet-h1 { font-size: 1.2rem; font-weight: 700; margin: 0 0 0.4rem; }
+.quiet-p { font-size: 0.9rem; margin: 0 0 0.5rem; }
+.quiet-sub { font-size: 0.78rem; opacity: 0.65; margin: 0 0 1rem; }

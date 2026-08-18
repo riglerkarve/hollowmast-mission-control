@@ -461,6 +461,38 @@ Each check returns one of **three** states — `fires`, `clear`, or `error` — 
 itself immediately: `budget.breaches()` threw on its first run (an omitted month reaching
 SQLite as `undefined`) and surfaced as `error` instead of passing silently as `clear`.
 
+### Quiet hours: a curtain, never a lock
+
+Backlog #29, "enforce time away". Its own rationale was the specification: *a limit you set
+in advance and can always override — not a lock you cannot open, because a wellbeing feature
+that traps you is the failure mode, not the feature.*
+
+`wellbeing_quiet` (migration 3) holds one row. **Off by default** — a boundary nobody asked
+for is an imposition.
+
+Every property is a refusal as much as a feature:
+
+- **It gates the UI only.** `/api/*` is never blocked, because the watchdog, the briefing
+  and the nightly backup run through it. A wellbeing setting must not be able to take the
+  ops chain down at 23:00. Verified: with the curtain active, `/api/status`, `/api/todo`
+  and `/api/briefing/latest` all still answered 200.
+- **The override is one click, full size, always visible, never delayed.** A dismissal that
+  is hard to find is a lock wearing a friendly label.
+- **Nothing is recorded about it.** No override count, no adherence, no streak. There is a
+  settings row and no event log, deliberately: the moment a "you ignored quiet hours four
+  times this week" figure exists, the feature has become a judgement about the user.
+- **If the check itself fails, the curtain does not close.** A broken fetch must never lock
+  you out of your own dashboard.
+- The override lasts for one page view — not persisted, so it cannot silently stay off
+  forever; not re-prompted, so it does not nag once answered.
+
+Two bugs caught before shipping. The overnight window (23:00–07:00) crosses midnight, so the
+test is an OR, not an AND — inverted, quiet hours would have been the only time the
+dashboard worked; nine cases now cover both window shapes and the disabled case. And
+`String(message)` turned an explicit JSON `null` into the string `"null"`, which is truthy,
+so the curtain would have displayed the word "null" as its message: clearing a value and
+omitting one are different requests.
+
 ### Self-care lives in wellbeing, not beside the bins
 
 The original todo read "chores, laundry, bins, **shower**". Shower is the one item on that

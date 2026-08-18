@@ -55,6 +55,37 @@ db.migrate('wellbeing', [
   (d) => {
     d.exec(`ALTER TABLE wellbeing_entries ADD COLUMN self_care TEXT;`);
   },
+
+  // 3 — quiet hours. Backlog #29, "enforce time away", and the item's own rationale is the
+  // specification: "I will build a limit you set in advance and can always override. I will
+  // NOT build a lock you cannot open: a wellbeing feature that traps you is the failure
+  // mode, not the feature."
+  //
+  // So every property here is a refusal as much as a feature:
+  //
+  //   - It gates the UI ONLY. /api/* is never blocked, because the watchdog, the briefing
+  //     and the backup run through it and a wellbeing setting must not be able to take the
+  //     ops chain down at 23:00.
+  //   - The override is one click, always visible, never delayed and never counted. A
+  //     dismissal that costs three seconds is a dark pattern; a dismissal that gets tallied
+  //     is a compliance score, and this module does not score.
+  //   - NOTHING IS RECORDED about it — not overrides, not adherence, not streaks. The
+  //     moment a "you ignored quiet hours 4 times this week" figure exists, the feature has
+  //     become a judgement about the user, which is the line this whole module sits behind.
+  //   - Off by default. A boundary nobody asked for is an imposition.
+  (d) => {
+    d.exec(`
+      CREATE TABLE wellbeing_quiet (
+        id       INTEGER PRIMARY KEY CHECK (id = 1),   -- single row, deliberately
+        enabled  INTEGER NOT NULL DEFAULT 0,
+        from_hm  TEXT NOT NULL DEFAULT '23:00',
+        to_hm    TEXT NOT NULL DEFAULT '07:00',
+        message  TEXT,
+        set_at   TEXT NOT NULL DEFAULT (datetime('now', 'localtime'))
+      );
+      INSERT INTO wellbeing_quiet (id, enabled) VALUES (1, 0);
+    `);
+  },
 ]);
 
 const router = express.Router();
@@ -89,6 +120,56 @@ const SUPPORT = {
 router.get('/support', (req, res) => res.json(SUPPORT));
 
 // ---------------------------------------------------------------------------- capture
+// ------------------------------------------------------------------------------ quiet
+const HM = /^([01]\d|2[0-3]):[0-5]\d$/;
+
+// Inside the window, handling the overnight case where 'from' is later than 'to'.
+function withinQuiet(row, now = new Date()) {
+  if (!row || !row.enabled) return false;
+  const hm = `${String(now.getHours()).padStart(2, '0')}:${String(now.getMinutes()).padStart(2, '0')}`;
+  // 23:00 -> 07:00 crosses midnight, so the test is an OR rather than an AND. Getting this
+  // backwards would make the quiet window the only time the dashboard was available.
+  return row.from_hm <= row.to_hm
+    ? hm >= row.from_hm && hm < row.to_hm
+    : hm >= row.from_hm || hm < row.to_hm;
+}
+
+router.get('/quiet', (req, res) => {
+  const row = db.prepare('SELECT * FROM wellbeing_quiet WHERE id = 1').get();
+  res.json({
+    enabled: !!row.enabled,
+    from: row.from_hm,
+    to: row.to_hm,
+    message: row.message,
+    active: withinQuiet(row),
+    contract: 'A limit you set and can always override in one click. It gates this page only '
+      + '— never /api, because the watchdog and the briefing run through there. Nothing about '
+      + 'whether you observe it is recorded, now or ever.',
+  });
+});
+
+router.put('/quiet', (req, res) => {
+  const { enabled, from, to, message } = req.body || {};
+  if (from !== undefined && !HM.test(String(from))) return res.status(400).json({ error: 'from must be HH:MM' });
+  if (to !== undefined && !HM.test(String(to))) return res.status(400).json({ error: 'to must be HH:MM' });
+
+  const cur = db.prepare('SELECT * FROM wellbeing_quiet WHERE id = 1').get();
+  db.prepare(
+    `UPDATE wellbeing_quiet SET enabled = ?, from_hm = ?, to_hm = ?, message = ?,
+            set_at = datetime('now','localtime') WHERE id = 1`
+  ).run(
+    enabled === undefined ? cur.enabled : (enabled ? 1 : 0),
+    from === undefined ? cur.from_hm : String(from),
+    to === undefined ? cur.to_hm : String(to),
+    // `message === undefined ? ... : String(message)` turned an explicit JSON null into the
+    // STRING "null", which is truthy, so the curtain would have rendered the word "null" as
+    // its message. Clearing a value and omitting it are different requests and must stay so.
+    message === undefined ? cur.message : (message === null ? null : (String(message).trim() || null))
+  );
+  const row = db.prepare('SELECT * FROM wellbeing_quiet WHERE id = 1').get();
+  res.json({ enabled: !!row.enabled, from: row.from_hm, to: row.to_hm, message: row.message, active: withinQuiet(row) });
+});
+
 router.post('/entries', (req, res) => {
   const { mood, note, date, selfCare } = req.body || {};
   const d = /^\d{4}-\d{2}-\d{2}$/.test(date || '') ? date : today();

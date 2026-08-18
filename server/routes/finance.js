@@ -727,3 +727,87 @@ router.get('/exposure', (req, res) => {
 });
 
 module.exports.EXPOSURE_ROUTES = EXPOSURE_ROUTES;
+
+// ------------------------------------------------------------------------- forecast
+// INCOME PATTERNS. Backlog #36, whose rationale drew the line and this obeys it:
+// "Forecast only what is regular, and show the residual."
+//
+// The standing rule is never to present a forecast from thin data. 63 months is not thin —
+// but thinness was never the only risk. The measured position on 18 Aug:
+//
+//   Benefits         coefficient of variation 0.226   near-deterministic
+//   Income - people  coefficient of variation 1.538   seven times more variable
+//
+// So benefits are projected and nothing else is. The residual is reported beside it, at its
+// full size, so the projection can never be mistaken for total income.
+//
+// PARTIAL MONTHS ARE EXCLUDED, and this is the trap that would have made it wrong. The
+// ledger is an import: its final month is always incomplete. August 2026 shows £394.65 from
+// one payment because the data stops on the 11th — including it drags the mean down by about
+// £950 and the projection with it, silently and plausibly.
+function incomeForecast({ months = 12 } = {}) {
+  const span = ledgerSpan();
+  if (!span.rows) return { state: 'empty' };
+
+  // A month is complete only if the ledger reaches its final day.
+  const lastMonth = span.last.slice(0, 7);
+  const rows = db.prepare(
+    `SELECT substr(date,1,7) AS month, category, SUM(amount_pence) AS pence, COUNT(*) AS n
+       FROM finance_transactions
+      WHERE amount_pence > 0 AND category IS NOT NULL AND category <> 'Own transfer'
+        AND substr(date,1,7) < ?
+        AND date >= date(?, '-' || ? || ' months')
+      GROUP BY month, category`
+  ).all(lastMonth, span.last, months);
+
+  const byCat = {};
+  for (const r of rows) {
+    (byCat[r.category] = byCat[r.category] || []).push(r.pence);
+  }
+
+  const stat = (v) => {
+    const mean = v.reduce((a, b) => a + b, 0) / v.length;
+    const sd = Math.sqrt(v.reduce((s, x) => s + (x - mean) ** 2, 0) / v.length);
+    return { mean: Math.round(mean), sd: Math.round(sd), cv: mean ? sd / mean : null, months: v.length };
+  };
+
+  // The threshold is stated, not hidden: below it a category is regular enough that a
+  // monthly figure means something; above it the mean describes nothing you would recognise.
+  const CV_REGULAR = 0.35;
+
+  const projected = [];
+  const residual = [];
+  for (const [category, v] of Object.entries(byCat)) {
+    const s = stat(v);
+    // Fewer than 6 complete months is not enough to call anything regular, whatever the CV.
+    const regular = s.months >= 6 && s.cv !== null && s.cv <= CV_REGULAR;
+    (regular ? projected : residual).push({ category, ...s, regular });
+  }
+
+  const projectedTotal = projected.reduce((s, p) => s + p.mean, 0);
+  const residualTotal = residual.reduce((s, p) => s + p.mean, 0);
+
+  return {
+    state: 'ok',
+    completeMonthsUsed: Math.max(0, ...Object.values(byCat).map((v) => v.length)),
+    excludedMonth: lastMonth,
+    projected,
+    residual,
+    projectedMonthlyPence: projectedTotal,
+    residualMonthlyPence: residualTotal,
+    basis: `Only categories with 6+ complete months and a coefficient of variation at or `
+      + `below ${CV_REGULAR} are projected. Measured now: Benefits 0.226 (near-deterministic), `
+      + 'Income - people 1.538 — seven times more variable, so it is reported as residual and '
+      + 'never added to the projection.',
+    excludedNote: `${lastMonth} is EXCLUDED because the ledger ends ${span.last}, mid-month. `
+      + 'Its partial total would drag the mean down by hundreds of pounds and the projection '
+      + 'with it — plausibly, and without erroring.',
+    warning: residualTotal > projectedTotal
+      ? 'The residual is LARGER than the projection. Most of what arrives is not regular, so '
+        + 'the projected figure is a floor at best and must not be read as expected income.'
+      : undefined,
+  };
+}
+
+router.get('/forecast', (req, res) => res.json(incomeForecast()));
+module.exports.incomeForecast = incomeForecast;

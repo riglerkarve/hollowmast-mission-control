@@ -13,6 +13,36 @@ const MOODS = [
   [1, 'rough'], [2, 'low'], [3, 'ok'], [4, 'good'], [5, 'great'],
 ];
 
+// Backlog #32, "the what is on your mind prompt". The note box was already this; what it
+// lacked was an actual QUESTION — "Anything you want to write down" is a form field, and a
+// blank box asks nothing.
+//
+// All of these are open, none assumes a mood, and none reacts to anything. That is the
+// constraint: the module may not respond to what the data says, so a prompt cannot become
+// "rough week — want to talk about it?" no matter how kindly meant.
+//
+// AND THERE IS DELIBERATELY NO NAG. The item asked for "a nudge", and the honest reading is
+// that the prompt IS the nudge. A reminder keyed to silence — "you have not written in five
+// days" — reacts to your data, which this module does not do, and it arrives on exactly the
+// days someone is least able to meet it. The invitation sits there and waits instead.
+const OPENERS = [
+  'What is on your mind?',
+  'Anything worth writing down?',
+  'How has today actually been?',
+  'What is taking up room in your head?',
+  'Anything you want out of your head and onto a page?',
+  'What happened today that you might want to remember?',
+  'Anything you would tell someone about today?',
+];
+
+// Rotates by date, not at random: the same day gives the same question, so a reload does
+// not shuffle the page under you, and nothing here needs Math.random.
+function openerForToday() {
+  const d = new Date();
+  const dayNumber = Math.floor(Date.parse(`${d.toISOString().slice(0, 10)}T00:00:00Z`) / 86400000);
+  return `${OPENERS[dayNumber % OPENERS.length]}  Optional, and private to this machine.`;
+}
+
 const TEMPLATE = `
   <div class="panel panel-wide">
     <div class="panel-header">
@@ -26,7 +56,11 @@ const TEMPLATE = `
       <div class="wb-moods" id="wbMoods">
         ${MOODS.map(([v, l]) => `<button class="wb-mood" data-mood="${v}"><span class="wb-mood-n">${v}</span><span class="wb-mood-l">${l}</span></button>`).join('')}
       </div>
-      <textarea id="wbNote" class="wb-note" rows="3" placeholder="Anything you want to write down. Optional, and private to this machine."></textarea>
+      <!-- Not escaped, deliberately: TEMPLATE is evaluated at module load, and esc is a
+           const declared below it, so calling it here throws on the temporal dead zone.
+           These are static literals in this file with no quotes or angle brackets — the
+           moment one comes from anywhere else, this needs escaping and a different order. -->
+      <textarea id="wbNote" class="wb-note" rows="3" placeholder="${openerForToday()}"></textarea>
       <input id="wbSelfCare" class="wb-selfcare" type="text"
              placeholder="Looked after yourself today? Optional — free text, nothing is scheduled or counted.">
       <div class="wb-actions">

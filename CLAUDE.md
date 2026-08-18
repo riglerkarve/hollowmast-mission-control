@@ -43,7 +43,7 @@ Because of that bind, everything below `server/gate.js` is behind a shared secre
   land in browser history or the access log.
 
 **Why a cookie and not a header.** There is no shared fetch helper in `public/` —
-`shared.js` is a chart renderer, and each of the thirteen panels defines its own local
+`shared.js` is a chart renderer, and each of the fourteen panels defines its own local
 `api()` wrapper. A cookie is attached by the browser to all of them, so the gate needed
 **zero panel edits**. Anything scripted can send `X-MC-Key` instead.
 
@@ -101,9 +101,11 @@ alerts    alert_kinds · alert_events
 goals     goals · goal_steps
 schedule  schedule_events
 safety    safety_limits · safety_payees · safety_decisions
+atlas     atlas_countries
+browsing  browsing_domains
 briefing  briefings
 brain     brain_flags
-wellbeing wellbeing_entries
+wellbeing wellbeing_entries · wellbeing_quiet
 health    health_metrics
 ```
 

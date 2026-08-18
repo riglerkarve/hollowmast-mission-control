@@ -112,7 +112,7 @@ function createPanel() {
     el.startPauseBtn.textContent = running ? 'Pause' : 'Start';
     const modeColors = { work: '#d9663d', short: '#4d8b6f', long: '#3f6fa6' };
     el.ring.style.stroke = modeColors[mode];
-    document.title = running ? `${formatTime(secondsLeft)} · Focus Flow` : 'Business Dashboard';
+    document.title = running ? `${formatTime(secondsLeft)} · Focus Flow` : 'Mission Control';
   }
 
   function renderTasks() {
@@ -328,7 +328,7 @@ function createPanel() {
 
     unmount() {
       clearInterval(tickHandle);
-      document.title = 'Business Dashboard';
+      document.title = 'Mission Control';
     },
   };
 }

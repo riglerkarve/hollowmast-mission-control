@@ -35,7 +35,7 @@ const FILES = new Set([
 ]);
 
 // Directories those pages may draw assets from. Deliberately narrow: docs/ and the game
-// folder, never a project root and never business-dashboard.
+// folder, never a project root and never mission-control.
 const DIRS = [
   'Mini Games/',
   'Oxford AutoWorks/docs/telemetry/',
@@ -64,7 +64,7 @@ function resolveAllowed(urlPath) {
   let rel = decodeURIComponent(urlPath).replace(/^\/+/, '');
   if (rel === '' || rel.endsWith('/')) rel += 'index.html';
 
-  // Normalise BEFORE testing membership, or "Mini Games/../business-dashboard/data/x.db"
+  // Normalise BEFORE testing membership, or "Mini Games/../mission-control/data/x.db"
   // passes a prefix check and then resolves somewhere else entirely.
   const abs = path.resolve(ROOT, rel);
   const norm = path.relative(ROOT, abs).split(path.sep).join('/');

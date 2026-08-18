@@ -101,9 +101,13 @@
   box-shadow: 0 1px 3px rgba(0,0,0,0.08);
 }
 
+/* Wrap: a fixed row of stat blocks overflowed the PAGE by 90px at 376px wide. Four
+   figures at 1.6rem will not fit a phone on one line, and the body must never scroll
+   sideways to accommodate them. */
 .stats-summary {
   display: flex;
-  gap: 24px;
+  flex-wrap: wrap;
+  gap: 12px 24px;
   margin-bottom: 20px;
 }
 

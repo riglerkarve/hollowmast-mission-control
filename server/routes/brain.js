@@ -169,7 +169,7 @@ function writeFlagsFile() {
   const L = [
     '# Flags on memory — set by the user, via Mission Control',
     '',
-    'GENERATED FILE. Written by `business-dashboard/server/routes/brain.js`; do not hand-edit,',
+    'GENERATED FILE. Written by `mission-control/server/routes/brain.js`; do not hand-edit,',
     'it is rebuilt in full from the database on every change.',
     '',
     'These are the user\'s corrections to memories Claude wrote. **A memory flagged `wrong`',

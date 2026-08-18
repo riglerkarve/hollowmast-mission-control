@@ -165,3 +165,19 @@ body {
 .quiet-h1 { font-size: 1.2rem; font-weight: 700; margin: 0 0 0.4rem; }
 .quiet-p { font-size: 0.9rem; margin: 0 0 0.5rem; }
 .quiet-sub { font-size: 0.78rem; opacity: 0.65; margin: 0 0 1rem; }
+
+/* Chart tooltips are removed on narrow screens, and that is a fix rather than a
+   concession. They are opacity:0 until :hover, but an invisible absolutely-positioned
+   element still contributes to scrollWidth — measured, they pushed the page 112px wide at
+   376px. And a hover tooltip cannot be reached on a touch screen at all, so at this width
+   it was dead weight whose only effect was to make the whole page scroll sideways.
+   display:none removes it from layout entirely; opacity and visibility do not. */
+@media (max-width: 640px) {
+  .bar-tooltip { display: none; }
+
+  /* Thirty bars do not fit a phone, so the CHART scrolls rather than the page. Scoped to
+     this breakpoint deliberately: overflow-x creates a scroll container that would clip a
+     tooltip vertically, and tooltips are already removed at this width, so the two rules
+     cannot conflict. Above 640px the chart fits and neither rule applies. */
+  .bar-chart { overflow-x: auto; }
+}

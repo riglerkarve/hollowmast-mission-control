@@ -229,3 +229,21 @@
   border-radius: 4px;
   color: var(--ink);
 }
+
+/* #24 — where the work goes. One neutral bar colour: a cluster with more closures is not
+   better than one with fewer, it is just different work, and a colour scale would say
+   otherwise. Appended at the very end so it cannot be overridden by an earlier rule, and
+   the narrow-width override sits after it for the same reason. */
+.td-clusters { list-style: none; margin: .5rem 0 0; padding: 0; display: flex; flex-direction: column; gap: .25rem; }
+.td-cl { display: grid; grid-template-columns: minmax(0, 10rem) minmax(0, 1fr) auto auto; gap: .6rem; align-items: center; font-size: .84rem; }
+.td-cl-name { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.td-cl-bar { background: var(--ring-bg); border-radius: 999px; height: .45rem; overflow: hidden; }
+.td-cl-fill { display: block; height: 100%; background: var(--accent); border-radius: 999px; }
+.td-cl-n { font-variant-numeric: tabular-nums; min-width: 4.5rem; text-align: right; }
+.td-cl-open { font-variant-numeric: tabular-nums; min-width: 4rem; text-align: right; color: var(--muted); }
+.td-caveat { margin: .8rem 0 0; padding: .6rem .75rem; background: var(--ring-bg); border-radius: 8px; color: var(--ink); font-size: .84rem; }
+
+@media (max-width: 760px) {
+  .td-cl { grid-template-columns: 1fr auto; }
+  .td-cl-bar, .td-cl-open { display: none; }
+}

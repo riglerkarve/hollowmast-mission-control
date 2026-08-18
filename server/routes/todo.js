@@ -863,5 +863,55 @@ function decidedSince(sinceIso) {
   return { byStatus: rows, undated };
 }
 
+
+// #24, the half that is honest today. Where the work actually goes, counted over the
+// cluster vocabulary the backlog already carries -- nothing here is weighted, scored or
+// levelled, and no number is invented.
+//
+// THE OTHER HALF OF #24 IS DELIBERATELY ABSENT. XP and levels need a curve, and a curve is
+// a coefficient somebody chooses; worse, every closure in this store lands on just two days
+// (12 on 17 Aug, 78 on 18 Aug), so a level would be an invented DEPTH rather than an
+// invented weight -- a trend line drawn through two points. Measured before deciding not to
+// build it. When there is enough history, copy the dash: one stated rule, no denominator.
+router.get('/clusters', (req, res) => {
+  const rows = db.prepare(
+    `SELECT COALESCE(NULLIF(TRIM(cluster), ''), '(none)') AS cluster,
+            COUNT(*)                                        AS total,
+            SUM(status = 'done')                            AS done,
+            SUM(status IN ('open','in_progress'))           AS open,
+            SUM(owner = 'YOU')                              AS yours
+     FROM todo_items GROUP BY cluster ORDER BY done DESC, total DESC`
+  ).all();
+
+  const totals = rows.reduce((a, r) => ({
+    total: a.total + r.total, done: a.done + r.done, open: a.open + r.open,
+  }), { total: 0, done: 0, open: 0 });
+
+  // Closures per day, so the THINNESS of the history is visible on the same screen as the
+  // distribution. A cluster chart with no time context invites exactly the trend reading
+  // the data cannot support.
+  const days = db.prepare(
+    `SELECT substr(decided_at, 1, 10) AS day, COUNT(*) AS n FROM todo_items
+     WHERE status = 'done' AND decided_at IS NOT NULL AND decided_at != ''
+     GROUP BY day ORDER BY day`
+  ).all();
+
+  const undated = db.prepare(
+    `SELECT COUNT(*) AS n FROM todo_items WHERE status = 'done'
+     AND (decided_at IS NULL OR decided_at = '')`
+  ).get().n;
+
+  res.json({
+    clusters: rows, totals, days, undatedDone: undated,
+    note: 'Counts over the clusters already written on each item. Nothing is weighted and '
+      + 'there is no score — this says where the work went, not how well it went.',
+    historyNote: days.length < 7
+      ? `Closures are recorded on ${days.length} day(s), and ${undated} done item(s) carry no `
+        + 'date at all. That is too little to read as a trend, which is why there is no '
+        + 'level or XP figure here.'
+      : null,
+  });
+});
+
 module.exports = router;
 module.exports.decidedSince = decidedSince;

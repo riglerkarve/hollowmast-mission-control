@@ -40,6 +40,8 @@ const TEMPLATE = `
       <div id="tdConstraint"></div>
     </section>
 
+    <section class="card" id="tdClusters"></section>
+
     <div class="mode-tabs" id="tdTabs">
       <button class="mode-tab active" type="button" data-view="mine">${VIEWS.mine.tab}</button>
       <button class="mode-tab" type="button" data-view="build">${VIEWS.build.tab}</button>
@@ -304,10 +306,48 @@ function renderFilters() {
       ? '<button class="btn td-act" type="button" data-act="clear">Clear filters</button>' : '');
 }
 
+// #24, the honest half: where the work actually goes. Counts over the cluster vocabulary
+// already written on each item — nothing weighted, nothing scored, no level.
+//
+// The history line is not decoration. Closures land on two days, so a distribution shown
+// alone would invite a trend reading the data cannot support; saying how thin it is beside
+// the bars is what stops the chart claiming more than it knows.
+async function loadClusters() {
+  if (!root) return;
+  const host = root.querySelector('#tdClusters');
+  if (!host) return;
+  let d;
+  try {
+    const r = await fetch('/api/todo/clusters', { headers: { 'X-MC-By': 'todo-panel' } });
+    d = await r.json();
+    if (!r.ok) throw new Error(d.error || `HTTP ${r.status}`);
+  } catch (err) {
+    if (!root) return;
+    host.innerHTML = `<p class="empty-hint">Could not read the cluster counts: ${esc(err.message)}<br>`
+      + '<small>That is a failure to look, not a report that you have done nothing.</small></p>';
+    return;
+  }
+  if (!root) return;
+
+  const max = Math.max(...d.clusters.map((c) => c.done), 1);
+  host.innerHTML = `
+    <h2 class="td-h2">Where the work goes</h2>
+    <p class="td-note">${esc(d.note)}</p>
+    <ul class="td-clusters">${d.clusters.filter((c) => c.done || c.open).map((c) => `
+      <li class="td-cl">
+        <span class="td-cl-name">${esc(c.cluster)}</span>
+        <span class="td-cl-bar"><span class="td-cl-fill" style="width:${Math.round(100 * c.done / max)}%"></span></span>
+        <span class="td-cl-n">${c.done} done</span>
+        <span class="td-cl-open">${c.open ? `${c.open} open` : ''}</span>
+      </li>`).join('')}</ul>
+    ${d.historyNote ? `<p class="td-caveat">${esc(d.historyNote)}</p>` : ''}`;
+}
+
 async function load() {
   await loadSummary();     // first — it supplies the cluster list the filters need
   renderFilters();
   await loadItems();
+  loadClusters();
 }
 
 async function reloadAll() {

@@ -304,3 +304,78 @@
 .fin-fc-res  { border-left: 3px solid var(--accent); }
 
 .fin-fc-warn { margin: 0.9rem 0 0.3rem; padding: 0.7rem 0.85rem; background: var(--accent-soft); color: var(--ink); border-radius: 8px; font-size: 0.88em; }
+
+/* Own-transfer suspects — backlog #M11.
+   Every custom property below is read from shell.css/shared.css. Five invented tokens
+   have shipped in this project before and they render as nothing, silently. */
+
+.fin-s-list {
+  list-style: none;
+  margin: 0.6rem 0 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 0.55rem;
+}
+
+.fin-s-row {
+  display: grid;
+  grid-template-columns: 1fr auto;
+  gap: 0.15rem 0.75rem;
+  padding: 0.6rem 0.7rem;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  background: var(--bg);
+}
+
+.fin-s-who {
+  font-weight: 600;
+  color: var(--ink);
+}
+
+.fin-s-amt {
+  font-variant-numeric: tabular-nums;
+  text-align: right;
+  color: var(--ink);
+}
+
+/* Both metadata lines span the full width under the name/amount pair. */
+.fin-s-meta,
+.fin-s-why {
+  grid-column: 1 / -1;
+  font-size: 0.82rem;
+  color: var(--muted);
+}
+
+.fin-s-why {
+  font-size: 0.78rem;
+}
+
+/* A credit in the tax year currently being measured is live; an older one is history.
+   Marked with a border, NOT a colour that means "bad" — this names a thing to check,
+   and nothing here has been established as wrong. */
+.fin-s-live {
+  border-left: 3px solid var(--accent);
+}
+
+/* The residue gets the same visual weight as the findings. A check that states what it
+   did not look at in smaller type than what it found is still hiding it. */
+.fin-s-residue {
+  margin-top: 0.9rem;
+  padding: 0.7rem 0.8rem;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  background: var(--accent-soft);
+  font-size: 0.85rem;
+  color: var(--ink);
+  line-height: 1.5;
+}
+
+.fin-s-residue ul {
+  margin: 0.45rem 0 0;
+  padding-left: 1.1rem;
+}
+
+.fin-s-residue li {
+  margin: 0.2rem 0;
+}

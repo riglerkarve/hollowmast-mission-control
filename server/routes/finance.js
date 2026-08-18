@@ -1015,3 +1015,177 @@ router.get('/access-log', (req, res) => {
       + 'invisible here, and no in-process log can change that.',
   });
 });
+
+// ---------------------------------------------------------------------------
+// Own-transfer suspects — backlog #M11
+//
+// Money INTO the business account counts as TURNOVER unless it is categorised
+// 'Own transfer'. That figure feeds the self-assessment report and the Making Tax
+// Digital threshold test for 2026/2027 — the year that decides April 2028 mandation.
+// So a personal transfer in, under a spelling no rule matches, becomes turnover with
+// no error and nothing to look at.
+//
+// This REPORTS SUSPICION AND CHANGES NOTHING. There is no write path in it. The
+// categoriser already owns "what kind of thing is this" (108 rules over 95.3% of the
+// ledger); a second classifier here would be a second owner for that question, and the
+// last time recurrence was used to answer it, it returned Tesco as a stopped subscription.
+//
+// The owner's name is NOT written down here. It is read from the counterparties the
+// ledger already asserts are the owner — the ones categorised 'Own transfer'. A
+// hard-coded name would be a second owner for "who is the owner", and it would go stale
+// the moment a spelling changed.
+
+// A one-character token is an initial. It cannot distinguish anybody, so it is dropped.
+// That is a property of the token, not a cut-off chosen to make the output look tidy.
+function nameTokens(s) {
+  const m = String(s == null ? '' : s).toLowerCase().match(/[a-z0-9']+/g);
+  return m ? m.filter((t) => t.length > 1) : [];
+}
+
+// UK tax year starts 6 April. A suspect in a closed year is history; one in the year
+// currently being measured is live, and that is a different thing to be told.
+function taxYearStart(isoDate) {
+  const parts = String(isoDate).split('-').map(Number);
+  const y = parts[0], mo = parts[1], d = parts[2];
+  return (mo > 4 || (mo === 4 && d >= 6)) ? (y + '-04-06') : ((y - 1) + '-04-06');
+}
+
+function ownTransferSuspects(opts) {
+  const accountKind = (opts && opts.accountKind) || 'business';
+  const accounts = db.prepare('SELECT id, label FROM finance_accounts WHERE kind = ?').all(accountKind);
+  if (!accounts.length) {
+    // "could not look" is not "found nothing".
+    return { ok: false, reason: 'no_account', message: 'No ' + accountKind + ' account exists in the ledger.' };
+  }
+  const ids = accounts.map((a) => a.id);
+  const holes = ids.map(() => '?').join(',');
+
+  // The strings the ledger already asserts are the owner. Read across the WHOLE ledger,
+  // not just this account: a spelling recognised on the personal side is still evidence
+  // about who that name is.
+  const ownCps = db.prepare("SELECT DISTINCT counterparty FROM finance_transactions WHERE category = 'Own transfer'")
+    .all().map((r) => r.counterparty);
+  if (!ownCps.length) {
+    return {
+      ok: false,
+      reason: 'no_own_transfers',
+      message: 'Nothing in the ledger is categorised "Own transfer", so there is no statement '
+        + 'of who the owner is to compare against. This is not an all-clear.',
+    };
+  }
+
+  // The account's own trading name is NOT the owner's personal name. "Private Security
+  // Services (business)" makes every counterparty in the same trade share a token with it
+  // — five real clients worth £43k here. Derived from finance_accounts.label rather than
+  // judged, so it is a fact about the data and not an opinion about the clients.
+  const tradeTokens = new Set(accounts.reduce((acc, a) => acc.concat(nameTokens(a.label)), ['business', 'personal']));
+
+  const ownTokenSource = new Map();          // token -> the own-transfer strings it came from
+  ownCps.forEach((cp) => nameTokens(cp).forEach((t) => {
+    if (!ownTokenSource.has(t)) ownTokenSource.set(t, new Set());
+    ownTokenSource.get(t).add(cp);
+  }));
+
+  // Discriminating power, measured rather than assumed: across the whole ledger, how many
+  // DISTINCT counterparties contain this token? A token in 200 counterparties identifies
+  // nobody. It is reported, never thresholded on — the ranking stays arithmetic you can check.
+  const allCps = db.prepare('SELECT DISTINCT counterparty FROM finance_transactions').all().map((r) => r.counterparty);
+  const spread = new Map();
+  allCps.forEach((cp) => new Set(nameTokens(cp)).forEach((t) => spread.set(t, (spread.get(t) || 0) + 1)));
+
+  const credits = db.prepare(
+    'SELECT counterparty, COALESCE(category, \'(uncategorised)\') AS cat, COUNT(*) AS n, '
+    + 'SUM(amount_pence) AS pence, MIN(date) AS first_seen, MAX(date) AS last_seen '
+    + 'FROM finance_transactions '
+    + 'WHERE account_id IN (' + holes + ') AND amount_pence > 0 '
+    + 'GROUP BY counterparty, cat'
+  ).all(...ids);
+
+  const ledgerEnd = db.prepare(
+    'SELECT MAX(date) AS d FROM finance_transactions WHERE account_id IN (' + holes + ')'
+  ).get(...ids).d;
+  const thisTaxYear = ledgerEnd ? taxYearStart(ledgerEnd) : null;
+
+  const candidates = [];
+  let alreadyOwnTransfer = 0, sharedNothing = 0, unjudgeable = 0;
+  let examinedTx = 0, examinedRows = 0;
+
+  credits.forEach((r) => {
+    examinedTx += r.n; examinedRows += 1;
+    if (r.cat === 'Own transfer') { alreadyOwnTransfer += r.n; return; }
+    const toks = [...new Set(nameTokens(r.counterparty))];
+    if (!toks.length) { unjudgeable += r.n; return; }        // e.g. a counterparty of only digits
+    const shared = toks.filter((t) => ownTokenSource.has(t));
+    if (!shared.length) { sharedNothing += r.n; return; }
+
+    const matches = shared.map((t) => ({
+      token: t,
+      alsoIn: spread.get(t),
+      via: [...ownTokenSource.get(t)],
+      fromTradingName: tradeTokens.has(t),
+    })).sort((a, b) => a.alsoIn - b.alsoIn);
+
+    candidates.push({
+      counterparty: r.counterparty,
+      category: r.cat,
+      transactions: r.n,
+      amountPence: r.pence,
+      firstSeen: r.first_seen,
+      lastSeen: r.last_seen,
+      inCurrentTaxYear: !!(thisTaxYear && r.last_seen >= thisTaxYear),
+      // A match on the account's own trading name is the weak kind, and it is LABELLED
+      // rather than dropped — a filter that removed these would report a clean run it had
+      // not earned.
+      onlyTradingName: matches.every((m) => m.fromTradingName),
+      matches,
+    });
+  });
+
+  candidates.sort((a, b) =>
+    (a.onlyTradingName ? 1 : 0) - (b.onlyTradingName ? 1 : 0)
+    || (b.inCurrentTaxYear ? 1 : 0) - (a.inCurrentTaxYear ? 1 : 0)
+    || a.matches[0].alsoIn - b.matches[0].alsoIn
+    || b.amountPence - a.amountPence);
+
+  const strong = candidates.filter((c) => !c.onlyTradingName);
+
+  return {
+    ok: true,
+    accounts: ids,
+    ledgerEndsOn: ledgerEnd,
+    currentTaxYearFrom: thisTaxYear,
+    ownTransferStrings: ownCps,
+    tradingNameTokens: [...tradeTokens].filter((t) => ownTokenSource.has(t)),
+    candidates,
+    counts: {
+      creditRowsExamined: examinedRows,
+      creditTransactionsExamined: examinedTx,
+      candidates: candidates.length,
+      candidatesNotOnTradingName: strong.length,
+      candidatesInCurrentTaxYear: candidates.filter((c) => c.inCurrentTaxYear).length,
+    },
+    // A filter must report its residue, or a clean run reads as an all-clear it did not earn.
+    residue: {
+      alreadyOwnTransfer,
+      sharedNoTokenWithOwner: sharedNothing,
+      couldNotJudge: unjudgeable,
+      note: alreadyOwnTransfer + ' credits are already categorised "Own transfer" and were not '
+        + 'examined. ' + sharedNothing + ' share no name token with any string the ledger calls '
+        + 'the owner. ' + unjudgeable + ' have no token longer than one character to compare.',
+    },
+    blindTo: [
+      'A transfer in under a name sharing NO token with any known spelling of the owner. This '
+        + 'compares strings; it cannot recognise a name it has never seen.',
+      'A genuine third party who happens to share a surname. That is exactly why this reports '
+        + 'and never recategorises.',
+      'Anything not yet imported. It reads the ledger, so it is silent about a payment the bank '
+        + 'has and the ledger has not.',
+    ],
+  };
+}
+
+router.get('/own-transfer-suspects', (req, res) => {
+  res.json(ownTransferSuspects({ accountKind: req.query.accountKind || 'business' }));
+});
+
+module.exports.ownTransferSuspects = ownTransferSuspects;

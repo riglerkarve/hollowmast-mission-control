@@ -70,6 +70,11 @@ const TEMPLATE = `
       <h2 class="fin-h2">Who has read this ledger</h2>
       <div id="finAccess"></div>
     </section>
+
+    <section class="card">
+      <h2 class="fin-h2">Money in that may be your own transfer</h2>
+      <div id="finSuspects"></div>
+    </section>
   </div>
 `;
 
@@ -423,6 +428,81 @@ async function loadAccessLog() {
     </div>`;
 }
 
+// Backlog #M11. Money into the business account is TURNOVER unless it is categorised
+// 'Own transfer', and turnover feeds the self-assessment report and the MTD threshold
+// test. This names credits whose counterparty resembles a name the ledger already calls
+// the owner, and it CHANGES NOTHING — there is no write path in the route or here.
+async function loadSuspects() {
+  const box = root.querySelector('#finSuspects');
+  let d;
+  try {
+    d = await api('/own-transfer-suspects');
+  } catch (err) {
+    box.innerHTML = `<p class="fin-error">Could not run the check: ${esc(err.message)}
+      — that is a failure to look, not a report that nothing is mislabelled.</p>`;
+    return;
+  }
+
+  // ok:false is "could not look" and must never render as an all-clear.
+  if (!d.ok) {
+    box.innerHTML = `<p class="fin-error">${esc(d.message)}</p>`;
+    return;
+  }
+
+  const money = (p) => `£${(p / 100).toFixed(2)}`;
+  const strong = d.candidates.filter((c) => !c.onlyTradingName);
+  const trade = d.candidates.filter((c) => c.onlyTradingName);
+
+  const row = (c) => `
+    <li class="fin-s-row${c.inCurrentTaxYear ? ' fin-s-live' : ''}">
+      <span class="fin-s-who">${esc(c.counterparty)}</span>
+      <span class="fin-s-amt">${money(c.amountPence)}</span>
+      <span class="fin-s-meta">${c.transactions} payment${c.transactions === 1 ? '' : 's'}
+        · last ${esc(c.lastSeen)} · currently <b>${esc(c.category)}</b>${
+          c.inCurrentTaxYear ? ' · <b>this tax year</b>' : ''}</span>
+      <span class="fin-s-why">${c.matches.map((m) =>
+        `shares “${esc(m.token)}” with ${esc(m.via[0])}${m.via.length > 1
+          ? ` (+${m.via.length - 1} more spelling${m.via.length === 2 ? '' : 's'})` : ''
+        } — that word is in ${m.alsoIn} of the ledger’s counterparties`).join('; ')}</span>
+    </li>`;
+
+  // Three states, not two: nothing to look at, looked and found nothing, and found something.
+  const strongBlock = !strong.length
+    ? `<p class="empty-hint">No business-account credit is under a name resembling yours,
+         across the ${d.counts.creditTransactionsExamined} credits examined. That is a
+         name-similarity check having found nothing — not a guarantee the turnover figure
+         is right.</p>`
+    : `<ul class="fin-s-list">${strong.map(row).join('')}</ul>`;
+
+  box.innerHTML = `
+    <p class="fin-note">Money in is <b>turnover</b> unless it is “Own transfer”, and turnover
+      feeds the tax report and the Making Tax Digital threshold. These are credits under a
+      name that <i>resembles</i> one the ledger already calls you. <b>It is a guess about a
+      string and it changes nothing</b> — recategorising is your decision, in the ledger.</p>
+
+    <h3 class="fin-h3">Resembles your name — worth a look</h3>
+    ${strongBlock}
+
+    ${trade.length ? `
+      <h3 class="fin-h3">Matches the trading name, not a person</h3>
+      <p class="fin-note">These share a word with <b>${esc(d.ownTransferStrings.find((s) =>
+        d.tradingNameTokens.some((t) => s.toLowerCase().includes(t))) || 'the account name')}</b>
+        — the account’s own trading name, taken from the account label. Anyone in the same
+        trade matches it, so this is expected rather than suspicious. Shown rather than
+        filtered out, because a check that hides its weak matches looks cleaner than it is.</p>
+      <ul class="fin-s-list fin-dim">${trade.map(row).join('')}</ul>` : ''}
+
+    <div class="fin-s-residue">
+      <b>What this looked at, and what it did not.</b>
+      Examined ${d.counts.creditRowsExamined} distinct counterparties over
+      ${d.counts.creditTransactionsExamined} credits into the business account,
+      ledger ending ${esc(d.ledgerEndsOn)}.
+      ${esc(d.residue.note)}
+      It compares against ${d.ownTransferStrings.length} spellings the ledger already calls you.
+      <ul>${d.blindTo.map((b) => `<li>${esc(b)}</li>`).join('')}</ul>
+    </div>`;
+}
+
 async function load() {
   const notice = root.querySelector('#finNotice');
   let d;
@@ -458,6 +538,7 @@ async function load() {
   loadAccessLog();
   loadWorth();
   loadForecast();
+  loadSuspects();
 }
 
 export default {

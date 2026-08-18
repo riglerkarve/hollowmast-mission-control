@@ -299,6 +299,84 @@ function mtdCheck() {
 // It reads years() and rows() — the SAME functions the printed report uses — rather than
 // running its own queries. A second query here would be a second owner for every figure,
 // and the two would drift the first time either was touched.
+// ---------------------------------------------------------------------------
+// Backlog #M11. Every turnover figure above rests on one assumption: that money into
+// the business account which is NOT categorised 'Own transfer' is genuinely income.
+// A personal transfer in, under a spelling no rule matches, is counted as turnover
+// with no error. This names the credits worth a second look.
+//
+// It lives here as well as in the Money panel because THIS is the file that asserts
+// turnover. A caveat that only exists on a screen the owner may not open, while the
+// report states a figure confidently, is the caveat in the wrong place.
+//
+// finance.ownTransferSuspects() owns this question. Recomputing it here would be a
+// second owner for the same figure.
+function ownTransferCheck() {
+  const finance = require('../server/routes/finance');
+  const d = finance.ownTransferSuspects({ accountKind: 'business' });
+
+  console.log('');
+  console.log('MONEY IN THAT MAY BE YOUR OWN TRANSFER');
+  console.log('-'.repeat(78));
+
+  if (!d.ok) {
+    // Could-not-look is not an all-clear, and must not print like one.
+    console.log(`  COULD NOT CHECK: ${d.message}`);
+    return;
+  }
+
+  const strong = d.candidates.filter((c) => !c.onlyTradingName);
+  const trade = d.candidates.filter((c) => c.onlyTradingName);
+
+  console.log(`  Money in counts as TURNOVER unless categorised 'Own transfer'. These are`);
+  console.log(`  credits under a name resembling one the ledger already calls you. It is a`);
+  console.log(`  guess about a string; nothing has been recategorised and nothing will be.`);
+  console.log('');
+
+  if (!strong.length) {
+    console.log('  Resembles your name:      none found.');
+    console.log('    A name-similarity check having found nothing is NOT a guarantee that the');
+    console.log('    turnover figures above are right. See what it is blind to, below.');
+  } else {
+    console.log(`  Resembles your name:      ${strong.length}`);
+    strong.forEach((c) => {
+      console.log(`    ${c.counterparty}`);
+      console.log(`      GBP ${gbp(c.amountPence).padStart(10)} over ${c.transactions} payment(s), last ${c.lastSeen}`
+        + `${c.inCurrentTaxYear ? '   <-- CURRENT TAX YEAR' : ''}`);
+      console.log(`      currently categorised '${c.category}'`
+        + `${c.category !== 'Own transfer' ? ' -> counted as turnover' : ''}`);
+      c.matches.forEach((m) => console.log(
+        `      shares "${m.token}" with ${m.via[0]} (that word is in ${m.alsoIn} of the ledger's counterparties)`));
+    });
+  }
+
+  if (trade.length) {
+    console.log('');
+    console.log(`  Matches the trading name, not a person: ${trade.length}`);
+    console.log(`    These share a word with the account's own name, so anyone in the same trade`);
+    console.log(`    matches. Listed rather than filtered out, because a check that hides its weak`);
+    console.log(`    matches looks cleaner than it is.`);
+    trade.forEach((c) => console.log(
+      `      ${String(c.counterparty).padEnd(28)} GBP ${gbp(c.amountPence).padStart(10)}  (${c.matches[0].token})`));
+  }
+
+  console.log('');
+  console.log(`  Examined ${d.counts.creditRowsExamined} distinct counterparties over `
+    + `${d.counts.creditTransactionsExamined} credits, ledger ending ${d.ledgerEndsOn}.`);
+  console.log(`  ${d.residue.note}`);
+  console.log(`  Compared against ${d.ownTransferStrings.length} spellings the ledger already calls you.`);
+  console.log('  It cannot see:');
+  d.blindTo.forEach((b) => {
+    const words = b.split(' ');
+    let line = '   ';
+    words.forEach((w) => {
+      if ((line + ' ' + w).length > 76) { console.log(line); line = '     '; }
+      line += ' ' + w;
+    });
+    console.log(line);
+  });
+}
+
 function csv() {
   const only = process.argv.slice(2).find((a) => /^\d{4}\/\d{4}$/.test(a));
   const cell = (v) => {
@@ -345,5 +423,6 @@ if (process.argv.includes('--csv')) {
   if (!process.argv.slice(2).find((a) => /^\d{4}\/\d{4}$/.test(a))) {
     incorporationCheck();
     mtdCheck();
+    ownTransferCheck();
   }
 }

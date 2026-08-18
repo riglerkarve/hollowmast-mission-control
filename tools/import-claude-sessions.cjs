@@ -28,6 +28,9 @@
 const fs = require('node:fs');
 const path = require('node:path');
 const db = require('../server/db');
+// Provenance: every read this process makes is logged against this actor. Without it the
+// access log records 'unknown', which is honest but useless. See server/provenance.js.
+db.setProcessActor('import');
 
 // REQUIRED FOR ITS MIGRATION, not for its router. Migrations in this project run when a
 // route file is required, so a tool that only requires db.js sees whatever schema the last

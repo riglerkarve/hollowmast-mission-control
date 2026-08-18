@@ -24,6 +24,9 @@
 'use strict';
 
 const db = require('../server/db');
+// Provenance: every read this process makes is logged against this actor. Without it the
+// access log records 'unknown', which is honest but useless. See server/provenance.js.
+db.setProcessActor('import');
 require('../server/routes/mail');           // ensures the migration has run
 const ga = require('./google-auth.cjs');
 

@@ -102,3 +102,60 @@ if (!ALL) console.log('\n  Tracked files only. Untracked files can still hold a 
 console.log('  Blind to: git HISTORY, backups, and anything outside this repo.');
 
 process.exitCode = hits ? 1 : 0;
+// ---- history mode ------------------------------------------------------------------------
+//
+// `--history` scans every blob ever committed, not just the working tree.
+//
+// IT EXISTS BECAUSE OF THE FIRST PUSH. Everything above answers "is a secret in the files I can
+// see", which is the right question every day except one: the day this repository gains a
+// remote, the thing published is the HISTORY. A credential committed in March and deleted in
+// April is still in the pack, still fetchable, and still valid if it was never rotated.
+//
+// It reports the commit and path so a hit can be judged rather than merely feared, and it never
+// prints the value itself — a leak report that quotes the secret has published it again.
+if (process.argv.includes('--history')) {
+  if (!secrets.length) {
+    console.log('\n  No secret values could be loaded, so the history was NOT scanned.');
+    console.log('  That is a failure to look, not a clean result.');
+    process.exitCode = 1;
+  } else {
+    let blobs = [];
+    try {
+      blobs = execFileSync('git', ['rev-list', '--objects', '--all'], { cwd: ROOT, encoding: 'utf8', maxBuffer: 256 * 1024 * 1024 })
+        .split('\n').filter(Boolean)
+        .map((line) => {
+          const sp = line.indexOf(' ');
+          return sp < 0 ? null : { sha: line.slice(0, sp), path: line.slice(sp + 1) };
+        }).filter(Boolean);
+    } catch (e) {
+      console.log(`\n  Could not list history objects: ${e.message}`);
+      process.exitCode = 1;
+    }
+
+    const hits = [];
+    let scanned = 0;
+    let unreadableBlobs = 0;
+    for (const b of blobs) {
+      let text;
+      try {
+        text = execFileSync('git', ['cat-file', '-p', b.sha], { cwd: ROOT, encoding: 'utf8', maxBuffer: 64 * 1024 * 1024 });
+      } catch { unreadableBlobs += 1; continue; }
+      scanned += 1;
+      for (const s of secrets) {
+        if (text.includes(s.value)) hits.push({ label: s.label, path: b.path, sha: b.sha.slice(0, 8) });
+      }
+    }
+
+    console.log(`\n  HISTORY: ${scanned} blob(s) scanned across every commit, ${secrets.length} secret value(s).`);
+    if (unreadableBlobs) console.log(`  ${unreadableBlobs} object(s) could not be read and were NOT checked.`);
+    if (hits.length) {
+      console.log('\n  A LIVE SECRET APPEARS IN THE HISTORY. Do not add a remote until it is rotated:');
+      for (const h of hits) console.log(`    ${h.label} — ${h.path} (blob ${h.sha})`);
+      console.log('\n  Rewriting history does not un-leak it once pushed. Rotate the credential first.');
+      process.exitCode = 1;
+    } else {
+      console.log('  No live secret value appears in any historical blob.');
+      console.log('  Still blind to: values that were never loaded above, and anything outside this repo.');
+    }
+  }
+}

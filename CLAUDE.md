@@ -27,29 +27,59 @@ npm start          # or let the MissionControl-Server scheduled task do it
 Runs on `0.0.0.0`, so it is reachable from your phone on the LAN — which is how
 notifications and quick capture are meant to work.
 
-### The access key
+### The access key, and per-device tokens
 
-Because of that bind, everything below `server/gate.js` is behind a shared secret:
+Because of that bind, everything below `server/gate.js` is gated. **The key ENROLS; a
+per-device token AUTHENTICATES** — rebuilt 18 Aug 2026 (#M3).
 
 - **Loopback is exempt.** `127.0.0.1` and `::1` pass straight through, so `npm start`,
   the browser on this machine, `scripts/watchdog.cjs` and every importer are unaffected.
-  A local process could read `data/dashboard.db` directly anyway, so gating it buys nothing.
-- **Anything arriving over the network must present the key.** `/api/*` answers `401`;
-  a page request redirects to `/unlock`.
+  A local process could read `data/dashboard.db` directly anyway, so gating it buys nothing
+  — and gating it would take the backup, the watchdog and every importer down with it.
+- **Anything arriving over the network must present a device token.** `/api/*` answers
+  `401`; a page request redirects to `/unlock`.
 - **The key lives in `data/gate-key.txt`**, minted on first boot (72 bits, 12 characters)
-  and printed in the startup banner. `MC_KEY` in the environment overrides it.
-- **The phone unlocks once** at `http://<lan-ip>:3000/unlock` and stores an HttpOnly
-  cookie for a year. The key goes in a form POST, never a query string, so it does not
-  land in browser history or the access log.
+  and printed in the startup banner. `MC_KEY` overrides it. It is now only used to *enrol*.
+- **`POST /unlock` with the key mints a random 256-bit token for that device** and returns
+  it in an HttpOnly cookie. The key goes in a form POST, never a query string.
 
-**Why a cookie and not a header.** There is no shared fetch helper in `public/` —
-`shared.js` is a chart renderer, and each of the fourteen panels defines its own local
-`api()` wrapper. A cookie is attached by the browser to all of them, so the gate needed
-**zero panel edits**. Anything scripted can send `X-MC-Key` instead.
+**What the previous single-secret design got wrong**, and each of these was real rather
+than theoretical:
 
-This is a lock on the front door, not encryption: the traffic is still plain HTTP on the
-LAN. It stops a device that joins the network from reading the ledger; it would not stop
-someone who can watch the wire.
+| Weakness | Now |
+|---|---|
+| Every device presented the same string, so revoking one meant re-keying all | Each device is a row, revocable **on its own** |
+| A one-year cookie nothing server-side knew about | 30-day **sliding idle** expiry (`MC_DEVICE_DAYS`); a device in daily use never expires, one in a drawer does |
+| `/unlock` accepted guesses as fast as the network allowed | 5 failures then a doubling lockout, capped at 6h, cleared by a correct key |
+| The cookie *was* the credential, stored in plain form | Only **`sha256(token)`** is stored — the database file does not contain a usable credential, which matters because that file is the thing being protected |
+
+**Fails closed.** `deviceFor()` never throws: a database problem returns null and the
+caller denies. Since loopback is exempt, failing closed cannot take the ops chain down.
+
+**The device API gates itself inline** — `app.get('/api/gate/devices', gate, …)`. `index.js`
+calls `gate.mount(app)` *before* `app.use(gate.gate)`, so anything registered there is
+otherwise unauthenticated. Correct for `/unlock`; for a revoke button it would have been a
+hole that hands an attacker the controls. Explicit so reordering `index.js` cannot open it.
+
+**`X-MC-Key` still works as break-glass**, deliberately kept: locking yourself out of a
+machine that is not the server has no other remedy. It is the shared secret with all its
+weaknesses — not revocable per device — so it is given no session and no device row.
+
+**Managed in the Safety panel** ("Devices that can reach this over the network"), because a
+revoke button nobody can find is a revocation that never happens. Revoked and expired rows
+stay visible, dimmed — "this device used to have access" is a fact worth reading.
+
+**Verified by 31 tests against the real LAN address**, not loopback: testing this on
+`127.0.0.1` exercises the exempt path and proves nothing. Covered fail-closed, lockout
+(including that a *correct* key is still refused while locked), token ≠ key, hash-only
+storage, per-device revocation not affecting siblings, enforced expiry, and loopback
+staying open throughout.
+
+**This is a lock on the front door, not encryption.** The traffic is still plain HTTP on
+the LAN — anyone who can watch the wire sees the token in flight, exactly as they
+previously saw the key. Per-device tokens make access revocable and expiring; they encrypt
+nothing. Real TLS is a separate, larger question (a self-signed cert means trusting a root
+on the phone). The panel says so at full size rather than in fine print.
 
 ---
 

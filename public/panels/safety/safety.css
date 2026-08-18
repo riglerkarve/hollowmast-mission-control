@@ -107,3 +107,51 @@
 .sf-log-what { font-size: 0.82rem; }
 .sf-log-why { font-size: 0.76rem; opacity: 0.8; }
 .sf-log-at { font-size: 0.72rem; opacity: 0.55; font-variant-numeric: tabular-nums; }
+
+/* ---------------------------------------------------------------------------------------
+   Devices with network access — backlog #M3.
+   Appended at the end, where a later rule WINS; every class is prefixed .sf-dev- and was
+   grepped against public/ first. Tokens are only ones defined in shell.css.
+   --------------------------------------------------------------------------------------- */
+.sf-dev-list { list-style: none; margin: 0.8rem 0 0; padding: 0; display: flex; flex-direction: column; gap: 0.5rem; }
+
+.sf-dev-list li {
+  display: grid;
+  grid-template-columns: 1fr auto;
+  grid-template-areas: "name button" "meta button" "state button";
+  gap: 0.15rem 1rem;
+  align-items: center;
+  padding: 0.65rem 0.8rem;
+  background: var(--bg);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+}
+
+.sf-dev-name  { grid-area: name; font-weight: 600; }
+.sf-dev-meta  { grid-area: meta;  color: var(--muted); font-size: 0.85em; }
+.sf-dev-state { grid-area: state; color: var(--muted); font-size: 0.8em; }
+
+.sf-dev-this {
+  margin-left: 0.4rem; padding: 0.05rem 0.35rem; border-radius: 4px;
+  background: var(--accent-soft); color: var(--ink); font-size: 0.72em; font-weight: 700;
+}
+
+/* A revoked or expired row is kept rather than hidden: "this device used to have access"
+   is a fact worth reading, and a list that only shows live devices cannot be checked
+   against what you remember granting. Dimmed, never removed. */
+.sf-dev-dead { opacity: 0.55; }
+
+.sf-dev-revoke { grid-area: button; white-space: nowrap; }
+
+/* Same call as the finance access log: the limitation gets the weight of the data, not
+   footnote treatment. --ink on --accent-soft measures 11.04:1 dark / 12.26:1 light. */
+.sf-dev-caveat {
+  margin-top: 0.9rem; padding: 0.75rem 0.85rem;
+  background: var(--accent-soft); color: var(--ink);
+  border-radius: 8px; font-size: 0.88em;
+}
+
+@media (max-width: 560px) {
+  .sf-dev-list li { grid-template-columns: 1fr; grid-template-areas: "name" "meta" "state" "button"; gap: 0.3rem; }
+  .sf-dev-revoke { justify-self: start; }
+}

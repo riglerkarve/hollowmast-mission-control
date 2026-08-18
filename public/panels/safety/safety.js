@@ -67,6 +67,11 @@ const TEMPLATE = `
     </div>
 
     <section class="card">
+      <h2 class="sf-h2">Devices that can reach this over the network</h2>
+      <div id="sfDevices"></div>
+    </section>
+
+    <section class="card">
       <h2 class="sf-h2">Every decision, allowed or refused</h2>
       <div id="sfLog"></div>
     </section>
@@ -78,6 +83,89 @@ async function api(path, opts) {
   const body = await r.json().catch(() => ({}));
   if (!r.ok) throw new Error(body.error || `HTTP ${r.status}`);
   return body;
+}
+
+// The gate is not the safety module and does not share its tables — this asks its API, the
+// same rule every module follows. Safety hosts the surface because this IS a governance
+// decision, and a revoke button nobody can find is a revocation that never happens.
+async function gateApi(path, opts) {
+  const r = await fetch(`/api/gate${path}`, opts);
+  const body = await r.json().catch(() => ({}));
+  if (!r.ok) throw new Error(body.error || `HTTP ${r.status}`);
+  return body;
+}
+
+const when = (iso) => {
+  if (!iso) return '—';
+  const d = new Date(iso);
+  if (Number.isNaN(d.getTime())) return String(iso);
+  const days = Math.floor((Date.now() - d.getTime()) / 86400000);
+  if (days <= 0) return 'today';
+  if (days === 1) return 'yesterday';
+  return `${days} days ago`;
+};
+
+async function renderDevices() {
+  const box = root.querySelector('#sfDevices');
+  let d;
+  try {
+    d = await gateApi('/devices');
+  } catch (err) {
+    box.innerHTML = `<p class="sf-banner">Could not read the device list: ${esc(err.message)}
+      — that is a failure to look, not a report that no devices are enrolled.</p>`;
+    return;
+  }
+
+  const active = d.devices.filter((x) => x.active);
+
+  // Three states, not two. "Nothing has ever enrolled" and "everything enrolled has been
+  // revoked or expired" are different facts, and only the first means the door was never used.
+  const list = !d.devices.length
+    ? `<p class="empty-hint">No device has ever unlocked over the network. Only this
+         machine has reached it — loopback needs no key.</p>`
+    : !active.length
+      ? `<p class="empty-hint">Nothing currently has network access. ${d.devices.length}
+           device${d.devices.length === 1 ? ' has' : 's have'} been revoked or expired.</p>`
+      : `<ul class="sf-dev-list">${d.devices.map((x) => `
+          <li class="${x.active ? '' : 'sf-dev-dead'}">
+            <span class="sf-dev-name">${esc(x.label)}${
+              x.id === d.thisDeviceId ? ' <b class="sf-dev-this">this device</b>' : ''}</span>
+            <span class="sf-dev-meta">added ${esc(when(x.created_at))} ·
+              last used ${esc(when(x.last_seen_at))}${x.last_ip ? ` · ${esc(x.last_ip)}` : ''}</span>
+            <span class="sf-dev-state">${
+              x.revoked_at ? 'revoked' : x.expired ? 'expired' : `expires if unused for ${d.idleDays} days`}</span>
+            ${x.active ? `<button class="btn sf-dev-revoke" data-id="${x.id}">Revoke</button>` : ''}
+          </li>`).join('')}</ul>`;
+
+  box.innerHTML = `
+    <p class="sf-note">Unlocking from a phone registers that device on its own, so one can be
+      removed without disturbing the others. This machine never appears here — loopback is
+      exempt, and gating it would stop the backup, the watchdog and every importer.</p>
+    ${list}
+    <div class="sf-dev-caveat"><b>This is a lock, not encryption.</b> ${esc(d.caveat)}</div>`;
+
+  box.querySelectorAll('.sf-dev-revoke').forEach((b) => {
+    b.addEventListener('click', async () => {
+      b.disabled = true;
+      b.textContent = 'Revoking…';
+      try {
+        const res = await gateApi(`/devices/${b.dataset.id}/revoke`, {
+          method: 'POST', headers: { 'content-type': 'application/json', 'x-mc-by': 'you' },
+        });
+        // Revoking the device you are sitting on is allowed, and it signs you out. Saying
+        // so beats an unexplained redirect to /unlock on the next click.
+        if (res.wasThisDevice) {
+          box.innerHTML = `<p class="sf-banner">${esc(res.note)}</p>`;
+          return;
+        }
+        renderDevices();
+      } catch (err) {
+        b.disabled = false;
+        b.textContent = 'Revoke';
+        box.insertAdjacentHTML('afterbegin', `<p class="sf-banner">${esc(err.message)}</p>`);
+      }
+    });
+  });
 }
 
 function renderState(d) {
@@ -146,6 +234,11 @@ function renderLog(d) {
 }
 
 async function load() {
+  // Called FIRST and not awaited into the guard's try/catch. The device list comes from a
+  // different route and must not vanish because the safety API had a bad day — two
+  // independent things failing together is how one outage looks like two.
+  renderDevices();
+
   let d;
   try {
     d = await api('/');

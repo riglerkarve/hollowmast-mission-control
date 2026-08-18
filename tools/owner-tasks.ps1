@@ -1,164 +1,214 @@
-# owner-tasks.ps1 - every terminal step currently waiting on the owner, in one place.
+# owner-tasks.ps1 - every terminal step waiting on the owner, run in one pass.
 #
 #   powershell -NoProfile -ExecutionPolicy Bypass -File tools\owner-tasks.ps1
-#   powershell -NoProfile -ExecutionPolicy Bypass -File tools\owner-tasks.ps1 -Step 3
+#       runs every step it CAN, skips the rest with a reason, prints a summary
 #
-# Standing instruction, 18 Aug 2026: commands meant for the owner are PowerShell, not bash.
-# My own tools run Git Bash, so bash syntax works for me and fails at their prompt - "curl -s
-# -u" produced "the parameter name 'u' is ambiguous", which is a baffling error about a
-# command they had every reason to think was right.
+#   ... -File tools\owner-tasks.ps1 -Step 3          just one step
+#   ... -File tools\owner-tasks.ps1 -List            show them without running anything
+#   ... -File tools\owner-tasks.ps1 -PayPalCsv "C:\path\Download.CSV"
+#   ... -File tools\owner-tasks.ps1 -Rotate          include the disruptive password rotation
 #
-# PURE ASCII, deliberately. Windows PowerShell 5.1 reads a .ps1 as ANSI when there is no BOM,
-# so a single en dash inside a quoted string breaks the parse and the script exits 1 having
-# logged nothing. No dashes, no arrows, no curly quotes anywhere in this file. 5.1 also has no
-# "&&", no ternary and no "??"; chaining is done with "if ($?)".
+# Standing instruction, 18 Aug 2026: commands meant for the owner are PowerShell, not bash. My
+# own tools run Git Bash, so bash syntax works for me and fails at their prompt - "curl -s -u"
+# produced "the parameter name 'u' is ambiguous", a baffling error about a command they had
+# every reason to think was right.
 #
-# EVERY STEP CHECKS ITS OWN PRECONDITION and says what it is about to do before doing it. A
-# step that cannot run says why, and says it in a way that cannot be mistaken for "nothing to
-# do" - the difference this whole workspace keeps being caught by.
+# THREE OUTCOMES, NEVER TWO. Every step reports DONE, SKIPPED or FAILED, and the summary keeps
+# them apart. A step that could not run is not a step that had nothing to do, and a run where
+# everything was skipped must not read like a clean sweep - which is what a bare "finished"
+# line would say.
+#
+# PURE ASCII. PS 5.1 reads a .ps1 as ANSI when there is no BOM, so a single en dash inside a
+# quoted string breaks the parse and the script exits 1 having logged nothing at all. No
+# dashes, no arrows, no curly quotes. 5.1 also has no "&&", no ternary and no "??"; chain with
+# "if ($?)".
 
 [CmdletBinding()]
-param([int]$Step = 0)
+param(
+    [int]$Step = 0,
+    [switch]$List,
+    [switch]$Rotate,
+    [string]$PayPalCsv = ""
+)
 
 $ErrorActionPreference = "Continue"
 $MC   = "C:\Users\jcwhi\Claude Outputs\mission-control"
 $SURV = "C:\Users\jcwhi\Claude Outputs\Survive"
-$PP   = "C:\Users\jcwhi\Claude Outputs\income-portfolio"
 
-function Head($n, $title, $why) {
+$script:Results = @()
+
+function Note($m) { Write-Host ("      " + $m) }
+function Record($n, $name, $status, $why) {
+    $script:Results += [pscustomobject]@{ N = $n; Name = $name; Status = $status; Why = $why }
+    Write-Host ("      " + $status + "  " + $why)
+}
+function Head($n, $title) {
     Write-Host ""
     Write-Host ("  [" + $n + "] " + $title)
-    Write-Host ("      " + $why)
 }
-function Ok($m)   { Write-Host ("      OK    " + $m) }
-function Warn($m) { Write-Host ("      NOTE  " + $m) }
-function Bad($m)  { Write-Host ("      STOP  " + $m) }
 
-function Show-Menu {
-    Write-Host ""
-    Write-Host "  Waiting on you. Run one with -Step N, or read and pick."
-    Head 1 "Push Mission Control to its new private remote" "101+ commits exist on one disk. History already scanned: no secrets in 853 blobs."
-    Head 2 "Push HOLLOWMAST" "The consent wall removal and the F8 bug box are built but not live."
-    Head 3 "Ship HOLLOWMAST to itch with butler" "Needs an API key first. itch is serving an older build than dist."
-    Head 4 "Import the PayPal statement" "Settles what SerpClix actually paid and which 54 bank rows were never refunds."
-    Head 5 "Rotate the dash password" "It appeared in a screenshot in the session transcript."
-    Head 6 "Save the Honeygain API token" "Replaces the daily-screenshot plan with something that needs nothing from you."
-    Write-Host ""
-    Write-Host "  Browser steps I cannot do (accounts and identity are yours):"
-    Write-Host "    - create the empty PRIVATE repo at github.com/new, named mission-control"
-    Write-Host "    - create an itch API key at itch.io/user/settings/api-keys"
-    Write-Host "    - export PayPal activity as CSV"
-    Write-Host ""
+# ---- shared: push a repo and PROVE the remote moved ---------------------------------------
+# Verifies by comparing ls-remote against local HEAD. "git push" exits 0 and moves nothing when
+# HEAD is on another branch, and that has caught this workspace twice.
+function Push-AndVerify($n, $name, $dir) {
+    Set-Location $dir
+    $remotes = git remote
+    if (-not $remotes) {
+        Record $n $name "SKIPPED" "no remote configured yet - create the private repo first"
+        return
+    }
+    $dirty = git status --porcelain
+    if ($dirty) {
+        $count = ($dirty -split "`n" | Where-Object { $_ }).Count
+        Note ($count.ToString() + " uncommitted file(s); other sessions share this checkout, so some may not be yours")
+    }
+    $branch = (git rev-parse --abbrev-ref HEAD).Trim()
+    $local  = (git rev-parse HEAD).Trim()
+    Note ("branch " + $branch + ", local " + $local.Substring(0,8))
+
+    git push -u origin $branch 2>&1 | ForEach-Object { Note $_ }
+
+    $line = git ls-remote origin $branch
+    if (-not $line) {
+        Record $n $name "FAILED" "the remote has no branch $branch - the push moved nothing"
+        return
+    }
+    $remote = ($line -split "\s+")[0]
+    if ($remote -eq $local) {
+        Record $n $name "DONE" ("remote verified at " + $remote.Substring(0,8))
+    } else {
+        Record $n $name "FAILED" ("remote is " + $remote.Substring(0,8) + " but local is " + $local.Substring(0,8))
+    }
 }
 
 function Step1 {
-    Head 1 "Push Mission Control to its new private remote" "Verifies the effect, not the exit code."
-    Set-Location $MC
-    $remotes = git remote
-    if (-not $remotes) {
-        Bad "No remote is configured yet."
-        Write-Host "      Create an EMPTY PRIVATE repo named mission-control at github.com/new,"
-        Write-Host "      tick nothing (no README, no .gitignore, no licence), then run:"
-        Write-Host "        git remote add origin https://github.com/riglerkarve/mission-control.git"
-        Write-Host "      and run this step again."
-        return
-    }
-    $branch = (git rev-parse --abbrev-ref HEAD).Trim()
-    $local  = (git rev-parse HEAD).Trim()
-    Ok ("branch " + $branch + ", local HEAD " + $local.Substring(0,8))
-    git push -u origin $branch
-    $line = git ls-remote origin $branch
-    if ($line) {
-        $remote = ($line -split "\s+")[0]
-        if ($remote -eq $local) { Ok ("VERIFIED: the remote holds " + $remote.Substring(0,8)) }
-        else { Bad ("remote is at " + $remote.Substring(0,8) + " but local is " + $local.Substring(0,8)) }
-    } else {
-        Bad "The remote has no such branch. The push reported success and moved nothing."
-    }
+    Head 1 "Push Mission Control to its private remote"
+    Push-AndVerify 1 "Mission Control push" $MC
 }
 
 function Step2 {
-    Head 2 "Push HOLLOWMAST" "The site build is staged locally; nothing is live until this runs."
-    Set-Location $SURV
-    $dirty = git status --porcelain
-    if ($dirty) {
-        Warn "Working tree is not clean. Other sessions share this checkout, so these may not be yours:"
-        $dirty -split "`n" | Where-Object { $_ } | ForEach-Object { Write-Host ("        " + $_) }
-        Write-Host "      Commit only what is yours with: git commit --only <paths> -m ..."
-    }
-    $branch = (git rev-parse --abbrev-ref HEAD).Trim()
-    $local  = (git rev-parse HEAD).Trim()
-    git push origin $branch
-    $line = git ls-remote origin $branch
-    if ($line) {
-        $remote = ($line -split "\s+")[0]
-        if ($remote -eq $local) { Ok ("VERIFIED: remote matches local at " + $local.Substring(0,8)) }
-        else { Bad "remote does not match local HEAD" }
-    }
+    Head 2 "Push HOLLOWMAST"
+    Push-AndVerify 2 "HOLLOWMAST push" $SURV
 }
 
 function Step3 {
-    Head 3 "Ship HOLLOWMAST to itch with butler" "Builds, packs, pushes, then asks itch what it is serving."
-    Set-Location $SURV
+    Head 3 "Ship HOLLOWMAST to itch with butler"
     $key = Join-Path $SURV "data\itch-api-key.txt"
     if (-not (Test-Path $key)) {
-        Bad "No API key at data\itch-api-key.txt"
-        Write-Host "      Create one at https://itch.io/user/settings/api-keys, then:"
-        Write-Host ("        Read-Host 'itch key' | Set-Content -Encoding ascii '" + $key + "'")
-        Write-Host "      It is already gitignored. This is 'cannot look', not 'nothing to upload'."
+        Record 3 "itch deploy" "SKIPPED" "no API key at data\itch-api-key.txt - make one at itch.io/user/settings/api-keys"
         return
     }
-    Ok "key present"
-    bash tools/deploy-itch.sh
+    Set-Location $SURV
+    bash tools/deploy-itch.sh 2>&1 | ForEach-Object { Note $_ }
+    if ($?) { Record 3 "itch deploy" "DONE" "butler reported the packed build is live" }
+    else    { Record 3 "itch deploy" "FAILED" "deploy-itch.sh did not verify - read its output above" }
 }
 
 function Step4 {
-    Head 4 "Import the PayPal statement" "Names who actually paid you, which the bank cannot."
-    $csv = Read-Host "      Full path to the PayPal CSV (blank to cancel)"
-    if (-not $csv) { Warn "cancelled"; return }
-    if (-not (Test-Path $csv)) { Bad ("no such file: " + $csv); return }
+    Head 4 "Import the PayPal statement, then reconcile it"
+    if (-not $PayPalCsv) {
+        Record 4 "PayPal import" "SKIPPED" "no CSV given - re-run with -PayPalCsv 'C:\path\Download.CSV'"
+        return
+    }
+    if (-not (Test-Path $PayPalCsv)) {
+        Record 4 "PayPal import" "FAILED" ("no such file: " + $PayPalCsv)
+        return
+    }
     Set-Location $MC
-    Write-Host "      Dry run first - nothing is written:"
-    node tools/import-paypal.cjs "$csv" --account paypal --label "PayPal" --kind personal --dry
-    $go = Read-Host "      Import for real? (y/N)"
-    if ($go -eq "y") {
-        node tools/import-paypal.cjs "$csv" --account paypal --label "PayPal" --kind personal
-        Write-Host "      Now matching bank PAYPAL credits against PayPal withdrawals:"
-        node tools/reconcile-paypal.cjs
-        Write-Host "      Report only. Add --apply to recategorise the matched ones."
-    } else { Warn "not imported" }
+    Note "dry run first, nothing written:"
+    node tools/import-paypal.cjs "$PayPalCsv" --account paypal --label "PayPal" --kind personal --dry 2>&1 | ForEach-Object { Note $_ }
+    node tools/import-paypal.cjs "$PayPalCsv" --account paypal --label "PayPal" --kind personal 2>&1 | ForEach-Object { Note $_ }
+    if (-not $?) { Record 4 "PayPal import" "FAILED" "the importer refused - read its reason above"; return }
+    Note "matching bank PAYPAL credits against PayPal withdrawals:"
+    node tools/reconcile-paypal.cjs 2>&1 | ForEach-Object { Note $_ }
+    Record 4 "PayPal import" "DONE" "imported and reconciled - reconcile is report-only until you add --apply"
 }
 
 function Step5 {
-    Head 5 "Rotate the dash password" "It appeared in a screenshot, so it is in the session transcript."
-    Set-Location $SURV
-    Write-Host "      This will prompt you for a new value and store it as a Worker secret."
-    npx wrangler secret put DASH_PASSWORD
-    if ($?) {
-        Ok "rotated. Now update the local copy so the reader keeps working:"
-        Write-Host ("        Read-Host 'new password' | Set-Content -Encoding ascii '" + (Join-Path $MC "data\dash-password.txt") + "'")
+    Head 5 "Save the Honeygain API token"
+    $f = Join-Path $MC "data\honeygain-token.txt"
+    if (Test-Path $f) {
+        Set-Location $MC
+        node tools/fetch-honeygain.cjs 2>&1 | ForEach-Object { Note $_ }
+        if ($?) { Record 5 "Honeygain" "DONE" "token worked and earnings were read" }
+        else    { Record 5 "Honeygain" "FAILED" "the token is present but did not work - it may have expired" }
+        return
     }
+    Record 5 "Honeygain" "SKIPPED" "no token yet - log in, DevTools, Network, copy the Authorization value"
+    Note ("then: Read-Host 'token' | Set-Content -Encoding ascii '" + $f + "'")
 }
 
 function Step6 {
-    Head 6 "Save the Honeygain API token" "Then earnings arrive with no screenshot and no obligation."
-    $f = Join-Path $MC "data\honeygain-token.txt"
-    Write-Host "      Log in at dashboard.honeygain.com, open DevTools, Network tab, click any"
-    Write-Host "      request, and copy the Authorization value (without the word Bearer)."
-    $t = Read-Host "      Paste it here (blank to cancel)"
-    if (-not $t) { Warn "cancelled"; return }
-    Set-Content -Path $f -Value $t -Encoding ascii
-    Ok ("saved to " + $f + " (already gitignored)")
-    Set-Location $MC
-    node tools/fetch-honeygain.cjs
+    Head 6 "Rotate the dash password"
+    if (-not $Rotate) {
+        Record 6 "Rotate password" "SKIPPED" "disruptive and interactive - re-run with -Rotate when ready"
+        return
+    }
+    Set-Location $SURV
+    Note "wrangler will prompt for the new value:"
+    npx wrangler secret put DASH_PASSWORD
+    if ($?) {
+        Record 6 "Rotate password" "DONE" "rotated at Cloudflare"
+        Note ("now update the local copy: Read-Host 'new' | Set-Content -Encoding ascii '" + (Join-Path $MC "data\dash-password.txt") + "'")
+    } else {
+        Record 6 "Rotate password" "FAILED" "wrangler did not complete"
+    }
 }
 
-switch ($Step) {
-    1 { Step1 }
-    2 { Step2 }
-    3 { Step3 }
-    4 { Step4 }
-    5 { Step5 }
-    6 { Step6 }
-    default { Show-Menu }
+$steps = @(
+    @{ N = 1; Title = "Push Mission Control to its private remote"; Fn = { Step1 } },
+    @{ N = 2; Title = "Push HOLLOWMAST";                            Fn = { Step2 } },
+    @{ N = 3; Title = "Ship HOLLOWMAST to itch with butler";        Fn = { Step3 } },
+    @{ N = 4; Title = "Import the PayPal statement";                Fn = { Step4 } },
+    @{ N = 5; Title = "Save the Honeygain API token";               Fn = { Step5 } },
+    @{ N = 6; Title = "Rotate the dash password";                   Fn = { Step6 } }
+)
+
+if ($List) {
+    Write-Host ""
+    Write-Host "  Steps (run with no arguments to do all of them):"
+    foreach ($s in $steps) { Write-Host ("    [" + $s.N + "] " + $s.Title) }
+    Write-Host ""
+    Write-Host "  Browser steps I cannot do - accounts and identity are yours:"
+    Write-Host "    - empty PRIVATE repo at github.com/new named mission-control"
+    Write-Host "    - itch API key at itch.io/user/settings/api-keys"
+    Write-Host "    - PayPal activity exported as CSV"
+    return
+}
+
+$start = Get-Location
+if ($Step -gt 0) {
+    $one = $steps | Where-Object { $_.N -eq $Step }
+    if (-not $one) { Write-Host ("  no such step: " + $Step); Set-Location $start; return }
+    & $one.Fn
+} else {
+    Write-Host ""
+    Write-Host "  Running every step that can run. Ones that cannot will say why."
+    foreach ($s in $steps) { & $s.Fn }
+}
+Set-Location $start
+
+# ---- the summary, which keeps the three outcomes apart -------------------------------------
+Write-Host ""
+Write-Host "  ----------------------------------------------------------------"
+$done    = @($script:Results | Where-Object { $_.Status -eq "DONE" })
+$skipped = @($script:Results | Where-Object { $_.Status -eq "SKIPPED" })
+$failed  = @($script:Results | Where-Object { $_.Status -eq "FAILED" })
+
+foreach ($r in $script:Results) {
+    Write-Host ("  " + $r.Status.PadRight(8) + "[" + $r.N + "] " + $r.Name)
+}
+Write-Host ""
+Write-Host ("  done " + $done.Count + ", skipped " + $skipped.Count + ", failed " + $failed.Count)
+
+if ($skipped.Count -gt 0) {
+    Write-Host ""
+    Write-Host "  Skipped is NOT finished. Each of these is waiting on something:"
+    foreach ($r in $skipped) { Write-Host ("    [" + $r.N + "] " + $r.Why) }
+}
+if ($failed.Count -gt 0) {
+    Write-Host ""
+    Write-Host "  Failed - these tried and did not succeed:"
+    foreach ($r in $failed) { Write-Host ("    [" + $r.N + "] " + $r.Why) }
+    exit 1
 }

@@ -88,6 +88,18 @@ function Step1 {
 
 function Step2 {
     Head 2 "Push HOLLOWMAST"
+    # Pages serves what is committed under site/, so a push carrying only src/ moves nothing a
+    # browser will ever download. This caught the owner once: the push verified correctly
+    # against ls-remote and was telling the truth, while the live game was still the previous
+    # build, because site/play/index.html had been rebuilt on disk and never committed.
+    # Checked here rather than left to be discovered on the live site.
+    Set-Location $SURV
+    $siteDirty = git status --porcelain site/
+    if ($siteDirty) {
+        Note "site/ has uncommitted build output - a push would NOT deploy it:"
+        $siteDirty -split "`n" | Where-Object { $_ } | ForEach-Object { Note ("    " + $_) }
+        Note "run: bash site-build/build-site.sh, then commit site/ before pushing"
+    }
     Push-AndVerify 2 "HOLLOWMAST push" $SURV
 }
 

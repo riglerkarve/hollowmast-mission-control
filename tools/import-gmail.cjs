@@ -22,6 +22,7 @@
 // The scope is gmail.metadata, so a body cannot be returned even if this asked for one.
 // ---------------------------------------------------------------------------------------
 'use strict';
+require('./_run-log.cjs').record();
 
 const db = require('../server/db');
 // Provenance: every read this process makes is logged against this actor. Without it the

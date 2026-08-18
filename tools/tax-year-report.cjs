@@ -17,6 +17,7 @@
 // inventing one.
 // ------------------------------------------------------------------------------------
 'use strict';
+require('./_run-log.cjs').record();
 
 const db = require('../server/db');
 // Provenance: every read this process makes is logged against this actor. Without it the

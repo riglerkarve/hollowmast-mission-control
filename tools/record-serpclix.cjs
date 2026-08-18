@@ -21,6 +21,7 @@
 // earlier payments" control. The gap is computed and reported rather than glossed, so nobody
 // later reads this as the whole history.
 'use strict';
+require('./_run-log.cjs').record();
 
 const db = require('../server/db');
 require('../server/routes/income');

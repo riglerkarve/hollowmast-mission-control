@@ -13,6 +13,7 @@
 // Verified against the real five-year history, 63 monthly files, 2021-06 to 2026-08:
 //   4,133 rows, no gaps, one header shape throughout, no malformed rows.
 'use strict';
+require('./_run-log.cjs').record();
 
 const fs = require('node:fs');
 const path = require('node:path');

@@ -23,6 +23,7 @@
 // removed — not a size check, not an mtime. Matching sizes are not matching bytes.
 // ------------------------------------------------------------------------------------
 'use strict';
+require('./_run-log.cjs').record();
 
 const fs = require('node:fs');
 const os = require('node:os');

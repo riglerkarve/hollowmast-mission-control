@@ -22,6 +22,7 @@
 // An invented CSS class renders as nothing and raises no error. An invented custom property
 // does the same. Neither is visible in a screenshot of a page that mostly works.
 'use strict';
+require('./_run-log.cjs').record();
 
 const fs = require('node:fs');
 const os = require('node:os');

@@ -12,6 +12,7 @@
 // Written after compacting the index (#M6), where a full rewrite of 132 lines could have
 // dropped one silently. It is cheap; run it after ANY bulk edit of MEMORY.md.
 'use strict';
+require('./_run-log.cjs').record();
 
 const fs = require('node:fs');
 const path = require('node:path');

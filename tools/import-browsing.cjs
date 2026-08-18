@@ -22,6 +22,7 @@
 //      ERR_OUT_OF_RANGE rather than silently rounding. The conversion to unix seconds is
 //      therefore done IN SQL, so the oversized number never reaches JavaScript at all.
 'use strict';
+require('./_run-log.cjs').record();
 
 const fs = require('node:fs');
 const os = require('node:os');

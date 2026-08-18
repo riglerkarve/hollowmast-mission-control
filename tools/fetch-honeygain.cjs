@@ -21,6 +21,7 @@
 // answer from the API is ever recorded. Tokens expire, so this WILL happen, and the day it does
 // the record must not quietly gain a run of zeroes.
 'use strict';
+require('./_run-log.cjs').record();
 
 const fs = require('node:fs');
 const path = require('node:path');

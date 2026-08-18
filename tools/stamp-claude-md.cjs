@@ -27,6 +27,7 @@
 // it. Only the blocks between the markers are generated. A file a human cannot write into
 // would be a worse document than a stale one.
 'use strict';
+require('./_run-log.cjs').record();
 
 const fs = require('node:fs');
 const path = require('node:path');

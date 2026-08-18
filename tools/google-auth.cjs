@@ -40,6 +40,7 @@
 // before this file was written, and revocable with --revoke.
 // ---------------------------------------------------------------------------------------
 'use strict';
+require('./_run-log.cjs').record();
 
 const fs = require('node:fs');
 const http = require('node:http');

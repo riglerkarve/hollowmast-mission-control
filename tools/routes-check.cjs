@@ -16,6 +16,7 @@
 //                                              tables created, zero endpoints reachable
 //   3. a mounted prefix that does not answer — mounted but broken
 'use strict';
+require('./_run-log.cjs').record();
 
 const fs = require('node:fs');
 const path = require('node:path');

@@ -125,18 +125,18 @@ append-only, one transaction each, version written in the same transaction as th
 
 | Counted | |
 | --- | --- |
-| Route files | 26 |
-| Endpoints | 147 |
-| Panels in the registry | 17 |
-| Migrated modules | 23 |
-| Tables | 48 |
-| Commits | 89, remote: none |
+| Route files | 28 |
+| Endpoints | 155 |
+| Panels in the registry | 19 |
+| Migrated modules | 26 |
+| Tables | 52 |
+| Commits | 121, remote: none |
 | Panels defining their own api() | 14 |
-| Memory store | 191 files |
+| Memory store | 212 files |
 
-**Migrated modules**, from `schema_meta`: alerts · atlas · brain · briefing · browsing · budget · cash · drive · exercise · finance · gate · goals · health · income · lifestyle · mail · safety · schedule · sessions · tasks · todo · wellbeing · work
+**Migrated modules**, from `schema_meta`: alerts · analytics · atlas · brain · briefing · browsing · budget · cash · drive · exercise · finance · gate · goals · health · income · income-attribution · income-balances · lifestyle · mail · safety · schedule · sessions · tasks · todo · wellbeing · work
 
-**Tables**, from `sqlite_master`: alert_events · alert_kinds · atlas_countries · brain_flags · brain_notes · briefings · browsing_domains · budget_lines · cash_counts · data_access_log · drive_files · drive_sync · exercise_sessions · finance_accounts · finance_assets · finance_rules · finance_transactions · focus_sessions · gate_attempts · gate_devices · gmail_messages · gmail_sender_rules · gmail_senders · gmail_sync · goal_steps · goals · health_metrics · income_entries · income_streams · lifestyle_chores · lifestyle_done · lifestyle_foods · lifestyle_intake · lifestyle_meals · lifestyle_targets · safety_decisions · safety_limits · safety_payees · schedule_events · schema_meta · sqlite_sequence · tasks · todo_items · todo_notes · wellbeing_entries · wellbeing_quiet · wishlist_items · work_items
+**Tables**, from `sqlite_master`: alert_events · alert_kinds · analytics_probes · analytics_traffic · atlas_countries · brain_flags · brain_notes · briefings · browsing_domains · budget_lines · cash_counts · data_access_log · drive_files · drive_sync · exercise_sessions · finance_accounts · finance_assets · finance_rules · finance_transactions · focus_sessions · gate_attempts · gate_devices · gmail_messages · gmail_sender_rules · gmail_senders · gmail_sync · goal_steps · goals · health_metrics · income_balances · income_entries · income_stream_payers · income_streams · lifestyle_chores · lifestyle_done · lifestyle_foods · lifestyle_intake · lifestyle_meals · lifestyle_targets · safety_decisions · safety_limits · safety_payees · schedule_events · schema_meta · sqlite_sequence · tasks · todo_items · todo_notes · wellbeing_entries · wellbeing_quiet · wishlist_items · work_items
 
 <!--END COUNTS-->
 
@@ -856,8 +856,14 @@ session opens to 70 files marked modified without having touched one, which buri
 change. `.ps1` is pinned CRLF (and separately must stay pure ASCII — PowerShell 5.1 reads
 a BOM-less file as ANSI); `.sh` is pinned LF, because CRLF breaks a shebang.
 
-**Still unversioned elsewhere in the workspace:** `thin-air`, `emberfall`, `Fallow`,
-`SecondBrain`. `Survive`, `income-portfolio` and `Mini Games` are repos.
+**Every project in the workspace now has a repository — 18 Aug 2026.** This line used to
+name four that did not. `tools/init-repos.cjs` initialised six (`.garage`, `thin-air`,
+`Fallow`, `emberfall`, `high-society-420-tycoon`, `SecondBrain`) plus the new
+`dropshipping`, writing each `.gitignore` BEFORE `git init` — the order is the safety
+property, since thin-air and emberfall are ~100 MB of `node_modules` around 0.2 MB of
+source. Verified after: 154 files tracked, zero under `node_modules`. The briefing reports
+project progress from git, so those six were reported as unmeasurable rather than quiet;
+that count is now zero.
 
 ---
 

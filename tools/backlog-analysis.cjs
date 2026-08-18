@@ -20,6 +20,7 @@
 // exported and never called. That last one is the dominant defect on this workspace -- five
 // were found in one day -- so it is worth a standing report rather than a memory.
 'use strict';
+require('./_run-log.cjs').record();
 
 const fs = require('node:fs');
 const path = require('node:path');

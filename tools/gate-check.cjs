@@ -7,6 +7,7 @@
 // It uses the REAL LAN address, because req.socket.remoteAddress must be genuinely
 // non-loopback: run against 127.0.0.1 this would exercise the EXEMPT path and pass while
 // proving nothing. It enrols and revokes real devices, then deletes every row it created.
+require('./_run-log.cjs').record();
 const fs = require('node:fs');
 const os = require('node:os');
 const path = require('node:path');

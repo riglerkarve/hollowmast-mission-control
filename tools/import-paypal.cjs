@@ -27,6 +27,7 @@
 // ONLY 'Completed' ROWS COUNT. Pending, Denied and Reversed rows describe money that did not
 // move. They are skipped and counted in the residue, never silently dropped.
 'use strict';
+require('./_run-log.cjs').record();
 
 const fs = require('node:fs');
 const path = require('node:path');

@@ -31,6 +31,7 @@
 // --inspect duly offered to import snoring milliseconds as sleep minutes.
 // ------------------------------------------------------------------------------------
 'use strict';
+require('./_run-log.cjs').record();
 
 const fs = require('node:fs');
 const path = require('node:path');

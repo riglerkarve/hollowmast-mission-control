@@ -17,6 +17,7 @@
 // passed through as plain text AND counted, so a briefing that grows a new construct shows up
 // as a number rather than as a gap.
 'use strict';
+require('./_run-log.cjs').record();
 
 const fs = require('node:fs');
 const os = require('node:os');

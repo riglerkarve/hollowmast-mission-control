@@ -24,6 +24,7 @@
 // It exits non-zero if the server does not come back, so a caller cannot mistake a dead
 // service for a restarted one.
 'use strict';
+require('./_run-log.cjs').record();
 
 const { execFileSync } = require('node:child_process');
 const TASK = 'MissionControl-Server';

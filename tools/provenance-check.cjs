@@ -17,6 +17,7 @@
 // I grepped a narrower pattern than the one I reported. A filter that reports a clean result
 // is the most dangerous kind, so this one prints its residue and its blind spots every run.
 'use strict';
+require('./_run-log.cjs').record();
 
 const fs = require('node:fs');
 const path = require('node:path');

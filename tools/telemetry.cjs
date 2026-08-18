@@ -25,6 +25,7 @@
 //      belong in a repo that could later be made public.
 // ------------------------------------------------------------------------------------
 'use strict';
+require('./_run-log.cjs').record();
 
 const fs = require('node:fs');
 const os = require('node:os');

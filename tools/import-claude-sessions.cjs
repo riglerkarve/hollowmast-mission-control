@@ -24,6 +24,7 @@
 // hours; that is the exact fabrication server/provenance.js exists to prevent.
 // ---------------------------------------------------------------------------------------
 'use strict';
+require('./_run-log.cjs').record();
 
 const fs = require('node:fs');
 const path = require('node:path');

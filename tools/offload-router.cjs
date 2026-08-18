@@ -23,6 +23,7 @@
 // say so out loud, because an audit that looks green while checking three things out of
 // seven is worse than no audit.
 'use strict';
+require('./_run-log.cjs').record();
 
 const fs = require('node:fs');
 const path = require('node:path');

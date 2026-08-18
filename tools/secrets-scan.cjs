@@ -13,6 +13,7 @@
 // It also reports what it could NOT check. A scanner that finds nothing because it read no
 // secrets is indistinguishable from a clean tree, and only one of those is good news.
 'use strict';
+require('./_run-log.cjs').record();
 
 const fs = require('node:fs');
 const path = require('node:path');

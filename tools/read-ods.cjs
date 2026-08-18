@@ -21,6 +21,7 @@
 // Node has no zip reader built in, so content.xml comes out via unzip(1), which is
 // present in Git Bash. If that ever stops being true this needs a real zip reader.
 
+require('./_run-log.cjs').record();
 const { execFileSync } = require('node:child_process');
 
 const file = process.argv[2];

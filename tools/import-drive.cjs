@@ -14,6 +14,7 @@
 // would have to be invented — "did the paging run out" is the honest completeness signal and
 // it is the one recorded.
 'use strict';
+require('./_run-log.cjs').record();
 
 const db = require('../server/db');
 // Provenance: every read this process makes is logged against this actor. Without it the

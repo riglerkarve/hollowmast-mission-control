@@ -16,6 +16,7 @@
 //     that naming the owner's business broke four answers that were already right. So this
 //     prompt says nothing about who the owner is or what they do.
 'use strict';
+require('./_run-log.cjs').record();
 
 const MODEL = process.argv.includes('--model')
   ? process.argv[process.argv.indexOf('--model') + 1] : 'qwen3.5:9b';

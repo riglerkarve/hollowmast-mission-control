@@ -20,6 +20,7 @@
 // IT REFUSES RATHER THAN GUESSING when it finds something credential-shaped that is not covered
 // by the ignore rules it is about to write. Better to stop and ask than to publish.
 'use strict';
+require('./_run-log.cjs').record();
 
 const fs = require('node:fs');
 const path = require('node:path');

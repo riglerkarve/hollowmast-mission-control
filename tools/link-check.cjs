@@ -30,6 +30,7 @@
 // that quietly drops the awkward cases makes the surviving list look healthier than it is.
 // ---------------------------------------------------------------------------------------
 'use strict';
+require('./_run-log.cjs').record();
 
 const fs = require('node:fs');
 const path = require('node:path');

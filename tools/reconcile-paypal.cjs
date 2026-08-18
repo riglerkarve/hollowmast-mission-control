@@ -19,6 +19,7 @@
 // asserting a fact from an absence, which is the error this whole exercise exists to correct.
 // Unmatched rows are listed for a human and left exactly as they are.
 'use strict';
+require('./_run-log.cjs').record();
 
 const db = require('../server/db');
 require('../server/routes/finance');

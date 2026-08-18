@@ -18,6 +18,7 @@
 // DETERMINISTIC RULES TABLE (descriptor match -> category), which is auditable, exact,
 // and cannot destabilise the other 24 rows.
 'use strict';
+require('./_run-log.cjs').record();
 
 const MODEL = process.env.PROBE_MODEL || 'qwen3.5:9b';
 const HOST = 'http://127.0.0.1:11434';

@@ -36,6 +36,7 @@
 //   node tools/rent-affordability.cjs --rent 750,850,950  compare several
 //   node tools/rent-affordability.cjs --save              also write reports/housing/
 
+require('./_run-log.cjs').record();
 const fs = require('fs');
 const path = require('path');
 const db = require('../server/db');

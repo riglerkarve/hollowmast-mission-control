@@ -11,6 +11,7 @@
 // 3D-printing business dropped the unambiguous set from 20/20 to 16/20 by over-applying
 // one category to unrelated merchants. Merchant knowledge belongs in finance_rules.
 'use strict';
+require('./_run-log.cjs').record();
 
 const db = require('../server/db');
 // Provenance: every read this process makes is logged against this actor. Without it the

@@ -22,6 +22,7 @@
 // stores nothing is not that. It is also why this lives in tools/ rather than inside either
 // module — neither owns the boundary between them.
 'use strict';
+require('./_run-log.cjs').record();
 
 const path = require('node:path');
 const { DatabaseSync } = require('node:sqlite');

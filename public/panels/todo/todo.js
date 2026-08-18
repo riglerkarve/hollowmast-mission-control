@@ -126,6 +126,19 @@ function ownerChip(owner) {
   return `<span class="td-chip ${you ? 'you' : 'bot'}" title="${you ? 'Only you can do this' : 'Where the work runs'}">${esc(owner)}</span>`;
 }
 
+// A deferred item carries a date it should be looked at again. Shown as a flag on the row
+// you are already reading, never as a notification: an alert you learn to dismiss is worse
+// than no alert. Due and not-yet-due render differently, because "deferred to next month"
+// and "deferred to a date that has passed" are opposite statements about the same item.
+function deferBadge(i) {
+  if (!i.recheck_at) return "";
+  const today = new Date().toISOString().slice(0, 10);
+  const due = i.recheck_at <= today;
+  const cls = due ? "td-defer is-due" : "td-defer";
+  const text = due ? `due for re-check ${esc(i.recheck_at)}` : `deferred to ${esc(i.recheck_at)}`;
+  return `<span class="${cls}" title="Deferred, not abandoned. Re-check on ${esc(i.recheck_at)}.">${text}</span>`;
+}
+
 const priClass = (p) => `pri-${String(p || '').toLowerCase()}`;
 
 // --------------------------------------------------------------------------- summary
@@ -214,6 +227,7 @@ function itemHtml(i) {
       <div class="td-row">
         <span class="td-chip ${priClass(i.priority)}">${esc(i.priority)}</span>
         <span class="td-title">${esc(i.title)}</span>
+          ${deferBadge(i)}
         <span class="td-id">${esc(i.id)}</span>
       </div>
       <div class="td-meta">

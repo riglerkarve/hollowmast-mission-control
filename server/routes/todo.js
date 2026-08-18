@@ -308,6 +308,22 @@ db.migrate('todo', [
   (d) => {
     d.exec("ALTER TABLE todo_notes ADD COLUMN superseded_by INTEGER REFERENCES todo_notes(id)");
   },
+
+  // 4. An item can be DEFERRED to a date rather than closed.
+  //
+  // 18 Aug: two items were deferred against a condition - the chore module until 1 Sept,
+  // and the automation item until enough of your own usage is recorded - and both dates
+  // lived only inside a note. A note resurfaces if and only if somebody reads it, which
+  // makes a deferral indistinguishable from an item quietly abandoned. The architect rule
+  // that breaks is the one about a "no" I cannot justify later.
+  //
+  // So the date is a field, and the backlog shows when it has come due. Nullable: an item
+  // without a date is simply not deferred, which is almost all of them. Deliberately NOT a
+  // reminder that fires at you - it is a flag you meet when you are already looking at the
+  // backlog, because an alert you learn to dismiss is worse than no alert at all.
+  (d) => {
+    d.exec('ALTER TABLE todo_items ADD COLUMN recheck_at TEXT');
+  },
 ]);
 
 const router = express.Router();
@@ -740,7 +756,7 @@ router.get('/export.csv', (req, res) => {
 // writes the old one into todo_notes first, dated and attributed, so the change is visible
 // rather than silent. That is the same shape as the rest of this project: a correction is
 // made openly, never by quietly overwriting.
-const TEXT_FIELDS = ['title', 'cluster', 'effort', 'owner', 'rationale'];
+const TEXT_FIELDS = ['title', 'cluster', 'effort', 'owner', 'rationale', 'recheck_at'];
 
 router.patch('/items/:id', (req, res) => {
   const { status, priority } = req.body || {};

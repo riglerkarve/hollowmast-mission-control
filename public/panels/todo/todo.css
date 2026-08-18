@@ -247,3 +247,8 @@
   .td-cl { grid-template-columns: 1fr auto; }
   .td-cl-bar, .td-cl-open { display: none; }
 }
+
+/* Deferred items: a flag on a row you are already reading, not a notification. */
+.td-defer { font-size: 11px; padding: 1px 7px; border-radius: 10px; white-space: nowrap;
+  background: var(--card); color: var(--muted); border: 1px solid var(--border); }
+.td-defer.is-due { color: var(--warn); border-color: var(--warn); }

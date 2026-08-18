@@ -1,0 +1,274 @@
+<!doctype html>
+<meta charset="utf-8">
+<title>Contrast audit — Mission Control</title>
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<link rel="stylesheet" href="/shell.css">
+<style>
+  body { margin: 0; padding: 1.25rem; background: var(--bg); color: var(--ink); font: 14px/1.5 system-ui, sans-serif; }
+  h1 { font-size: 1.15rem; margin: 0 0 .35rem; }
+  .lede { color: var(--muted); max-width: 62ch; margin: 0 0 1rem; }
+  .bar { display: flex; gap: .5rem; flex-wrap: wrap; align-items: center; margin-bottom: 1rem; }
+  button { font: inherit; padding: .45rem .8rem; border-radius: 6px; border: 1px solid var(--border); background: var(--card); color: var(--ink); cursor: pointer; }
+  button.primary { background: var(--accent); color: #fff; border-color: transparent; }
+  button:disabled { opacity: .5; cursor: default; }
+  #frame { width: 1280px; height: 900px; border: 0; position: absolute; left: -20000px; top: 0; }
+  table { border-collapse: collapse; width: 100%; font-size: 13px; }
+  th, td { text-align: left; padding: .3rem .5rem; border-bottom: 1px solid var(--border); vertical-align: top; }
+  th { position: sticky; top: 0; background: var(--bg); }
+  td.n { text-align: right; font-variant-numeric: tabular-nums; white-space: nowrap; }
+  .fail { color: #c0392b; font-weight: 600; }
+  .warn { color: #b8860b; font-weight: 600; }
+  .ok { color: var(--muted); }
+  .box { border: 1px solid var(--border); border-radius: 8px; padding: .75rem 1rem; margin-bottom: 1rem; background: var(--card); }
+  .box.stop { border-color: #c0392b; }
+  .sw { display: inline-block; width: .8em; height: .8em; border: 1px solid var(--border); vertical-align: -1px; border-radius: 2px; }
+  code { font-family: ui-monospace, Consolas, monospace; font-size: 12px; }
+  .residue { color: var(--muted); font-size: 12.5px; }
+  .residue b { color: var(--ink); }
+  .wrap { overflow-x: auto; }
+</style>
+
+<h1>Contrast audit</h1>
+<p class="lede">Walks every panel in the real dashboard and measures rendered text against the
+ground it actually sits on — compositing translucent backgrounds and cumulative ancestor
+opacity, because both compound and neither is visible in a screenshot.</p>
+
+<div class="bar">
+  <button id="run" class="primary">Measure this theme</button>
+  <button id="clear">Forget stored runs</button>
+  <span id="status" class="residue"></span>
+</div>
+
+<div id="out"></div>
+<iframe id="frame" src="/" title="the dashboard under audit"></iframe>
+
+<script type="module">
+// ---------------------------------------------------------------------------------------
+// WHY THIS PAGE EXISTS, AND WHAT IT REFUSES TO DO
+//
+// On 18 Aug I "compared light and dark" by setting data-theme on the root and measuring
+// twice. Mission Control has no data-theme hook — shell.css switches on prefers-color-scheme
+// alone — so the attribute did nothing and BOTH captures were dark. Two identical runs read
+// as a clean light/dark comparison, because nothing in the output named which theme it had
+// actually measured.
+//
+// So this page never trusts a toggle. It reads the ground colour it actually rendered
+// against, files each run under that, and REFUSES to present a two-theme comparison unless
+// the runs have different grounds. Changing the theme is the operator's job — in the OS or
+// the browser's appearance override — and the page's job is to notice whether it happened.
+// ---------------------------------------------------------------------------------------
+
+const $ = (s) => document.querySelector(s);
+const KEY = 'mc-contrast-runs';
+const frame = $('#frame');
+
+// WCAG relative luminance and ratio. Correct for TEXT ON A SOLID GROUND, which is what a
+// dashboard is. It is not a general image metric and is not used as one here.
+const lin = (c) => { c /= 255; return c <= 0.04045 ? c / 12.92 : ((c + 0.055) / 1.055) ** 2.4; };
+const lum = (p) => 0.2126 * lin(p[0]) + 0.7152 * lin(p[1]) + 0.0722 * lin(p[2]);
+const ratio = (a, b) => { const s = [lum(a), lum(b)].sort((p, q) => q - p); return (s[0] + 0.05) / (s[1] + 0.05); };
+const hex = (p) => '#' + p.map((v) => Math.round(v).toString(16).padStart(2, '0')).join('');
+const esc = (s) => String(s).replace(/[<&]/g, (c) => (c === '<' ? '&lt;' : '&amp;'));
+
+function parse(c) {
+  const m = String(c).match(/rgba?\(([^)]+)\)/);
+  if (!m) return null;
+  const p = m[1].split(/[\s,/]+/).filter(Boolean).map(Number);
+  return { rgb: [p[0], p[1], p[2]], a: p.length > 3 ? p[3] : 1 };
+}
+
+// src OVER dst. Alpha compositing, not a blend. A 20%-alpha panel over a dark page is NOT
+// the panel's own colour, and reading backgroundColor straight off the element reports
+// exactly that wrong answer — which is how a naive checker passes text nobody can read.
+const over = (src, a, dst) => src.map((v, i) => v * a + dst[i] * (1 - a));
+
+function effective(el, win) {
+  // Build the ancestor chain, then composite from the page ground UPWARD. Opacity is
+  // CUMULATIVE — nested 0.6 and 0.5 render at 0.30 — and it multiplies the alpha of the
+  // background at that level and of any text below it.
+  const chain = [];
+  for (let n = el; n && n.nodeType === 1; n = n.parentElement) chain.push(n);
+  chain.reverse();
+
+  let ground = [255, 255, 255];   // the canvas under everything
+  let cum = 1;                    // cumulative opacity down the chain
+  let unknown = null;             // an image or gradient that cannot be composited
+
+  for (const n of chain) {
+    const cs = win.getComputedStyle(n);
+    cum *= parseFloat(cs.opacity || '1');
+    if (cs.backgroundImage && cs.backgroundImage !== 'none') unknown = cs.backgroundImage.slice(0, 40);
+    const bg = parse(cs.backgroundColor);
+    if (bg && bg.a > 0) ground = over(bg.rgb, bg.a * cum, ground);
+  }
+  const fg = parse(win.getComputedStyle(el).color);
+  if (!fg) return null;
+  return { fg: over(fg.rgb, fg.a * cum, ground), bg: ground, cum, unknown };
+}
+
+function visible(el, win) {
+  const cs = win.getComputedStyle(el);
+  if (cs.display === 'none' || cs.visibility === 'hidden') return false;
+  if (parseFloat(cs.opacity || '1') === 0) return false;
+  const r = el.getBoundingClientRect();
+  if (r.width < 1 || r.height < 1) return false;
+  // DIRECT text only. An element whose text lives in a child is measured at that child,
+  // where the colour actually applies — measuring it here would attribute the parent's
+  // colour to the child's words.
+  return [...el.childNodes].some((n) => n.nodeType === 3 && n.textContent.trim().length > 1);
+}
+
+function required(el, win) {
+  const cs = win.getComputedStyle(el);
+  const px = parseFloat(cs.fontSize);
+  const w = parseInt(cs.fontWeight, 10) || 400;
+  const large = px >= 24 || (px >= 18.66 && w >= 700);   // WCAG's own definition of large text
+  return { need: large ? 3.0 : 4.5, large, px };
+}
+
+const settle = (ms) => new Promise((r) => setTimeout(r, ms));
+
+async function auditPanel(name, win, doc) {
+  // CLICK THE REAL BUTTON. The shell switches panels on a click handler over
+  // button.nav-item[data-panel]; setting location.hash looked equivalent and is not — the
+  // first version did that, every panel stayed on Focus, and it would have reported one
+  // panel's contrast fourteen times under fourteen different names.
+  const btn = doc.querySelector('.nav-item[data-panel="' + name + '"]');
+  if (!btn) throw new Error('no nav button for panel ' + name);
+  btn.click();
+  await settle(450);
+  const rows = [];
+  let skipped = 0, unmeasurable = 0;
+  for (const el of doc.body.querySelectorAll('*')) {
+    if (el.tagName === 'SCRIPT' || el.tagName === 'STYLE') continue;
+    if (!visible(el, win)) { skipped++; continue; }
+    const e = effective(el, win);
+    if (!e) { unmeasurable++; continue; }
+    if (e.unknown) { unmeasurable++; continue; }   // gradient or image: NOT counted as a pass
+    const r = required(el, win);
+    const cls = (typeof el.className === 'string' && el.className.trim())
+      ? '.' + el.className.trim().split(/\s+/).slice(0, 2).join('.') : '';
+    rows.push({
+      panel: name,
+      sel: el.tagName.toLowerCase() + cls,
+      text: (el.textContent || '').trim().slice(0, 42),
+      ratio: ratio(e.fg, e.bg), need: r.need, large: r.large,
+      fg: hex(e.fg), bg: hex(e.bg), cum: e.cum,
+    });
+  }
+  return { rows, skipped, unmeasurable };
+}
+
+async function run() {
+  $('#run').disabled = true;
+  const win = frame.contentWindow, doc = frame.contentDocument;
+  $('#status').textContent = 'waiting for the dashboard…';
+  await settle(800);
+
+  // The panels are read from the app's OWN NAV, so a panel added later is audited without
+  // touching this file. A hand-typed list would drift, and would look complete while
+  // silently skipping the newest panel — the exact failure this tool exists to catch.
+  const names = [...doc.querySelectorAll('.nav-item[data-panel]')]
+    .map((b) => b.dataset.panel).filter(Boolean);
+
+  if (!names.length) {
+    $('#out').innerHTML = '<div class="box stop"><b>Could not read the panel list</b> from the app nav, '
+      + 'so nothing was measured. This is a FAILURE TO LOOK, not a clean result.</div>';
+    $('#run').disabled = false; $('#status').textContent = ''; return;
+  }
+
+  const all = [];
+  let skipped = 0, unmeasurable = 0;
+  for (const n of names) {
+    $('#status').textContent = 'measuring ' + n + '…';
+    const r = await auditPanel(n, win, doc);
+    all.push(...r.rows); skipped += r.skipped; unmeasurable += r.unmeasurable;
+  }
+
+  // THE GROUND IS THE THEME'S FINGERPRINT — measured, never asserted. Whatever the OS or
+  // the browser override claims, this is what actually rendered.
+  const ground = hex(effective(doc.body, win).bg);
+  const scheme = win.matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light';
+
+  const runs = JSON.parse(localStorage.getItem(KEY) || '{}');
+  runs[ground] = { ground, scheme, at: new Date().toISOString(), rows: all, skipped, unmeasurable, panels: names.length };
+  localStorage.setItem(KEY, JSON.stringify(runs));
+  $('#status').textContent = '';
+  $('#run').disabled = false;
+  render();
+}
+
+function table(rows) {
+  const bad = rows.filter((r) => r.ratio < r.need).sort((a, b) => a.ratio - b.ratio);
+  if (!bad.length) return '<p class="ok">Every measured element clears its WCAG AA threshold.</p>';
+  const body = bad.slice(0, 120).map((r) => '<tr>'
+    + '<td>' + r.panel + '</td><td><code>' + esc(r.sel) + '</code></td><td>' + esc(r.text) + '</td>'
+    + '<td class="n ' + (r.ratio < r.need * 0.8 ? 'fail' : 'warn') + '">' + r.ratio.toFixed(2) + ':1</td>'
+    + '<td class="n">' + r.need + (r.large ? ' (large)' : '') + '</td>'
+    + '<td><span class="sw" style="background:' + r.fg + '"></span> <code>' + r.fg + '</code> on '
+    + '<span class="sw" style="background:' + r.bg + '"></span> <code>' + r.bg + '</code>'
+    + (r.cum < 1 ? ' <span class="residue">@' + r.cum.toFixed(2) + ' opacity</span>' : '') + '</td></tr>').join('');
+  return '<div class="wrap"><table><thead><tr><th>panel</th><th>element</th><th>text</th>'
+    + '<th class="n">ratio</th><th class="n">needs</th><th>colours</th></tr></thead><tbody>'
+    + body + '</tbody></table></div>'
+    + (bad.length > 120 ? '<p class="residue">' + (bad.length - 120) + ' further failing rows not listed.</p>' : '');
+}
+
+function render() {
+  const runs = Object.values(JSON.parse(localStorage.getItem(KEY) || '{}'));
+  if (!runs.length) { $('#out').innerHTML = '<div class="box">No runs stored yet.</div>'; return; }
+
+  let html = '';
+  // THE REFUSAL. Two runs whose measured ground is identical are one theme measured twice,
+  // whatever the browser reported about its own preference — and presenting that as a
+  // light/dark comparison is the precise mistake this page was built after making.
+  if (runs.length === 1) {
+    html += '<div class="box stop"><b>One theme measured so far</b> — ground '
+      + '<span class="sw" style="background:' + runs[0].ground + '"></span> <code>' + runs[0].ground + '</code>, '
+      + 'which rendered as <b>' + runs[0].scheme + '</b>. This is <b>not</b> a both-themes audit. '
+      + 'Change your OS or browser appearance setting, reload this page, and measure again. '
+      + 'There is deliberately no in-page toggle: <code>shell.css</code> switches on '
+      + '<code>prefers-color-scheme</code> alone, so a toggle here would change nothing and the '
+      + 'second run would silently repeat the first.</div>';
+  } else {
+    const grounds = new Set(runs.map((r) => r.ground));
+    if (grounds.size === 1) {
+      html += '<div class="box stop"><b>Refusing to compare.</b> ' + runs.length + ' runs, all with the '
+        + 'same measured ground <code>' + [...grounds][0] + '</code> — that is one theme measured '
+        + 'repeatedly. The appearance setting did not actually change between them.</div>';
+    } else {
+      html += '<div class="box"><b>' + grounds.size + ' distinct themes measured</b>, confirmed by '
+        + 'different rendered grounds — not by asking the browser what it prefers.</div>';
+    }
+  }
+
+  for (const r of runs.slice().sort((a, b) => a.scheme.localeCompare(b.scheme))) {
+    const bad = r.rows.filter((x) => x.ratio < x.need).length;
+    html += '<div class="box">'
+      + '<h2 style="font-size:1rem;margin:.1rem 0 .5rem">' + r.scheme + ' — ground '
+      + '<span class="sw" style="background:' + r.ground + '"></span> <code>' + r.ground + '</code></h2>'
+      + '<p class="residue"><b>' + r.rows.length + '</b> elements measured across <b>' + r.panels
+      + '</b> panels · <b>' + bad + '</b> below AA · <b>' + r.skipped + '</b> skipped as not visible or '
+      + 'carrying no direct text · <b>' + r.unmeasurable + '</b> NOT CHECKED because they sit on a '
+      + 'gradient or image, which cannot be composited to one colour — excluded, never counted as passes.'
+      + '<br>Blind to: text over canvas or video, anything shown only on hover or focus, and any panel '
+      + 'state this walk did not reach.</p>'
+      + table(r.rows) + '</div>';
+  }
+  $('#out').innerHTML = html;
+}
+
+// THE AUDIT'S OWN FAILURE MUST BE LOUDER THAN ITS SILENCE. The first run of this page threw
+// partway through and left "No runs stored yet" on screen — indistinguishable from never
+// having pressed the button, which is the failure mode the whole tool exists to prevent,
+// reproduced inside the tool.
+$('#run').addEventListener('click', () => run().catch((err) => {
+  $('#run').disabled = false;
+  $('#status').textContent = '';
+  $('#out').innerHTML = '<div class="box stop"><b>The audit itself failed</b> and measured nothing: <code>'
+    + esc(err && err.message ? err.message : String(err)) + '</code>. '
+    + 'No result was stored. This is not a pass.</div>' + $('#out').innerHTML;
+}));
+$('#clear').addEventListener('click', () => { localStorage.removeItem(KEY); render(); });
+render();
+</script>

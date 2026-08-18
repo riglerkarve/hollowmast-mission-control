@@ -174,7 +174,17 @@ function main() {
 
   const rules = RULES.map(([match_type, pattern, direction, category, note]) => {
     if (!CATEGORIES.includes(category)) throw new Error(`rule uses unknown category "${category}"`);
-    return { match_type, pattern, direction, category, note };
+    // '' means "either direction", NOT null. finance_rules.direction became NOT NULL in
+    // finance migration 4, because SQLite treats NULLs as DISTINCT in a UNIQUE index -- so
+    // UNIQUE(match_type, pattern, direction) never constrained a direction-less rule, the
+    // ON CONFLICT below silently degraded to a plain INSERT, and this seed duplicated 12
+    // rules the second time it ran. The RULES table above still writes null for "either",
+    // which reads better there; it is normalised here, at the single point of entry.
+    //
+    // '' rather than a word like 'any' on purpose: the matcher tests `if (r.direction && ...)`
+    // to mean "applies to either", and '' is falsy where 'any' would not be. So the
+    // matching logic keeps working with no second edit that could be missed.
+    return { match_type, pattern, direction: direction || '', category, note };
   });
 
   const seen = new Set();

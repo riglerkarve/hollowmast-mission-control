@@ -58,6 +58,9 @@ db.migrate('finance', [
         match_type TEXT NOT NULL,             -- 'counterparty_exact' | 'counterparty_contains' | 'reference_contains'
         pattern    TEXT NOT NULL,
         direction  TEXT,                      -- 'in' | 'out' | NULL for either
+                                              -- SUPERSEDED by migration 4: NOT NULL DEFAULT ''.
+                                              -- This migration has shipped and must not be
+                                              -- edited; migration 4 is the live shape.
         category   TEXT NOT NULL,
         note       TEXT,
         created_at TEXT NOT NULL DEFAULT (datetime('now', 'localtime')),
@@ -111,6 +114,73 @@ db.migrate('finance', [
         updated_at   TEXT NOT NULL DEFAULT (datetime('now','localtime'))
       );
       CREATE INDEX idx_fin_assets_kind ON finance_assets(kind);
+    `);
+  },
+
+  // 4. Make UNIQUE (match_type, pattern, direction) actually constrain the rules.
+  //
+  // It never did for a rule that omits a direction. SQLite treats NULLs as DISTINCT in a
+  // UNIQUE index -- standard SQL, not a quirk -- so two rows with the same match_type and
+  // pattern and a NULL direction do not conflict. seed-rules.cjs relies on
+  // ON CONFLICT(match_type, pattern, direction) DO UPDATE, which therefore degraded
+  // silently to a plain INSERT for exactly those rows.
+  //
+  // Measured before the fix: 120 rules, 108 distinct, 25 with direction NULL, 12 already
+  // duplicated -- including all four 'Own transfer' rules, which is what the turnover
+  // figure in the tax report depends on. Every further seed run would have duplicated up
+  // to 25 more, unbounded.
+  //
+  // NOT WRONG TODAY, and that is what made it easy to leave: both copies said the same
+  // thing, so classification was unaffected. It cost correctness two ways later --
+  // unbounded growth, and an edit to one copy leaving the other in place, so the edit
+  // appears to do nothing and nothing errors.
+  //
+  // The fix makes the constraint TRUE rather than working around it: direction becomes
+  // NOT NULL DEFAULT '', and '' means "either direction" exactly as NULL did.
+  // Deliberately '' and not a sentinel word: seed-rules.cjs tests `if (r.direction && ...)`
+  // to mean "applies to either", and '' is falsy while 'any' would not be. The existing
+  // matching logic therefore keeps working unchanged, rather than needing a second edit
+  // somewhere else that could be missed.
+  (d) => {
+    // Verified before writing this: the 12 duplicate pairs differ in created_at ONLY.
+    // Category, pattern, note and business are identical across every pair, so which copy
+    // survives cannot change how any transaction is classified. Keeping the LOWEST id
+    // keeps the row from the first seed run -- the one any manual edit would have hit.
+    d.exec(`
+      DELETE FROM finance_rules
+       WHERE direction IS NULL
+         AND id NOT IN (
+           SELECT MIN(id) FROM finance_rules WHERE direction IS NULL
+            GROUP BY match_type, pattern
+         );
+    `);
+
+    // SQLite cannot ALTER a column to NOT NULL, so the table is rebuilt. Safe here, and
+    // checked rather than assumed: nothing in sqlite_master references finance_rules --
+    // no foreign key, no view, no trigger, no extra index.
+    d.exec(`
+      CREATE TABLE finance_rules_new (
+        id         INTEGER PRIMARY KEY AUTOINCREMENT,
+        match_type TEXT NOT NULL,
+        pattern    TEXT NOT NULL,
+        direction  TEXT NOT NULL DEFAULT '',   -- 'in' | 'out' | '' for either. NEVER NULL:
+                                               -- a NULL here silently voids the UNIQUE key
+                                               -- below, which is the bug this fixes.
+        category   TEXT NOT NULL,
+        note       TEXT,
+        created_at TEXT NOT NULL DEFAULT (datetime('now', 'localtime')),
+        business   INTEGER,
+        UNIQUE (match_type, pattern, direction)
+      );
+
+      INSERT INTO finance_rules_new
+             (id, match_type, pattern, direction, category, note, created_at, business)
+        SELECT id, match_type, pattern, COALESCE(direction, ''), category, note,
+               created_at, business
+          FROM finance_rules;
+
+      DROP TABLE finance_rules;
+      ALTER TABLE finance_rules_new RENAME TO finance_rules;
     `);
   },
 ]);

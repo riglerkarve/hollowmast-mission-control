@@ -93,14 +93,14 @@ router.post('/derive', (req, res) => {
   );
 
   let written = 0;
-  db.exec('BEGIN');
   try {
-    for (const t of typical) {
-      const basis = `median of ${t.monthsConsidered} complete months, present in ${t.monthsPresent}`;
-      written += ins.run(t.category, t.medianPence, basis, ESSENTIAL_BY_DEFAULT.has(t.category) ? 1 : 0).changes;
-    }
-    db.exec('COMMIT');
-  } catch (err) { db.exec('ROLLBACK'); return res.status(500).json({ error: err.message }); }
+    db.withTransaction(() => {
+      for (const t of typical) {
+        const basis = `median of ${t.monthsConsidered} complete months, present in ${t.monthsPresent}`;
+        written += ins.run(t.category, t.medianPence, basis, ESSENTIAL_BY_DEFAULT.has(t.category) ? 1 : 0).changes;
+      }
+    });
+  } catch (err) { return res.status(500).json({ error: err.message }); }
 
   res.json({ derivedFromMonths: months, categories: typical.length, written,
     note: 'Median, not mean — one Christmas would drag a mean into a budget you never hit.' });

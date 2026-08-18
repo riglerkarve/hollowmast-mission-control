@@ -731,30 +731,21 @@ router.patch('/items/:id', (req, res) => {
   }
   args.push(req.params.id);
 
-  // `began` exists so the catch cannot roll back somebody else's transaction. node:sqlite
-  // hands out ONE connection, three routes call BEGIN, and if one is already open this
-  // BEGIN throws -- at which point an unconditional ROLLBACK aborts the OUTER transaction
-  // and discards writes this route never made.
-  //
-  // It cannot happen today only because every BEGIN..COMMIT block in this codebase is
-  // fully synchronous, so the event loop cannot interleave two. That is a real constant
-  // and it is written down nowhere else: PUT NO `await` BETWEEN BEGIN AND COMMIT, here or
-  // in alerts.js or budget.js.
-  let began = false;
+  // db.withTransaction is the only place BEGIN appears — it refuses to nest, refuses an
+  // async callback, and rolls back only the transaction it actually started. The hand-rolled
+  // version here would roll back somebody else's on the shared connection.
   try {
-    db.exec('BEGIN');
-    began = true;
-    for (const [field, was] of kept) {
-      db.prepare('INSERT INTO todo_notes (item_id, note, by_whom) VALUES (?, ?, ?)').run(
-        req.params.id,
-        `${field} replaced. Previous text: ${was == null ? '(empty)' : was}`,
-        req.by,
-      );
-    }
-    db.prepare(`UPDATE todo_items SET ${sets.join(', ')} WHERE id = ?`).run(...args);
-    db.exec('COMMIT');
+    db.withTransaction(() => {
+      for (const [field, was] of kept) {
+        db.prepare('INSERT INTO todo_notes (item_id, note, by_whom) VALUES (?, ?, ?)').run(
+          req.params.id,
+          `${field} replaced. Previous text: ${was == null ? '(empty)' : was}`,
+          req.by,
+        );
+      }
+      db.prepare(`UPDATE todo_items SET ${sets.join(', ')} WHERE id = ?`).run(...args);
+    });
   } catch (err) {
-    if (began) { try { db.exec('ROLLBACK'); } catch { /* already rolled back */ } }
     return res.status(500).json({ error: err.message });
   }
   res.json({

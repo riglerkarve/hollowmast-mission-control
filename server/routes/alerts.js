@@ -180,12 +180,12 @@ router.post('/kinds/:kind/unmute', (req, res) => {
   const k = db.prepare('SELECT * FROM alert_kinds WHERE kind = ?').get(req.params.kind);
   if (!k) return res.status(404).json({ error: 'no such alert kind' });
 
-  db.exec('BEGIN');
   try {
-    db.prepare('UPDATE alert_kinds SET muted = 0, muted_at = NULL, muted_reason = NULL WHERE kind = ?').run(k.kind);
-    db.prepare("UPDATE alert_events SET verdict = NULL, verdict_at = NULL WHERE kind = ? AND verdict = 'ignored'").run(k.kind);
-    db.exec('COMMIT');
-  } catch (err) { db.exec('ROLLBACK'); return res.status(500).json({ error: err.message }); }
+    db.withTransaction(() => {
+      db.prepare('UPDATE alert_kinds SET muted = 0, muted_at = NULL, muted_reason = NULL WHERE kind = ?').run(k.kind);
+      db.prepare("UPDATE alert_events SET verdict = NULL, verdict_at = NULL WHERE kind = ? AND verdict = 'ignored'").run(k.kind);
+    });
+  } catch (err) { return res.status(500).json({ error: err.message }); }
 
   res.json({ kind: k.kind, muted: false, note: 'Unmuted, and previous ignores cleared so it starts fresh.' });
 });

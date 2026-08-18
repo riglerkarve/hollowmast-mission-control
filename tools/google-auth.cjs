@@ -385,9 +385,17 @@ async function revoke(which) {
   console.log(left.length ? `  still authorised: ${left.join(', ')}` : '  no accounts remain authorised.');
 }
 
-(async () => {
-  if (has('--status')) return status();
-  if (has('--test')) return test();
-  if (has('--revoke')) return revoke(process.argv[process.argv.indexOf('--revoke') + 1]);
-  return authorise();
-})();
+// GUARDED, and this was a real bug rather than a precaution. Adding module.exports made this
+// file requirable as a library — and requiring it ran the CLI, which with no flags means
+// authorise(): it printed a consent URL and held port 43117 waiting for a redirect. The
+// importer's first probe hung for two minutes and left a stray listener behind.
+//
+// A file that is both a command and a library must know which it is being used as.
+if (require.main === module) {
+  (async () => {
+    if (has('--status')) return status();
+    if (has('--test')) return test();
+    if (has('--revoke')) return revoke(process.argv[process.argv.indexOf('--revoke') + 1]);
+    return authorise();
+  })();
+}

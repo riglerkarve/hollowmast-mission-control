@@ -250,5 +250,54 @@ router.get('/senders', (req, res) => {
   ).all(since));
 });
 
+
+// M40: where the mail comes from, and how old the unread is. Two counts and nothing else.
+//
+// DELIBERATELY ABSENT: any score, streak, target, or colour that means bad. There is no
+// inbox-zero figure and no suggestion to unsubscribe. This reports what is there; what to
+// do about it is not the dashboard's opinion to have.
+router.get('/attention', (req, res) => {
+  const total = db.prepare('SELECT COUNT(*) AS n FROM gmail_messages').get().n;
+  if (!total) return res.json({ state: 'empty', message: 'No mail imported yet.' });
+
+  const senders = db.prepare(
+    `SELECT from_addr AS addr, COUNT(*) AS n FROM gmail_messages
+     GROUP BY from_addr ORDER BY n DESC LIMIT 12`
+  ).all().map((r) => ({ ...r, pct: +(100 * r.n / total).toFixed(1) }));
+
+  const distinct = db.prepare('SELECT COUNT(DISTINCT from_addr) AS n FROM gmail_messages').get().n;
+  const top12 = senders.reduce((a, r) => a + r.n, 0);
+
+  const unread = db.prepare('SELECT COUNT(*) AS n FROM gmail_messages WHERE labels LIKE ?').get('%UNREAD%').n;
+  const bands = db.prepare(
+    `SELECT CASE
+       WHEN julianday('now') - julianday(day) <  7  THEN 'under a week'
+       WHEN julianday('now') - julianday(day) <  30 THEN 'under a month'
+       WHEN julianday('now') - julianday(day) < 365 THEN 'under a year'
+       ELSE 'over a year' END AS band, COUNT(*) AS n
+     FROM gmail_messages WHERE labels LIKE ? GROUP BY band`
+  ).all('%UNREAD%');
+  const order = ['under a week', 'under a month', 'under a year', 'over a year'];
+  const ageing = order.map((b) => ({ band: b, n: (bands.find((x) => x.band === b) || {}).n || 0 }));
+
+  const sync = db.prepare('SELECT account, messages_held, total_estimate FROM gmail_sync').all();
+  const held = sync.reduce((a, r) => a + (r.messages_held || 0), 0);
+  const est = sync.reduce((a, r) => a + (r.total_estimate || 0), 0);
+
+  res.json({
+    state: 'ok', total, distinctSenders: distinct, senders,
+    top12Share: +(100 * top12 / total).toFixed(1),
+    unread, unreadPct: +(100 * unread / total).toFixed(1), ageing,
+    // Coverage travels WITH the figures. Sender concentration over a partial mailbox is a
+    // claim about the last few days wearing the clothes of a claim about your mail.
+    coverage: est ? +(100 * held / est).toFixed(1) : null,
+    // The caveat is part of the payload, not the panel's decoration, so anything else that
+    // reads this endpoint carries it too.
+    unreadCaveat: `Unread is a LABEL, not a measure of attention -- ${(100 * unread / total).toFixed(0)}%`
+      + ' of this mailbox is unread, which means the flag is not being used to track anything.'
+      + ' Treat the bands as where mail accumulates, not as a backlog you owe.',
+  });
+});
+
 module.exports = router;
 module.exports.counts = counts;

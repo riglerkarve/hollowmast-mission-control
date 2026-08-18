@@ -1,0 +1,43 @@
+/* Mail panel. Theme tokens only — --ink, --muted, --bg, --card, --border, --accent,
+   --accent-fill, --ring-bg. No colour here carries a judgement: the bars are one neutral
+   fill, because a red bar on a big sender would be the dashboard saying that sender is bad. */
+
+.ml-h2 { font-size: 1rem; margin: 0 0 .3rem; }
+
+.ml-note { color: var(--muted); font-size: .86rem; margin: 0 0 .8rem; }
+
+.ml-list { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: .3rem; }
+
+.ml-row {
+  display: grid;
+  grid-template-columns: minmax(0, 18rem) 1fr auto auto;
+  align-items: center;
+  gap: .6rem;
+  font-size: .86rem;
+}
+
+/* Addresses are long and must not push the bar off the row. */
+.ml-addr { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+
+.ml-bar { background: var(--ring-bg); border-radius: 999px; height: .5rem; overflow: hidden; }
+.ml-bar-fill { display: block; height: 100%; background: var(--accent); border-radius: 999px; }
+
+.ml-n { font-variant-numeric: tabular-nums; text-align: right; min-width: 4.5rem; }
+.ml-pct { font-variant-numeric: tabular-nums; text-align: right; min-width: 3rem; color: var(--muted); }
+
+/* The caveat gets the same weight as the numbers it qualifies. A figure whose meaning is
+   contested, printed large with its qualification in fine print, is a figure that will be
+   misread — and this one WILL be misread as a backlog. */
+.ml-caveat {
+  margin: .9rem 0 0;
+  padding: .7rem .85rem;
+  background: var(--ring-bg);
+  border-radius: 8px;
+  color: var(--ink);
+  font-size: .86rem;
+}
+
+@media (max-width: 760px) {
+  .ml-row { grid-template-columns: 1fr auto auto; }
+  .ml-bar { display: none; }
+}

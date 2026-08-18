@@ -101,16 +101,63 @@ async function get(pathname, tok) {
   } else if (!Array.isArray(rows)) {
     console.log('\n  payout history came back in an unexpected shape; not recording it.');
   } else {
+    // THE FIELD NAMES WERE GUESSED WRONG FIRST TIME, and the guard is why that was visible
+    // rather than silent: every row printed "(no amount)" instead of "$0.00". Honeygain's
+    // actual shape is { method, status, requested_amount, created_at }.
+    //
+    // requested_amount is in CREDITS, not cents. The ratio is 1000 credits to the dollar,
+    // confirmed against the account's own dashboard: 20,478.35 credits displayed as $20.48.
+    // So cents = credits / 10. Anything that assumed cents would have reported a payout as
+    // a hundred times its real value.
+    const payoutCents = (r) => {
+      const c = pick(r, 'requested_amount');
+      return c == null ? null : Math.round(Number(c) / 10);
+    };
     console.log(`\n  payouts on record: ${rows.length}`);
-    for (const r of rows.slice(0, 8)) {
+    let missing = 0;
+    for (const r of rows.slice(0, 10)) {
       const when = String(pick(r, 'created_at', 'date', 'paid_at') || '').slice(0, 10);
-      const amt = pick(r, 'usd_cents', 'amount_cents');
-      console.log(`    ${when || '(no date)'}  ${amt != null ? `$${(amt / 100).toFixed(2)}` : '(no amount)'}  ${pick(r, 'status') || ''}`);
+      const amt = payoutCents(r);
+      if (amt == null) missing += 1;
+      console.log(`    ${when || '(no date)'}  ${amt != null ? `$${(amt / 100).toFixed(2)}`.padStart(8) : '(no amount)'}`
+        + `  ${pick(r, 'status') || ''}  via ${pick(r, 'method') || '(unknown)'}`);
+    }
+    const paid = rows.map(payoutCents).filter((c) => c != null).reduce((a, c) => a + c, 0);
+    console.log(`    ${'-'.repeat(46)}`);
+    console.log(`    lifetime paid: $${(paid / 100).toFixed(2)} across ${rows.length} payouts`
+      + (missing ? `  (${missing} with no readable amount)` : ''));
+
+    // Where the money actually lands decides whether any of this can ever be automatic.
+    const methods = [...new Set(rows.map((r) => pick(r, 'method')).filter(Boolean))];
+    if (methods.length) {
+      console.log(`\n  paid via: ${methods.join(', ')}`);
+      if (!methods.some((m) => /paypal/i.test(m))) {
+        console.log('  NOT PayPal — so these payouts will never appear in the PayPal export,');
+        console.log('  and the bank sees only whatever that processor finally deposits.');
+      }
     }
 
     if (RECORD) {
       const db = require('../server/db');
-      require('../server/routes/income');
+      const income = require('../server/routes/income');
+
+      // THE BALANCE IS A DAILY SNAPSHOT, NOT INCOME. It is money that has accrued and has not
+      // been paid; recording it as earnings would count the same dollars again on payout day.
+      // One row per stream per day, so a briefing that runs twice cannot invent a second day.
+      if (cents != null) {
+        const day = new Date().toISOString().slice(0, 10);
+        income.recordBalance('honeygain', day, cents, 'USD', 'honeygain-api');
+        console.log(`\n  balance snapshot recorded for ${day}: $${(cents / 100).toFixed(2)}`);
+
+        const rate = income.earningRate('honeygain', 30);
+        if (rate.state === 'ok' && rate.perDayAvg != null) {
+          const gaps = rate.gapsSkipped ? `, ${rate.gapsSkipped} gap(s) skipped` : '';
+          console.log(`  earning rate: $${(rate.perDayAvg / 100).toFixed(4)}/day over ${rate.cleanDays} whole day(s)${gaps}`);
+        } else {
+          console.log(`  earning rate: ${rate.why || 'not yet computable'}`);
+        }
+      }
+
       const ins = db.prepare(`INSERT INTO income_entries (stream_id, period, amount_pence, currency, recorded_at)
                               VALUES ('honeygain', ?, ?, 'USD', datetime('now'))`);
       const have = new Set(db.prepare("SELECT period FROM income_entries WHERE stream_id='honeygain'").all().map((r) => r.period));
@@ -118,7 +165,7 @@ async function get(pathname, tok) {
       db.withTransaction(() => {
         for (const r of rows) {
           const when = String(pick(r, 'created_at', 'date', 'paid_at') || '').slice(0, 10);
-          const amt = pick(r, 'usd_cents', 'amount_cents');
+          const amt = payoutCents(r);
           if (!/^\d{4}-\d{2}-\d{2}$/.test(when) || amt == null) { skipped += 1; continue; }
           if (have.has(when)) { skipped += 1; continue; }
           ins.run(when, amt);

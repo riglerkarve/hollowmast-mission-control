@@ -653,7 +653,94 @@ function derivedFromLedger(sinceISO) {
 }
 
 
+// ---- daily balance snapshots ---------------------------------------------------------------
+//
+// A BALANCE IS NOT INCOME, and keeping them in separate tables is the whole point. Honeygain
+// pays out roughly twice a year; its balance accrues every day. Writing the balance into
+// income_entries would count the same money twice -- once while it accrues and again when it
+// is actually paid -- so payouts go to income_entries and balances come here.
+//
+// What this buys that a payout log cannot: the DELTA between two snapshots is the daily
+// earning rate. That is the figure that answers "is this still worth running", and it is
+// invisible in a payout history that fires twice a year.
+//
+// One row per stream per day. Re-running on the same day updates rather than appends, so a
+// briefing that runs twice does not fabricate a second day of earnings.
+db.migrate('income-balances', [
+  (d) => {
+    d.exec(`
+      CREATE TABLE income_balances (
+        id        INTEGER PRIMARY KEY AUTOINCREMENT,
+        stream_id TEXT NOT NULL,
+        day       TEXT NOT NULL,          -- YYYY-MM-DD
+        amount    INTEGER NOT NULL,       -- minor units of the currency column below
+        currency  TEXT NOT NULL DEFAULT 'USD',
+        source    TEXT,                   -- which API said so
+        at        TEXT NOT NULL
+      );
+      CREATE UNIQUE INDEX idx_balance_stream_day ON income_balances (stream_id, day);
+    `);
+  },
+]);
+
+function recordBalance(streamId, day, amountMinor, currency, source) {
+  db.prepare(`INSERT INTO income_balances (stream_id, day, amount, currency, source, at)
+              VALUES (?, ?, ?, ?, ?, datetime('now'))
+              ON CONFLICT (stream_id, day) DO UPDATE SET
+                amount = excluded.amount, currency = excluded.currency,
+                source = excluded.source, at = excluded.at`)
+    .run(streamId, day, Math.round(amountMinor), currency || 'USD', source || null);
+}
+
+// The earning rate, derived from consecutive snapshots.
+//
+// IT REPORTS GAPS RATHER THAN AVERAGING THROUGH THEM. If a day is missing -- the laptop was
+// off, the token had expired -- the delta across that gap covers more than one day, and
+// dividing it evenly would invent daily figures nobody measured. Each step carries how many
+// days it actually spans, and a step longer than one day is labelled.
+function earningRate(streamId, limit) {
+  const rows = db.prepare(
+    'SELECT day, amount, currency FROM income_balances WHERE stream_id = ? ORDER BY day DESC LIMIT ?'
+  ).all(streamId, Number(limit) || 30).reverse();
+
+  if (rows.length < 2) {
+    return { state: 'not-enough', have: rows.length, why: 'a rate needs two snapshots; one reading is a balance, not a rate' };
+  }
+
+  const steps = [];
+  for (let i = 1; i < rows.length; i += 1) {
+    const days = Math.round((Date.parse(rows[i].day) - Date.parse(rows[i - 1].day)) / 86400000);
+    const delta = rows[i].amount - rows[i - 1].amount;
+    steps.push({
+      to: rows[i].day,
+      spansDays: days,
+      delta,
+      // Negative means a payout was taken out of the balance, not that earnings were negative.
+      likelyPayout: delta < 0,
+      perDay: days > 0 && delta >= 0 ? Math.round(delta / days) : null,
+    });
+  }
+
+  const clean = steps.filter((s) => s.perDay != null && s.spansDays === 1);
+  return {
+    state: 'ok',
+    currency: rows[0].currency,
+    from: rows[0].day,
+    to: rows[rows.length - 1].day,
+    snapshots: rows.length,
+    steps,
+    // Only whole single days feed the average. Gaps and payout drops are excluded and counted.
+    perDayAvg: clean.length ? Math.round(clean.reduce((a, s) => a + s.perDay, 0) / clean.length) : null,
+    cleanDays: clean.length,
+    gapsSkipped: steps.filter((s) => s.spansDays !== 1).length,
+    payoutsSeen: steps.filter((s) => s.likelyPayout).length,
+  };
+}
+
+
 module.exports = router;
 module.exports.derivedFromLedger = derivedFromLedger;
+module.exports.recordBalance = recordBalance;
+module.exports.earningRate = earningRate;
 module.exports.KINDS = KINDS;
 module.exports.earnedSince = earnedSince;

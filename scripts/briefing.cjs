@@ -675,6 +675,29 @@ async function main() {
        prose_by = excluded.prose_by, created_at = datetime('now', 'localtime')`
   ).run(facts.date, md, JSON.stringify(facts), prose.by);
 
+
+  // Honeygain, once a day, on the pass that already runs. No sixth scheduled task: five live
+  // services already depend on Task Scheduler and each one added is another thing that can
+  // stop silently.
+  //
+  // WRAPPED, and the wrapping matters more than the fetch. An expired token, a changed API or
+  // no network must leave the briefing successful and only this line absent. fetch-honeygain
+  // exits 2 on every "could not look" path and records NOTHING in those cases, so a bad day
+  // cannot write a run of zero earnings into the balance series.
+  try {
+    const out = require('node:child_process').execFileSync(
+      process.execPath,
+      [require('node:path').join(__dirname, '..', 'tools', 'fetch-honeygain.cjs'), '--record'],
+      { encoding: 'utf8', timeout: 60000 },
+    );
+    const snap = (out.match(/balance snapshot recorded for [\d-]+: \$[\d.]+/) || [])[0];
+    const rate = (out.match(/earning rate: [^\n]+/) || [])[0];
+    console.log(`honeygain: ${snap || 'no balance read'}${rate ? ` | ${rate}` : ''}`);
+  } catch (e) {
+    // Exit 2 is "could not look" and is expected whenever the token lapses.
+    console.log('honeygain: could not read today (token expired, or the API moved) - nothing recorded');
+  }
+
   console.log(`wrote reports/${facts.date}.md  (${md.length} bytes, prose ${prose.by || 'omitted'})`);
 
   // A document to accompany the markdown. Owner request, 18 Aug 2026: the briefing should

@@ -29,7 +29,7 @@ data/*.db-shm
 data/*.db-wal
 
 # 41 MB of VACUUM INTO copies of exactly the same thing.
-backups/
+/backups/
 
 # Session telemetry for this workspace (backlog #6). Derived metrics about sessions that
 # read the bank ledger; the owner chose gitignored over committed on 18 Aug.
@@ -42,11 +42,17 @@ data/watchdog-state.json
 # Generated output that quotes the ledger: the daily briefing carries real spending
 # figures and the tax reports carry five years of turnover. Both regenerate from the
 # database on demand, so nothing is lost by keeping them out.
-reports/
+#
+# ANCHORED WITH A LEADING SLASH, and that is not style. A pattern without one matches a
+# directory of that name at ANY depth, so bare "reports/" was also excluding
+# public/panels/reports/ -- the Reports PANEL, two files of source, silently never
+# committed since git init. Found 18 Aug when git add refused the path. The same trap is
+# waiting for logs/ and backups/, so those are anchored too.
+/reports/
 
 # --- logs --------------------------------------------------------------------------
 # Request and error logs can echo query strings and data values.
-logs/
+/logs/
 *.log
 
 # --- restorable ---------------------------------------------------------------------

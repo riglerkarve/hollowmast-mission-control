@@ -12,7 +12,7 @@
        coloured body text. It is the one thing on the card you must be able to read. */
 
 /* Wider than the shared 720px, scoped to this panel with three classes so it wins over
-   reports.css's .panel.panel-wide whichever order the sheets load in. Step lists with a
+   shared.css's .panel.panel-wide whichever order the sheets load in. Step lists with a
    cost, a blocker and a note per row need the room. */
 .panel.panel-wide.gl-panel { max-width: 900px; }
 

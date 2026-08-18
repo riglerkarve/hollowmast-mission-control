@@ -1,0 +1,46 @@
+.export-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+}
+
+.export-row .empty-hint {
+  margin: 0;
+  text-align: left;
+}
+
+/* The morning briefing, rendered inline. Markdown subset only — headings, bold, italics,
+   lists, tables and rules — because that is all scripts/briefing.cjs emits. */
+.rp-brief-head { display: flex; align-items: baseline; justify-content: space-between; gap: 1rem; }
+.rp-brief-when { font-size: 0.78rem; opacity: 0.6; font-variant-numeric: tabular-nums; }
+
+.rp-b-h1 { font-size: 0.95rem; font-weight: 700; margin: 0.6rem 0 0.3rem; }
+.rp-b-h2 { font-size: 0.84rem; font-weight: 700; margin: 0.9rem 0 0.3rem; opacity: 0.85; }
+.rp-p { font-size: 0.82rem; margin: 0.35rem 0; }
+.rp-list { margin: 0.3rem 0; padding-left: 1.1rem; font-size: 0.82rem; }
+.rp-list li { margin: 0.15rem 0; }
+.rp-hr { border: 0; border-top: 1px solid var(--border); margin: 0.9rem 0; }
+
+/* Wide content scrolls inside its own box; the page must never scroll sideways. */
+.rp-tablewrap { overflow-x: auto; margin: 0.4rem 0; }
+.rp-table { border-collapse: collapse; width: 100%; font-size: 0.78rem; }
+.rp-table th, .rp-table td { text-align: left; padding: 0.3rem 0.5rem; border-bottom: 1px solid var(--border); white-space: nowrap; }
+.rp-table th { font-weight: 700; opacity: 0.8; }
+.rp-table td:not(:first-child) { font-variant-numeric: tabular-nums; }
+
+/* Major Tom — backlog #22. Appended at the end where a later rule wins; classes prefixed
+   .rp-say- and grepped against public/ first. Tokens only from shell.css. */
+.rp-say {
+  display: flex;
+  align-items: baseline;
+  gap: 0.7rem;
+  flex-wrap: wrap;
+  margin-top: 1rem;
+  padding-top: 0.9rem;
+  border-top: 1px solid var(--border);
+}
+
+/* The words are shown BEFORE the button is pressed. A voice you cannot preview is one you
+   stop trusting to press, and this is the only output here that cannot be re-read. */
+.rp-say-line { color: var(--muted); font-size: 0.87em; font-style: italic; }

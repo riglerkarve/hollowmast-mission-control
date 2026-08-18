@@ -9,7 +9,7 @@ const RING_CIRCUMFERENCE = 2 * Math.PI * 100;
 const DAY_LABELS = ['S', 'M', 'T', 'W', 'T', 'F', 'S'];
 
 const TEMPLATE = `
-  <div class="panel">
+  <div class="panel panel-wide focus-panel">
     <div class="panel-header">
       <h1>Focus</h1>
       <div class="badge" id="streak">

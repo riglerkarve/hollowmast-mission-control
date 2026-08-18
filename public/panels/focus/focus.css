@@ -266,3 +266,25 @@
   padding: 0.15rem 0.6rem;
   font-size: 0.8rem;
 }
+
+/* Focus hosts the backlog now, so it needs the backlog's width — 1060px, the figure
+   todo.css already chose for 93 rows carrying their reasoning.
+   
+   This is repairing a regression the embed introduced and that only a measurement caught:
+   embedded mode strips .panel and .panel-wide from the backlog's own wrapper, so
+   `.panel.panel-wide.td-panel { max-width: 1060px }` stopped matching and the list was
+   squeezed into Focus's 480px — its two-column grid collapsing to 292px + 172px, with an
+   item row 243px wide. Nothing errored and at the 704px test viewport nothing even looked
+   different, because max-width does not bind until the viewport is wide enough to reach it. */
+.panel.panel-wide.focus-panel {
+  max-width: 1060px;
+}
+
+/* The timer and the week chart do not want 1060px of stretch; only the list does. */
+.focus-panel > .card {
+  max-width: 720px;
+}
+
+#focusBacklog {
+  max-width: none;
+}

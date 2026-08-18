@@ -2,6 +2,16 @@
    tabs, badges, stat blocks, and the bar-chart component. Panel-specific
    CSS files hold only what's unique to that panel. */
 
+/* The wide page width, used by ten panels. It lived in reports.css until 18 Aug, which
+   worked only because index.html loads every panel stylesheet eagerly -- delete or rename
+   that one sheet and nine unrelated panels silently lose their width, with no error and no
+   obvious connection to the change. A primitive that many panels depend on belongs here,
+   with .panel-header and .card. The base .panel (480px) stays in shell.css, which owns
+   the page frame. */
+.panel.panel-wide {
+  max-width: 720px;
+}
+
 .panel-header {
   display: flex;
   align-items: center;

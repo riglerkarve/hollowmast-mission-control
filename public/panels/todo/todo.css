@@ -11,7 +11,7 @@
        the reading. Nothing here depends on telling two fills apart. */
 
 /* Wider than the shared 720px, scoped to this panel only — three specificity classes so
-   it wins over reports.css's .panel.panel-wide whichever order the sheets load in.
+   it wins over shared.css's .panel.panel-wide whichever order the sheets load in.
    93 rows with their reasoning need the room. */
 .panel.panel-wide.td-panel { max-width: 1060px; }
 

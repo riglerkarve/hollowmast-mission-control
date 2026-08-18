@@ -263,6 +263,50 @@ spreadsheet row.
 
 ---
 
+## The offload router — the policy as code, and the audit that checks it
+
+```bash
+node tools/offload-router.cjs            # audit the call sites, then the decision table
+node tools/offload-router.cjs --policy   # just the table
+```
+
+Backlog #21 and #13, which are one item. `route(task)` encodes the ARCHITECTURE.md offload
+policy so a new feature has something to ask rather than a paragraph to remember, and the
+audit half scans for model call sites and checks them against it.
+
+**The order is rules → local → frontier, and the first question is never "which model" but
+"is a model needed at all".** That is the measured finding, not a preference: on the real
+categorisation job the rules table did 95.3% and the model 4.7%, and naming the business in
+the prompt broke four answers that were already right.
+
+**It found a contradiction in the written policy.** ARCHITECTURE.md says offload when a task
+is "high-volume, low-stakes, reviewable, and structurally constrained" — then lists
+"summarising a day's data into briefing prose" as a local task. One sentence a day is not
+high-volume, so read as a conjunction the rule refuses its own example. Resolved the way the
+evidence points: **the local model is free, so volume argues against FRONTIER, never against
+local.** The binding three are low-stakes, reviewable, structurally constrained; volume is
+recorded and not required.
+
+Validated against reality rather than against itself — the routed tier matches what the code
+actually does in **5 of 5** cases, including the one that matters: the router refuses
+wellbeing, and `server/routes/wellbeing.js` contains no model call at all.
+
+**The audit reports what it cannot see, and that list is longer than what it can.** It
+checks three mechanical things in source text: a schema or enum, temperature 0, and no bare
+`format:'json'`. It cannot see whether a task is low-stakes, whether output is auto-applied,
+whether a number came from the model, or whether there is a path when Ollama is down. A
+green audit that silently checked three of seven things would be worse than none.
+
+Two differences currently reported, both real and neither automatically a bug:
+
+- `scripts/briefing.cjs` uses `temperature: 0.2` where the policy says 0 throughout. No
+  comment records why. For one sentence of prose a little variation may be wanted — but it
+  is an undocumented divergence, which is the thing worth surfacing.
+- `tools/llm-probe.cjs` contains `format:'json'` because it MEASURED the difference. The
+  check cannot tell a file that uses a string from one that mentions it, and says so.
+
+---
+
 ## Self-assessment preparation
 
 `tools/tax-year-report.cjs` — five tax years off the business account, UK 6 April

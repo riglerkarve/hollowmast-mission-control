@@ -371,6 +371,39 @@ Putting it in the chore module would have given it an interval, a due date, an "
 
 The support card is unaffected and still renders unconditionally.
 
+### Anchored chores: when the schedule is not yours to move
+
+Most chores are *due = last done + interval*. The clock starts when you last did it, which
+is right for laundry.
+
+**It is wrong for anything the outside world schedules**, and wrong in a way that degrades
+silently. Bins are collected on alternating Thursday mornings. Put them out on Friday
+because you missed Thursday, and an interval model books the next one 14 days from Friday
+— so it drifts off the real collection and stays wrong, permanently, with no error.
+
+So `lifestyle_chores` gained `anchor_date` and `lead_days` (migration 2). An anchored
+chore derives its next date from the CALENDAR — a known real occurrence plus whole
+multiples of the interval — and **recording it does not move the schedule**.
+
+Verified: with recycling anchored to Thu 2026-08-20 and "did it" recorded on Saturday
+2026-08-15, the next collection stayed **2026-08-20**. The interval model would have said
+2026-08-29, nine days wrong.
+
+`lead_days` exists because the useful moment is the night before, not the morning of. Both
+bin chores carry lead 1, so they tip to due on the Wednesday for a Thursday round — which
+is exactly when the `chores_due` notification fires.
+
+Two consequences worth knowing:
+
+- **An anchored chore has no `never done` state.** A collection happens whether or not you
+  ever recorded putting the bins out, so "no history" is absence of a RECORD, not absence
+  of a schedule. Both bins correctly left the briefing's never-recorded list.
+- `dueInDays` still counts to the ACTION rather than the event, so the briefing, the
+  trigger and the sort never need to know which kind of chore they are looking at.
+
+Current setting, from the owner on 18 Aug: fortnightly Thursdays, recycling 2026-08-20,
+general waste 2026-08-27, alternating.
+
 ### Chores: why one thing is both a notification and a briefing line
 
 Backlog #52. The module already derived the schedule; what was missing was that a chore

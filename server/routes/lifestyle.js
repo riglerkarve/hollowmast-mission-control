@@ -76,6 +76,15 @@ db.migrate('lifestyle', [
       ['Hoover', 7],
     ].forEach(([name, every]) => ins.run(name, every));
   },
+
+  // 2 — anchored chores. See nextAnchored() for why an interval alone is the wrong model
+  // for anything the outside world schedules.
+  (d) => {
+    d.exec(`
+      ALTER TABLE lifestyle_chores ADD COLUMN anchor_date TEXT;              -- a real, known occurrence
+      ALTER TABLE lifestyle_chores ADD COLUMN lead_days INTEGER NOT NULL DEFAULT 0;
+    `);
+  },
 ]);
 
 const router = express.Router();
@@ -84,6 +93,28 @@ const router = express.Router();
 // not a score: `dueInDays` is returned raw on every chore, and this number is returned
 // alongside it as `soonWithinDays`, so any grouping decision can be checked by hand.
 const SOON_WITHIN_DAYS = 2;
+
+// ANCHORED CHORES — the ones the outside world schedules, not you.
+//
+// The default model is due = last done + interval, which is right for laundry: the clock
+// starts when you last did it. It is WRONG for a council bin collection, and wrong in a way
+// that gets worse rather than erroring. Put the bins out on Friday because you missed
+// Thursday, and an interval model schedules the next one 14 days from Friday — so it
+// desynchronises from the actual collection and stays wrong, quietly, forever.
+//
+// An anchored chore therefore derives its next date from the CALENDAR: a known real
+// collection date, plus whole multiples of the interval, regardless of when it was last
+// recorded. Recording "did it" still records that you did it; it just cannot move a
+// schedule that was never yours to move.
+//
+// lead_days exists because the useful moment is not the collection, it is the night
+// before: bins go out on Wednesday evening for a Thursday morning round.
+function nextAnchored(anchorDate, intervalDays, today) {
+  const step = Math.max(1, intervalDays);
+  const diff = Math.round((Date.parse(today) - Date.parse(anchorDate)) / 86400000);
+  if (diff <= 0) return anchorDate;
+  return addDays(anchorDate, Math.ceil(diff / step) * step);
+}
 
 // The user's stated floor: one proper meal a day. Stored as a number, disclosed in every
 // intake response, and never turned into a percentage or a grade.
@@ -112,6 +143,7 @@ const addDays = (date, n) => new Date(Date.parse(date) + n * 86400000).toISOStri
 const CHORE_SQL = `
   SELECT
     c.id, c.name, c.interval_days, c.active, c.created_at,
+    c.anchor_date, c.lead_days,
     MAX(d.done_on)                  AS last_done,
     COUNT(DISTINCT d.done_on)       AS days_recorded,
     CAST(julianday(date('now','localtime')) - julianday(MAX(d.done_on)) AS INTEGER) AS days_since
@@ -200,9 +232,49 @@ function decorate(r, gaps) {
   };
 }
 
+// An anchored chore is decorated entirely from the calendar. It never reaches the
+// last-done branches above, and it has NO 'never done' state: a bin collection happens
+// whether or not you have ever recorded putting the bins out, so "no history" is not
+// absence of a schedule here — it is only absence of a record.
+function decorateAnchored(r, gaps) {
+  const today = localToday();
+  const nextOn = nextAnchored(r.anchor_date, r.interval_days, today);
+  const daysUntil = dayDiff(nextOn, today);
+  const lead = Math.max(0, r.lead_days || 0);
+
+  return {
+    id: r.id,
+    name: r.name,
+    intervalDays: r.interval_days,
+    active: !!r.active,
+    addedOn: String(r.created_at).slice(0, 10),
+    daysRecorded: r.days_recorded,
+    lastDone: r.last_done,
+    daysSinceDone: r.days_since,
+
+    anchored: true,
+    anchorDate: r.anchor_date,
+    leadDays: lead,
+    nextDueOn: nextOn,
+    daysUntilNext: daysUntil,
+
+    // dueInDays counts to the ACTION, not to the collection: with a lead of 1, the bins
+    // are "due" the day before. Kept on the same field name so the briefing, the trigger
+    // and the sort do not need to know which kind of chore this is.
+    dueInDays: daysUntil - lead,
+    overdueByDays: 0,
+    state: daysUntil - lead <= 0 ? 'due' : (daysUntil - lead <= SOON_WITHIN_DAYS ? 'soon' : 'ok'),
+    why: `Fixed schedule, not an interval since you last did it: every ${r.interval_days} days `
+      + `from ${r.anchor_date}${lead ? `, and it is flagged ${lead} day${lead === 1 ? '' : 's'} ahead` : ''}. `
+      + 'Recording it does not move the next date, because the collection is not yours to move.',
+    typical: gaps.get(r.id) || { medianDays: null, gapsCounted: 0, note: 'Nothing recorded yet.' },
+  };
+}
+
 function allChores() {
   const gaps = typicalGaps();
-  return db.prepare(CHORE_SQL).all().map((r) => decorate(r, gaps));
+  return db.prepare(CHORE_SQL).all()
+    .map((r) => (r.anchor_date ? decorateAnchored(r, gaps) : decorate(r, gaps)));
 }
 
 const STATE_ORDER = { due: 0, 'never done': 1, soon: 2, ok: 3 };

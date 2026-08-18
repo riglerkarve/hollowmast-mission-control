@@ -527,6 +527,133 @@ function earnedSince(sinceISO) {
   };
 }
 
+// ---- attribution: which payer belongs to which stream -------------------------------------
+//
+// SerpClix pays through PayPal, and until tonight the ledger could not say so: the bank line
+// reads PAYPAL and nothing else. tools/import-paypal.cjs brings in the sender name, and this is
+// the part that says "a credit from SerpClix is income on the serpclix stream".
+//
+// THIS MODULE STORES NO AMOUNTS. The money lives in finance_transactions and it lives there
+// once. What income owns is the ATTRIBUTION -- the pattern that maps a payer to a stream -- and
+// the totals below are computed on demand from finance's rows rather than copied into
+// income_entries. A copy would be a second place the same figure lives, and the two would
+// disagree the first time a transaction was recategorised.
+//
+// income_entries stays for manual entry: a cash job, or a platform that never touches a payment
+// processor. Derived and entered figures are reported separately and never summed into one
+// number, because they answer different questions and have different reliability.
+db.migrate('income-attribution', [
+  (d) => {
+    d.exec(`
+      CREATE TABLE income_stream_payers (
+        id        INTEGER PRIMARY KEY AUTOINCREMENT,
+        stream_id TEXT NOT NULL,
+        pattern   TEXT NOT NULL,          -- matched against counterparty, case-insensitive
+        note      TEXT,
+        added_at  TEXT NOT NULL DEFAULT (datetime('now'))
+      );
+      CREATE UNIQUE INDEX idx_payer_stream_pattern ON income_stream_payers (stream_id, pattern);
+    `);
+    // Seeded from the streams that already exist. These are the names the platforms actually
+    // use as PayPal senders; anything wrong here shows up as an unattributed payer in the
+    // report below rather than as a silently missing figure.
+    const seed = [
+      ['serpclix', 'serpclix', 'pays out through PayPal, monthly on the 1st'],
+      ['honeygain', 'honeygain', null],
+      ['packetstream', 'packetstream', null],
+      ['coinbase', 'coinbase', null],
+      ['paypal', 'payhip', 'PrintProfit sales arrive from Payhip'],
+    ];
+    const ins = d.prepare('INSERT INTO income_stream_payers (stream_id, pattern, note) VALUES (?, ?, ?)');
+    for (const s of seed) ins.run(s[0], s[1], s[2]);
+  },
+]);
+
+// What the ledger says each stream has actually been paid.
+//
+// It reports UNATTRIBUTED payers too, and that is the point rather than a nicety: a platform
+// whose sender name does not match any pattern would otherwise contribute nothing and look
+// exactly like a platform that paid nothing. The residue is where a missing pattern becomes
+// visible.
+//
+// Transfers are excluded. A withdrawal from PayPal to the bank is the owner's own money moving
+// between his own accounts; counting it as income would double every payout, once when it
+// arrives at PayPal and again when it reaches the bank.
+function derivedFromLedger(sinceISO) {
+  const since = String(sinceISO || '').slice(0, 10) || '1970-01-01';
+  let rows;
+  try {
+    rows = db.prepare(`
+      SELECT counterparty, date, amount_pence, category
+      FROM finance_transactions
+      WHERE amount_pence > 0 AND date >= ?
+        AND (category IS NULL OR category != 'Own transfer')
+      ORDER BY date DESC`).all(since);
+  } catch (e) {
+    return { state: 'could-not-read', why: e.message };
+  }
+
+  const pats = db.prepare('SELECT stream_id, pattern FROM income_stream_payers').all();
+  const streams = new Map(db.prepare('SELECT id, label FROM income_streams').all().map((s) => [s.id, s.label]));
+
+  const byStream = new Map();
+  const unattributed = new Map();
+
+  for (const r of rows) {
+    const who = String(r.counterparty || '').toLowerCase();
+    const hit = pats.find((p) => who.includes(String(p.pattern).toLowerCase()));
+    if (hit) {
+      const cur = byStream.get(hit.stream_id) || { pence: 0, n: 0, first: r.date, last: r.date };
+      cur.pence += r.amount_pence;
+      cur.n += 1;
+      if (r.date < cur.first) cur.first = r.date;
+      if (r.date > cur.last) cur.last = r.date;
+      byStream.set(hit.stream_id, cur);
+    } else {
+      const cur = unattributed.get(who) || { pence: 0, n: 0 };
+      cur.pence += r.amount_pence;
+      cur.n += 1;
+      unattributed.set(who, cur);
+    }
+  }
+
+  const attributed = [...byStream.entries()].map(([id, v]) => ({
+    stream: id, label: streams.get(id) || id, ...v,
+  })).sort((a, b) => b.pence - a.pence);
+
+  return {
+    state: 'ok',
+    since,
+    attributed,
+    attributedPence: attributed.reduce((a, s) => a + s.pence, 0),
+    unattributed: [...unattributed.entries()]
+      .map(([who, v]) => ({ who, ...v }))
+      .sort((a, b) => b.pence - a.pence).slice(0, 15),
+    unattributedPence: [...unattributed.values()].reduce((a, v) => a + v.pence, 0),
+
+    // THE RESIDUE BY VALUE IS THE WRONG PLACE TO LOOK FOR A MISSING STREAM, and sorting it by
+    // amount hides exactly what it was added to reveal. Measured over the real ledger, the
+    // unattributed total is £160k of wages, DWP payments and security-firm invoices; a £12
+    // SerpClix payout sits invisibly at the bottom of that list.
+    //
+    // So this is the second view, and the rule is stated rather than tuned: a payer seen three
+    // or more times averaging under £50 looks like a micro-income platform rather than an
+    // employer. Both numbers are printed beside every row so the rule can be argued with.
+    likelyStreams: [...unattributed.entries()]
+      .map(([who, v]) => ({ who, ...v, avgPence: Math.round(v.pence / v.n) }))
+      .filter((v) => v.n >= 3 && v.avgPence < 5000)
+      .sort((a, b) => b.n - a.n).slice(0, 15),
+
+    note: 'Derived from finance_transactions, which owns these amounts. Nothing is copied here. '
+      + 'Transfers are excluded so a payout is not counted twice. Two residues are reported: '
+      + 'unattributed by value, which is dominated by wages and benefits, and likelyStreams, '
+      + 'which is where a missing platform pattern actually shows up (3+ payments averaging '
+      + 'under £50). A missing pattern and a platform that paid nothing look identical without them.',
+  };
+}
+
+
 module.exports = router;
+module.exports.derivedFromLedger = derivedFromLedger;
 module.exports.KINDS = KINDS;
 module.exports.earnedSince = earnedSince;

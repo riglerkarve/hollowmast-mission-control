@@ -9,9 +9,12 @@
 // is an answer, and it must not be read as one.
 //
 // IT DOES NOT PRINT A FIGURE YOU CAN AFFORD, and refusing to is the main design decision.
-// 77.6% of measured spending is cash or person-to-person with no purpose recorded, so a
-// single "you can afford £X" would be built on under a quarter of the evidence and would
-// look exactly as confident as one built on all of it. What it does instead:
+// Around three quarters of measured spending is cash or person-to-person with no purpose
+// recorded, so a single "you can afford £X" would be built on the remaining quarter and
+// would look exactly as confident as one built on all of it. The exact share is COMPUTED
+// and printed by the tool -- it was 77.6% on 18 Aug and moved to 77.3% the same day when
+// two bookmakers were recategorised, which is why no figure is written into this comment.
+// What it does instead:
 //
 //   1. Splits income into EXPLICIT SCENARIOS and refuses to choose between them.
 //   2. States the arithmetic that IS solid  — the reconciliation.
@@ -323,8 +326,11 @@ if (!RENTS.length) {
   say('  Arithmetic on figures printed above: income minus itemised minus opaque. Not a rule');
   say(`  of thumb, not a limit anyone chose, and deliberately ${SCENARIOS.length} numbers rather than one.`);
   say('');
+  // Computed, not typed. This line said 77.6% and was stale within the hour, because
+  // recategorising two bookmakers moved it to 77.3%. A percentage in printed output has to
+  // come from the same query that produced the section above it.
   say('  NONE of them is "the rent you can afford". Each is the rent at which SOMETHING HAS');
-  say('  TO CHANGE under that reading -- and since 77.6% of the spending it would come from');
+  say(`  TO CHANGE under that reading -- and since ${opaquePct}% of the spending it would come from`);
   say('  has no recorded purpose, neither of us knows whether changing it is easy.');
   say('');
   say(`  None of these columns include council tax, water, energy or broadband, because you`);

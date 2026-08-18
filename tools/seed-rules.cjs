@@ -126,6 +126,25 @@ const RULES = [
   // dead-rule check caught after the first pass filed it as 'out' and it matched nothing.
   ['counterparty_exact', 'Virgingames', null, 'Gambling', null],
 
+  // Two bookmakers that were sitting in 'Payments to people' (#M23). Small in cash terms
+  // -- GBP 100 of GBP 24,328 -- but 'Payments to people' is one of the two categories the
+  // affordability tool treats as OPAQUE, on the grounds that money to a named individual
+  // has no recorded purpose. These two DO have a known purpose, so leaving them there
+  // makes the opacity figure look worse than it is, and that figure is load-bearing.
+  //
+  // EXACT, and for both the reason is a real collision rather than caution:
+  //   'admiral'  is also a large UK insurer. A substring rule would sweep car insurance
+  //              into Gambling.
+  //   'coral'    is a first name as well as a bookmaker, and 'Ladbrokes Coral Group' is a
+  //              separate counterparty already correctly filed. Checked the whole ledger:
+  //              no person of that name appears.
+  // One rule each covers every casing -- norm() lowercases, so 'Coral' also matches 'CORAL'.
+  //
+  // Direction-agnostic on purpose: the single 'CORAL' row is a CREDIT of GBP 68.31, i.e. a
+  // win, which had been filed as 'Income - people'. An 'out' rule would leave it there.
+  ['counterparty_exact', 'Admiral Casino', null, 'Gambling', null],
+  ['counterparty_exact', 'Coral', null, 'Gambling', null],
+
   // Inbound PayPal is money coming back, not a purchase.
   // One rule, not two: matching is case-insensitive, so 'PayPal' also covers 'PAYPAL'.
   ['counterparty_exact', 'PayPal', 'in', 'Refunds', null],

@@ -73,3 +73,8 @@ Thumbs.db
 #   data/seed/     — the backlog seeder is code, and carries no transaction data
 #   package-lock.json — pins the one dependency
 #   CLAUDE.md, ARCHITECTURE.md — the reasoning is the most valuable thing here
+
+# Honeygain API bearer token. Ignored BEFORE the file exists, so it can never be
+# accidentally committed in the window between creating it and remembering to ignore it.
+data/honeygain-token.txt
+data/*-token.txt

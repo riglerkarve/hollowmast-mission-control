@@ -1,0 +1,52 @@
+/* Exercise panel. Theme tokens only — --ink, --muted, --bg, --card, --border, --accent,
+   --accent-fill, --ring-bg.
+   ONE NEUTRAL BAR COLOUR THROUGHOUT. No green for good and no red for a quiet week: a
+   colour that means "bad" is a judgement, and this module's whole point is that it makes
+   none. */
+
+.ex-h2 { font-size: 1rem; margin: 0 0 .3rem; }
+.ex-note { color: var(--muted); font-size: .84rem; margin: .5rem 0 0; }
+
+.ex-form { display: flex; gap: .45rem; flex-wrap: wrap; align-items: center; }
+.ex-in {
+  font: inherit; font-size: .88rem; padding: .4rem .55rem;
+  border: 1px solid var(--border); border-radius: 6px;
+  background: var(--bg); color: var(--ink);
+}
+.ex-kind { flex: 1 1 11rem; min-width: 8rem; }
+.ex-num  { width: 5.5rem; }
+.ex-note-in, .ex-in.ex-note { flex: 2 1 12rem; }
+
+.ex-list { list-style: none; margin: .5rem 0 0; padding: 0; display: flex; flex-direction: column; gap: .25rem; }
+
+.ex-row {
+  display: grid;
+  grid-template-columns: minmax(6rem, 9rem) minmax(0, 1fr) auto minmax(0, 12rem) auto;
+  gap: .6rem; align-items: baseline; font-size: .86rem;
+  padding: .2rem 0; border-bottom: 1px solid var(--border);
+}
+.ex-recent-row { grid-template-columns: 6.5rem minmax(5rem, 8rem) minmax(0, 1fr) minmax(0, 1fr) auto; }
+
+.ex-kindname { font-weight: 600; }
+.ex-tot  { font-variant-numeric: tabular-nums; }
+.ex-sess { font-variant-numeric: tabular-nums; color: var(--muted); }
+.ex-best, .ex-last, .ex-day, .ex-rnote { color: var(--muted); font-size: .8rem;
+  overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+
+.ex-del {
+  border: 1px solid var(--border); background: var(--card); color: var(--muted);
+  border-radius: 4px; cursor: pointer; line-height: 1; padding: .1rem .35rem; font-size: .9rem;
+}
+.ex-del:hover { color: var(--ink); }
+
+/* Weeks: bare counts. Deliberately NOT a percentage and NOT scaled to a goal — the tallest
+   bar is your own busiest week, so the shape shows variation without implying a shortfall. */
+.ex-weeks { list-style: none; margin: .5rem 0 0; padding: 0; display: flex; gap: .3rem; align-items: flex-end; height: 5rem; }
+.ex-week { flex: 1 1 0; display: flex; flex-direction: column; align-items: center; justify-content: flex-end; height: 100%; }
+.ex-wbar { display: block; width: 100%; min-height: 2px; background: var(--accent); border-radius: 3px 3px 0 0; }
+.ex-wn { font-size: .7rem; color: var(--muted); font-variant-numeric: tabular-nums; margin-top: .15rem; }
+
+@media (max-width: 760px) {
+  .ex-row, .ex-recent-row { grid-template-columns: 1fr auto; }
+  .ex-best, .ex-last, .ex-rnote { display: none; }
+}

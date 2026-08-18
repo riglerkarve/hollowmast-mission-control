@@ -9,6 +9,7 @@ const PANELS = {
   brain: () => import('/panels/brain/brain.js'),
   mail: () => import('./panels/mail/mail.js'),
   work: () => import('./panels/work/work.js'),
+  exercise: () => import('./panels/exercise/exercise.js'),
   safety: () => import('/panels/safety/safety.js'),
   browsing: () => import('/panels/browsing/browsing.js'),
   atlas: () => import('/panels/atlas/atlas.js'),

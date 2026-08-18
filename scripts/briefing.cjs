@@ -15,6 +15,9 @@ const fs = require('node:fs');
 const path = require('node:path');
 
 const db = require('../server/db');
+// Provenance: this runs from Task Scheduler with no human and no request, so without
+// this every read it makes is logged 'unknown'. See server/provenance.js.
+db.setProcessActor('schedule');
 require('../server/routes/finance');
 require('../server/routes/briefing');
 

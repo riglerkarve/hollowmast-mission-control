@@ -73,7 +73,27 @@ db.migrate('analytics', [
 
 // Declared vocabulary. An import naming anything else is refused rather than filed as 'other',
 // because a row whose provenance is a guess is worse than a row that was never accepted.
-const SOURCES = ['search-console', 'cloudflare', 'report-worker'];
+const SOURCES = ['search-console', 'cloudflare', 'report-worker', 'itch'];
+
+// HOW OFTEN EACH SOURCE ACTUALLY MOVES. This is not documentation, it is the thing that stops a
+// stale reading being mistaken for a current one -- the failure that "accurate is not current"
+// names. A figure copied from a dashboard is only as fresh as that dashboard's own cadence.
+//
+// itch.io is the one that bites: the owner reports its analytics refresh on a SEVEN DAY cycle,
+// and its headline figure is literally labelled "7d Impressions". So a number read today may
+// describe last week, polling it daily would produce six identical rows and one real one, and a
+// flat line means "not refreshed yet" at least as often as it means "nobody came".
+const SOURCE_CADENCE = {
+  'search-console': { hours: 48, note: 'Search Console lags roughly two days behind reality.' },
+  cloudflare: { hours: 1, note: 'Web Analytics is near real time.' },
+  'report-worker': { hours: 0, note: 'Ours, written as the game reports. No lag.' },
+  itch: {
+    hours: 168,
+    note: 'itch.io refreshes on a 7-day cycle and its impressions figure is a 7-day window. '
+      + 'A reading may be up to a week old, so do not poll it daily and do not read a flat '
+      + 'line as no traffic — it is as likely to mean not yet refreshed.',
+  },
+};
 
 const PROBE_EVERY_MS = 15 * 60 * 1000;    // network calls; a 15-minute cadence is plenty
 const live = () => PROJECTS.filter((p) => p.live);
@@ -139,6 +159,7 @@ router.get('/', (req, res) => {
     probeEveryMs: PROBE_EVERY_MS,
     traffic,
     sources: SOURCES,
+    cadence: SOURCE_CADENCE,
     // Absence, stated rather than drawn as a zero.
     trafficState: traffic.length ? 'imported' : 'none imported',
     trafficNote: traffic.length ? null

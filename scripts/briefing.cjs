@@ -645,6 +645,24 @@ async function main() {
 
   console.log(`wrote reports/${facts.date}.md  (${md.length} bytes, prose ${prose.by || 'omitted'})`);
 
+  // A document to accompany the markdown. Owner request, 18 Aug 2026: the briefing should
+  // produce something you can open, print and file, not only something a terminal renders.
+  //
+  // WRAPPED, because a formatting step must never be able to fail the morning report. The
+  // markdown and the database row are already written by this point; if LibreOffice is busy
+  // or missing, the briefing still succeeded and says so, and only the PDF is absent.
+  try {
+    require('node:child_process').execFileSync(
+      process.execPath,
+      [require('node:path').join(__dirname, '..', 'tools', 'briefing-doc.cjs'), facts.date],
+      { stdio: 'pipe', timeout: 180000 },
+    );
+    console.log(`wrote reports/briefing-${facts.date}.pdf`);
+  } catch (e) {
+    console.log(`PDF not produced: ${String(e.message).split('\n')[0].slice(0, 90)}`);
+  }
+
+
   // One notification a day, and it is the delivery mechanism for the whole feature — a
   // briefing you have to remember to go and read is a chore with a nice font. If it gets
   // dismissed unread twice, delete it rather than tuning it.

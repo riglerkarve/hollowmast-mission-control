@@ -37,6 +37,32 @@ let activePanel = null;
 let mountToken = 0;
 let mountAbort = null;   // aborted when the panel that owns it is torn down
 
+// A panel’s stylesheet loads WITH the panel, not before every panel.
+//
+// Measured 18 Aug: index.html pulled 20 stylesheets on first paint, and 112,892 of the
+// 148,433 CSS bytes — 76% — belonged to panels that were not on screen. The JS was already
+// lazy (17 dynamic imports); the CSS was not, which was an inconsistency rather than a
+// decision. On localhost that costs nothing. This dashboard is meant to be opened from a
+// phone on the LAN, where it is 18 extra round trips before anything paints.
+//
+// It AWAITS the load. Mounting first would show one unstyled frame, and a flash of
+// unstyled content on every panel switch is a worse defect than the one being fixed.
+// A stylesheet that fails to load resolves anyway: a panel with plain styling beats a
+// panel that never appears.
+const sheetsLoaded = new Set();
+function panelStyles(name) {
+  if (sheetsLoaded.has(name)) return Promise.resolve();
+  const href = `/panels/${name}/${name}.css`;
+  if (document.querySelector(`link[href="${href}"]`)) { sheetsLoaded.add(name); return Promise.resolve(); }
+  return new Promise((resolve) => {
+    const link = document.createElement('link');
+    link.rel = 'stylesheet';
+    link.href = href;
+    link.addEventListener('load', () => { sheetsLoaded.add(name); resolve(); });
+    link.addEventListener('error', () => resolve());   // unstyled beats absent
+    document.head.appendChild(link);
+  });
+}
 async function mountPanel(name) {
   const loader = PANELS[name];
   if (!loader) return;
@@ -90,6 +116,8 @@ async function mountPanel(name) {
   // cleared the root and mounted its own panel; writing now would overwrite it.
   if (token !== mountToken) return;
 
+  await panelStyles(name);
+  if (token !== mountToken) return;
   activePanel = mod.default;
   activePanel.mount(panelRoot, { signal: mountAbort.signal });
 

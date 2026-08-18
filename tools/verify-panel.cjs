@@ -41,6 +41,15 @@ const sheets = [...html.matchAll(/<link[^>]+href="([^"]+\.css)"/g)]
   .map((m) => path.join(PUB, m[1].replace(/^\//, '')))
   .filter((p) => fs.existsSync(p));
 
+// PANEL SHEETS ARE NO LONGER IN index.html — they load with their panel as of 18 Aug. So
+// the defined-class set is built from the sheets index.html DOES load PLUS every panel
+// stylesheet on disk. Without this the audit would report every panel class as undefined
+// the moment the CSS went lazy: a correct check, against a source that had moved.
+for (const d of fs.readdirSync(path.join(PUB, 'panels'))) {
+  const f = path.join(PUB, 'panels', d, `${d}.css`);
+  if (fs.existsSync(f) && !sheets.includes(f)) sheets.push(f);
+}
+
 const definedClasses = new Map();
 const definedTokens = new Map();
 for (const s of sheets) {

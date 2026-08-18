@@ -93,14 +93,20 @@ function gitInfo(dir) {
 }
 
 router.get('/', async (req, res) => {
-  const out = [];
-  for (const p of PROJECTS) {
+  // EVERY PROJECT IS INSPECTED IN PARALLEL. This loop used to await gitInfo() one project
+  // at a time, and gitInfo spawns TWO git subprocesses. Measured 18 Aug: three of the seven
+  // entries are real repositories, a git pair costs ~130ms each, and the route answered in
+  // ~410ms warm — the slowest endpoint in the dashboard, and almost exactly 3 x 130.
+  //
+  // The work was never dependent: no project needs another project’s answer. Sequential
+  // await here bought nothing and cost the sum instead of the maximum.
+  const out = await Promise.all(PROJECTS.map(async (p) => {
     const dir = path.join(ROOT, p.dir);
     const exists = fs.existsSync(dir);
     const dashDir = p.dash ? path.join(dir, p.dash) : null;
     const hasDash = Boolean(dashDir && fs.existsSync(path.join(dashDir, p.entry || 'index.html')));
 
-    out.push({
+    return {
       ...p,
       exists,
       // Absence and failure differ: a project directory that is gone is a different
@@ -108,8 +114,8 @@ router.get('/', async (req, res) => {
       state: !exists ? 'missing from disk' : hasDash ? 'has a control centre' : 'no control centre',
       href: p.href || (hasDash ? `/api/projects/${p.id}/dash/${p.entry}` : null),
       git: exists ? await gitInfo(p.dir) : null,
-    });
-  }
+    };
+  }));
 
   res.json({
     projects: out,

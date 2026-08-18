@@ -27,6 +27,8 @@ const TEMPLATE = `
         ${MOODS.map(([v, l]) => `<button class="wb-mood" data-mood="${v}"><span class="wb-mood-n">${v}</span><span class="wb-mood-l">${l}</span></button>`).join('')}
       </div>
       <textarea id="wbNote" class="wb-note" rows="3" placeholder="Anything you want to write down. Optional, and private to this machine."></textarea>
+      <input id="wbSelfCare" class="wb-selfcare" type="text"
+             placeholder="Looked after yourself today? Optional — free text, nothing is scheduled or counted.">
       <div class="wb-actions">
         <button class="btn primary" id="wbSaveNote">Save note</button>
         <span id="wbEcho" class="wb-echo"></span>
@@ -75,6 +77,10 @@ function renderSupport(s) {
 
 async function save(mood) {
   const noteEl = root.querySelector('#wbNote');
+  // Free text, deliberately. A preset list of self-care items is a list you can fail, and
+  // on a bad day that reads as an accusation. Nothing schedules this, nothing counts it,
+  // and no notification will ever mention it — see the migration note in the route.
+  const selfCareEl = root.querySelector('#wbSelfCare');
   const echo = root.querySelector('#wbEcho');
   echo.textContent = 'saving…';
   echo.className = 'wb-echo';
@@ -83,7 +89,7 @@ async function save(mood) {
     const r = await api('/entries', {
       method: 'POST',
       headers: { 'content-type': 'application/json' },
-      body: JSON.stringify({ mood, note: noteEl.value }),
+      body: JSON.stringify({ mood, note: noteEl.value, selfCare: selfCareEl.value }),
     });
 
     // Recall, not assessment. Both halves are facts already in the table.
@@ -101,6 +107,7 @@ async function save(mood) {
     echo.textContent = bits.join(' ');
     echo.className = 'wb-echo ok';
     noteEl.value = '';
+    selfCareEl.value = '';
     await Promise.all([loadPatterns(), loadEntries()]);
   } catch (err) {
     echo.textContent = `Not saved: ${err.message}`;
@@ -177,6 +184,7 @@ async function loadEntries() {
         <button class="wb-del" data-id="${e.id}" title="Delete this entry">×</button>
       </span>
       ${e.note ? `<span class="wb-e-note">${esc(e.note)}</span>` : ''}
+      ${e.self_care ? `<span class="wb-e-care">${esc(e.self_care)}</span>` : ''}
     </li>`).join('')}</ul>`;
 
   el.querySelectorAll('.wb-del').forEach((b) => {

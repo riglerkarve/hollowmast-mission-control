@@ -302,6 +302,29 @@ Each check returns one of **three** states — `fires`, `clear`, or `error` — 
 itself immediately: `budget.breaches()` threw on its first run (an omitted month reaching
 SQLite as `undefined`) and surfaced as `error` instead of passing silently as `clear`.
 
+### Self-care lives in wellbeing, not beside the bins
+
+The original todo read "chores, laundry, bins, **shower**". Shower is the one item on that
+list that is not housework, and the owner's call on 18 Aug was to reframe it rather than
+add it as a chore.
+
+Putting it in the chore module would have given it an interval, a due date, an "overdue by
+3 days" and a phone notification — a machine telling you to wash. So it is
+`wellbeing_entries.self_care` (wellbeing migration 2), and every property is deliberate:
+
+- **Free text, not a checklist.** A preset list of self-care items is a list you can fail,
+  and on a bad day it reads as an accusation.
+- **No interval, no due date, no overdue state.** Nothing schedules it, so nothing can
+  report it as late.
+- **Excluded from triggers and the briefing.** Verified: zero mentions of `self_care` in
+  either file. It is never pushed at you.
+- **Recalled by date only.** `/patterns` was left untouched on purpose — "3 of 7 days"
+  here would be a judgement wearing a number.
+- An entry may be self-care ALONE, with no mood and no note. Refusing that would make the
+  field feel like an afterthought to the "real" entry.
+
+The support card is unaffected and still renders unconditionally.
+
 ### Chores: why one thing is both a notification and a briefing line
 
 Backlog #52. The module already derived the schedule; what was missing was that a chore

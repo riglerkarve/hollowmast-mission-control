@@ -111,3 +111,25 @@
   padding: 0 0.2rem;
 }
 .wb-del:hover { opacity: 1; color: var(--accent); }
+
+/* Self-care. Free text on the journal entry, never a checklist and never scheduled —
+   see the migration note in server/routes/wellbeing.js for why each of those matters.
+   Styled quieter than the note: it is an optional aside, not a second thing to fill in. */
+.wb-selfcare {
+  width: 100%;
+  margin-top: 0.5rem;
+  padding: 0.5rem 0.6rem;
+  font: inherit;
+  font-size: 0.85rem;
+  color: var(--ink);
+  background: var(--bg);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+}
+
+.wb-selfcare::placeholder { opacity: 0.7; }
+.wb-selfcare:focus-visible { outline: 2px solid var(--accent); outline-offset: 1px; }
+
+/* In recall it is shown plainly beside the note. No count, no ratio, no streak —
+   "3 of 7 days" here would be a judgement wearing a number. */
+.wb-e-care { display: block; font-size: 0.78rem; opacity: 0.75; }

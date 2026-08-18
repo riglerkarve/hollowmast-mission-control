@@ -227,7 +227,13 @@ function itemHtml(i) {
           <p class="td-why-text">${esc(why)}</p>
           <p class="td-why-label">Editorial judgement, written when the item was triaged — not a score. Argue with it.</p>
         </details>` : '<p class="td-why-none td-dim">No reasoning recorded for this one.</p>'}
-      ${i.notes.length ? `<ul class="td-notes">${i.notes.map((n) => `<li>${esc(n.note)} <span class="td-dim">${esc(n.created_at)}</span></li>`).join('')}</ul>` : ''}
+      ${i.notes.length ? `<ul class="td-notes">${i.notes.map((n) => `
+        <li${n.superseded_by ? ' class="td-note-old"' : ''}>${n.superseded_by
+    // A superseded note is NOT hidden and NOT edited — the record stands. It is marked, so
+    // a reader who stops here is told something later corrects it, instead of walking away
+    // with a figure that was withdrawn an hour after it was written.
+    ? `<span class="td-note-flag">superseded by the later note</span> ` : ''}${
+  esc(n.note)} <span class="td-dim">${esc(n.created_at)}</span></li>`).join('')}</ul>` : ''}
       <div class="td-acts">
         ${i.status !== 'in_progress' && i.status !== 'done' ? `<button class="btn td-act" type="button" data-act="status" data-to="in_progress">Start</button>` : ''}
         ${i.status !== 'done' ? `<button class="btn td-act" type="button" data-act="status" data-to="done">Done</button>` : ''}

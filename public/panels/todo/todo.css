@@ -212,3 +212,20 @@
 .td-focus-btn {
   font-weight: 600;
 }
+
+/* A superseded note. Struck through and quiet, but still readable and still present —
+   the point of an append-only trail is that nothing is removed. The flag comes first so
+   it is read before the claim it qualifies, not after. */
+.td-note-old { text-decoration: line-through; text-decoration-thickness: 1px; color: var(--muted); }
+
+.td-note-flag {
+  text-decoration: none;
+  display: inline-block;
+  font-size: 0.68rem;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  padding: 0 0.3rem;
+  border: 1px solid var(--border);
+  border-radius: 4px;
+  color: var(--ink);
+}

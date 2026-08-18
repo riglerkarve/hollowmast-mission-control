@@ -294,6 +294,20 @@ db.migrate('todo', [
   (d) => {
     provenance.addColumn(d, 'todo_notes');
   },
+
+  // 3. A note can be marked SUPERSEDED by a later note. Not edited, not deleted.
+  //
+  // Notes are append-only and that is right: the value of the trail is that it was not
+  // rewritten. But on 18 Aug I wrote a long note on #25 quoting figures that a fix
+  // invalidated within the hour, and the only remedy was to append a second note starting
+  // "CORRECTION to my note above". A reader who hits the first note and stops gets the
+  // wrong numbers with nothing on screen to warn them.
+  //
+  // So the fact stays, dated and attributed, and gains a pointer to what replaced it. The
+  // reader is warned; nothing is destroyed. Nullable, so every existing note is unaffected.
+  (d) => {
+    d.exec("ALTER TABLE todo_notes ADD COLUMN superseded_by INTEGER REFERENCES todo_notes(id)");
+  },
 ]);
 
 const router = express.Router();
@@ -795,8 +809,33 @@ router.post('/items/:id/notes', (req, res) => {
   if (!db.prepare('SELECT 1 FROM todo_items WHERE id = ?').get(req.params.id)) {
     return res.status(404).json({ error: 'no such item' });
   }
-  const info = db.prepare('INSERT INTO todo_notes (item_id, note, by_whom) VALUES (?, ?, ?)').run(req.params.id, note, req.by);
-  res.status(201).json({ id: Number(info.lastInsertRowid), itemId: req.params.id, note });
+  // `supersedes` marks an EARLIER note as replaced by this one. The earlier note is not
+  // edited and not deleted — it gains a pointer, so a reader who stops at it is warned that
+  // something later corrects it. Both writes go in one transaction: a note claiming to
+  // supersede something, where the pointer failed to land, is worse than neither.
+  const supersedes = req.body && req.body.supersedes;
+  let prior = null;
+  if (supersedes !== undefined && supersedes !== null) {
+    prior = db.prepare('SELECT id, item_id FROM todo_notes WHERE id = ?').get(Number(supersedes));
+    if (!prior) return res.status(404).json({ error: `no note ${supersedes} to supersede` });
+    if (String(prior.item_id) !== String(req.params.id)) {
+      // Crossing items would let a note on one item silently annotate another.
+      return res.status(400).json({ error: `note ${supersedes} belongs to item ${prior.item_id}, not ${req.params.id}` });
+    }
+  }
+
+  let id;
+  try {
+    db.withTransaction(() => {
+      const info = db.prepare('INSERT INTO todo_notes (item_id, note, by_whom) VALUES (?, ?, ?)')
+        .run(req.params.id, note, req.by);
+      id = Number(info.lastInsertRowid);
+      if (prior) db.prepare('UPDATE todo_notes SET superseded_by = ? WHERE id = ?').run(id, prior.id);
+    });
+  } catch (err) {
+    return res.status(500).json({ error: err.message });
+  }
+  res.status(201).json({ id, itemId: req.params.id, note, supersedes: prior ? prior.id : null });
 });
 
 // ------------------------------------------------------------------- DELETE /items/:id

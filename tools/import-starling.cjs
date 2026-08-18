@@ -18,6 +18,9 @@ const fs = require('node:fs');
 const path = require('node:path');
 
 const db = require('../server/db');
+// Provenance: every read this process makes is logged against this actor. Without it the
+// access log records 'unknown', which is honest but useless. See server/provenance.js.
+db.setProcessActor('import');
 require('../server/routes/finance');   // required for its migrations
 
 const EXPECTED_HEADER = 'Date,Counter Party,Reference,Type,Amount (GBP),Balance (GBP),Spending Category,Notes';

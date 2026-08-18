@@ -19,6 +19,9 @@
 'use strict';
 
 const db = require('../server/db');
+// Provenance: every read this process makes is logged against this actor. Without it the
+// access log records 'unknown', which is honest but useless. See server/provenance.js.
+db.setProcessActor('claude');
 require('../server/routes/finance');
 
 const ACCOUNT = 'starling-business';

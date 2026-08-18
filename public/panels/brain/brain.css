@@ -67,8 +67,8 @@
 
 .brain-item-top { display: flex; justify-content: space-between; gap: 0.5rem; align-items: baseline; }
 .brain-name { font-weight: 600; font-size: 0.9rem; }
-.brain-desc { font-size: 0.82rem; opacity: 0.8; line-height: 1.35; }
-.brain-meta { font-size: 0.74rem; opacity: 0.55; }
+.brain-desc { font-size: 0.82rem; color: var(--muted); line-height: 1.35; }
+.brain-meta { font-size: 0.74rem; color: var(--muted); }
 
 .brain-flag {
   font-size: 0.68rem;
@@ -103,7 +103,7 @@
   font-size: 0.82rem;
 }
 
-.brain-result { font-size: 0.8rem; min-height: 1.2em; opacity: 0.8; }
+.brain-result { font-size: 0.8rem; min-height: 1.2em; color: var(--muted); }
 .brain-result.ok  { color: var(--short); }
 .brain-result.bad { color: var(--accent); }
 .brain-error      { color: var(--accent); font-size: 0.86rem; }
@@ -204,4 +204,4 @@
 /* Used in three places by the JS and never defined until now — an invented class renders
    as nothing at all and shows no error, which is why classes get audited against the
    sheet rather than assumed. */
-.brain-dim { color: var(--muted); opacity: 0.85; }
+.brain-dim { color: var(--muted); color: var(--muted); }

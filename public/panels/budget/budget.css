@@ -1,7 +1,7 @@
-.bg-h2 { margin: 0 0 0.6rem; font-size: 0.95rem; opacity: 0.85; }
-.bg-h3 { margin: 1rem 0 0.5rem; font-size: 0.8rem; opacity: 0.7; font-weight: 600; }
-.bg-note { font-size: 0.8rem; opacity: 0.72; line-height: 1.5; margin: 0.3rem 0 0.9rem; }
-.bg-dim { opacity: 0.5; }
+.bg-h2 { margin: 0 0 0.6rem; font-size: 0.95rem; color: var(--muted); }
+.bg-h3 { margin: 1rem 0 0.5rem; font-size: 0.8rem; color: var(--muted); font-weight: 600; }
+.bg-note { font-size: 0.8rem; color: var(--muted); line-height: 1.5; margin: 0.3rem 0 0.9rem; }
+.bg-dim { color: var(--muted); }
 .bg-error { color: var(--accent); font-size: 0.85rem; }
 .bg-pos { color: var(--short); }
 .bg-neg { color: var(--accent); }
@@ -29,7 +29,7 @@
 }
 
 .bg-l-cat { opacity: 0.85; display: flex; gap: 0.35rem; align-items: baseline; flex-wrap: wrap; }
-.bg-ess { font-size: 0.62rem; text-transform: uppercase; letter-spacing: 0.04em; opacity: 0.5; }
+.bg-ess { font-size: 0.62rem; text-transform: uppercase; letter-spacing: 0.04em; color: var(--muted); }
 
 .bg-l-track { position: relative; height: 1.2rem; border-radius: 5px; background: var(--ring-bg); overflow: hidden; }
 .bg-l-spent { position: absolute; inset: 0 auto 0 0; background: var(--accent); opacity: 0.85; border-radius: 5px; }
@@ -55,12 +55,12 @@
 .bg-w-top { display: flex; justify-content: space-between; gap: 0.7rem; align-items: baseline; }
 .bg-w-name { font-size: 0.88rem; font-weight: 600; }
 .bg-w-price { font-variant-numeric: tabular-nums; font-size: 0.85rem; }
-.bg-w-aff { font-size: 0.78rem; opacity: 0.75; }
-.bg-w-note { font-size: 0.76rem; opacity: 0.55; }
+.bg-w-aff { font-size: 0.78rem; color: var(--muted); }
+.bg-w-note { font-size: 0.76rem; color: var(--muted); }
 .bg-w-acts { display: flex; gap: 0.4rem; align-items: center; margin-top: 0.2rem; flex-wrap: wrap; }
 .bg-act { font-size: 0.76rem; padding: 0.25rem 0.6rem; }
 
-.bg-del { margin-left: auto; border: 0; background: transparent; color: inherit; opacity: 0.3; cursor: pointer; font-size: 1rem; line-height: 1; padding: 0 0.2rem; }
+.bg-del { margin-left: auto; border: 0; background: transparent; color: var(--muted); cursor: pointer; font-size: 1rem; line-height: 1; padding: 0 0.2rem; }
 .bg-del:hover { opacity: 1; color: var(--accent); }
 
 .bg-headroom {
@@ -109,7 +109,7 @@
 }
 
 .bg-scope-split b { font-variant-numeric: tabular-nums; }
-.bg-scope-split i { opacity: 0.6; font-style: normal; font-size: 0.76rem; }
+.bg-scope-split i { color: var(--muted); font-style: normal; font-size: 0.76rem; }
 
 /* Inline budget editing. The panel has always claimed "edit any of them"; until now
    PUT /lines/:category existed and nothing called it. */

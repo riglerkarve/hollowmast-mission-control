@@ -13,10 +13,10 @@
 /* The morning briefing, rendered inline. Markdown subset only — headings, bold, italics,
    lists, tables and rules — because that is all scripts/briefing.cjs emits. */
 .rp-brief-head { display: flex; align-items: baseline; justify-content: space-between; gap: 1rem; }
-.rp-brief-when { font-size: 0.78rem; opacity: 0.6; font-variant-numeric: tabular-nums; }
+.rp-brief-when { font-size: 0.78rem; color: var(--muted); font-variant-numeric: tabular-nums; }
 
 .rp-b-h1 { font-size: 0.95rem; font-weight: 700; margin: 0.6rem 0 0.3rem; }
-.rp-b-h2 { font-size: 0.84rem; font-weight: 700; margin: 0.9rem 0 0.3rem; opacity: 0.85; }
+.rp-b-h2 { font-size: 0.84rem; font-weight: 700; margin: 0.9rem 0 0.3rem; color: var(--muted); }
 .rp-p { font-size: 0.82rem; margin: 0.35rem 0; }
 .rp-list { margin: 0.3rem 0; padding-left: 1.1rem; font-size: 0.82rem; }
 .rp-list li { margin: 0.15rem 0; }

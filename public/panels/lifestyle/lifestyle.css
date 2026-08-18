@@ -1,6 +1,6 @@
-.lf-h2 { margin: 0 0 0.3rem; font-size: 0.95rem; opacity: 0.85; }
-.lf-h3 { margin: 1.1rem 0 0.5rem; font-size: 0.82rem; opacity: 0.7; font-weight: 600; }
-.lf-hint { font-size: 0.8rem; opacity: 0.7; line-height: 1.5; margin: 0 0 0.9rem; }
+.lf-h2 { margin: 0 0 0.3rem; font-size: 0.95rem; color: var(--muted); }
+.lf-h3 { margin: 1.1rem 0 0.5rem; font-size: 0.82rem; color: var(--muted); font-weight: 600; }
+.lf-hint { font-size: 0.8rem; color: var(--muted); line-height: 1.5; margin: 0 0 0.9rem; }
  /* De-emphasis by COLOUR, not opacity. Opacity COMPOUNDS: .lf-dim at 0.55 nested inside
    another dimmed element rendered at 0.39 cumulative and measured 3.14:1 against the card,
    under the 4.5:1 it needs at 13px. A colour cannot compound, so the same rule holds
@@ -11,7 +11,7 @@
 
 /* Reserves its line whether or not it is speaking, so the form below does not jump up the
    page every time a message clears. */
-.lf-echo { font-size: 0.82rem; opacity: 0.8; line-height: 1.45; margin: 0.7rem 0 0; min-height: 1.2em; }
+.lf-echo { font-size: 0.82rem; color: var(--muted); line-height: 1.45; margin: 0.7rem 0 0; min-height: 1.2em; }
 .lf-echo.ok  { color: var(--short); opacity: 1; }
 .lf-echo.bad { color: var(--accent); opacity: 1; }
 
@@ -42,11 +42,11 @@
 
 .lf-c-main { display: flex; flex-direction: column; gap: 0.15rem; min-width: 0; }
 .lf-c-name { font-size: 0.88rem; font-weight: 600; display: flex; gap: 0.4rem; align-items: baseline; flex-wrap: wrap; }
-.lf-c-when { font-size: 0.78rem; opacity: 0.75; }
-.lf-typ { font-size: 0.74rem; opacity: 0.65; line-height: 1.4; }
+.lf-c-when { font-size: 0.78rem; color: var(--muted); }
+.lf-typ { font-size: 0.74rem; color: var(--muted); line-height: 1.4; }
 .lf-c-acts { display: flex; gap: 0.3rem; align-items: center; flex: 0 0 auto; }
 .lf-did { font-size: 0.76rem; padding: 0.25rem 0.6rem; }
-.lf-tag { font-size: 0.62rem; text-transform: uppercase; letter-spacing: 0.04em; opacity: 0.5; }
+.lf-tag { font-size: 0.62rem; text-transform: uppercase; letter-spacing: 0.04em; color: var(--muted); }
 
 /* Four states, and the two that mean "nothing to do" are not the two that stand out.
    Only 'due' takes the accent. */
@@ -104,7 +104,7 @@
 }
 .lf-meal:hover { background: var(--accent-soft); border-color: var(--accent); }
 
-.lf-today { font-size: 0.82rem; opacity: 0.75; margin: 0; }
+.lf-today { font-size: 0.82rem; color: var(--muted); margin: 0; }
 
 .lf-strip { display: flex; gap: 4px; flex-wrap: wrap; margin-bottom: 0.6rem; }
 
@@ -161,7 +161,7 @@
 .mt-card { margin-top: 1rem; }
 
 .mt-head { display: flex; gap: 0.8rem; align-items: baseline; justify-content: space-between; flex-wrap: wrap; }
-.mt-daylab { font-size: 0.78rem; opacity: 0.7; display: flex; gap: 0.4rem; align-items: center; }
+.mt-daylab { font-size: 0.78rem; color: var(--muted); display: flex; gap: 0.4rem; align-items: center; }
 .mt-date { flex: 0 0 auto; padding: 0.3rem 0.5rem; font-size: 0.8rem; }
 
 .mt-search { display: flex; gap: 0.5rem; flex-wrap: wrap; margin-bottom: 0.7rem; }
@@ -185,12 +185,12 @@
 /* FAULT. The question never got answered. */
 .mt-failed { border-left: 3px solid var(--accent); background: var(--accent-soft); }
 /* Printed verbatim, so a route-side misclassification stays readable instead of laundered. */
-.mt-why { font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; font-size: 0.76rem; opacity: 0.85; }
+.mt-why { font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; font-size: 0.76rem; color: var(--muted); }
 
 /* ABSENCE. Answered, and it is not there. Must not borrow the fault's colour. */
 .mt-absent { border-left: 3px dashed var(--muted); background: transparent; }
 
-.mt-found { font-size: 0.8rem; opacity: 0.75; margin: 0 0 0.5rem; }
+.mt-found { font-size: 0.8rem; color: var(--muted); margin: 0 0 0.5rem; }
 .mt-results { list-style: none; margin: 0 0 0.8rem; padding: 0; display: flex; flex-direction: column; gap: 0.4rem; }
 /* min-width:0 rather than nothing: a flex child defaults to min-content width, so a long
    unbroken product name would push this row wider than the card and scroll the page. */
@@ -205,10 +205,10 @@
 }
 .mt-pick:hover { border-color: var(--accent); background: var(--accent-soft); }
 .mt-r-name { font-size: 0.85rem; font-weight: 600; }
-.mt-r-basis { font-size: 0.72rem; opacity: 0.78; }
+.mt-r-basis { font-size: 0.72rem; color: var(--muted); }
 
 /* A figures strip. Uniform: no nutrient is styled as more or less desirable than another. */
-.mt-r-figs { display: flex; gap: 0.7rem; flex-wrap: wrap; font-size: 0.74rem; opacity: 0.8; }
+.mt-r-figs { display: flex; gap: 0.7rem; flex-wrap: wrap; font-size: 0.74rem; color: var(--muted); }
 .mt-fig { display: inline-flex; gap: 0.25rem; }
 .mt-fig b { font-variant-numeric: tabular-nums; font-weight: 600; }
 /* These are the FOOD's figures, not this meal's contribution - the total is these times
@@ -218,7 +218,7 @@
    while the naive colour-vs-background reading said 11.22:1 and would have passed it. The
    hierarchy is carried by size, caps and letter-spacing instead, none of which cost
    legibility. */
-.mt-per { text-transform: uppercase; letter-spacing: 0.04em; font-size: 0.65rem; opacity: 0.9; }
+.mt-per { text-transform: uppercase; letter-spacing: 0.04em; font-size: 0.65rem; color: var(--muted); }
 
 .mt-picked {
   display: flex; flex-direction: column; gap: 0.3rem;
@@ -235,7 +235,7 @@
 .mt-clear:hover { opacity: 1; color: var(--accent); }
 
 .mt-compose { display: flex; gap: 0.5rem; flex-wrap: wrap; align-items: center; }
-.mt-servlab { display: flex; gap: 0.4rem; align-items: center; font-size: 0.78rem; opacity: 0.75; }
+.mt-servlab { display: flex; gap: 0.4rem; align-items: center; font-size: 0.78rem; color: var(--muted); }
 .mt-serv { flex: 0 0 5.5rem; }
 .mt-bare { flex: 0 0 auto; }
 
@@ -253,7 +253,7 @@
 
 /* An item with no figures. Dashed, unfilled, and SAID rather than shaded - it is missing
    information, not a bad meal, and nothing in this module grades a meal. */
-.mt-i-nofig { font-size: 0.74rem; opacity: 0.7; font-style: italic; }
+.mt-i-nofig { font-size: 0.74rem; color: var(--muted); font-style: italic; }
 .mt-item-bare { border-left-style: dashed; border-left-color: var(--muted); background: transparent; }
 .mt-none { margin: 0.3rem 0 0.8rem; }
 
@@ -268,7 +268,7 @@
   background: var(--accent-soft);
 }
 .mt-warn-h { font-size: 0.87rem; }
-.mt-warn-b { font-size: 0.8rem; line-height: 1.55; opacity: 0.9; }
+.mt-warn-b { font-size: 0.8rem; line-height: 1.55; color: var(--muted); }
 
 /* --- totals -----------------------------------------------------------------------
    Every cell is styled identically whatever the number is. There is no fill that grows, no
@@ -284,7 +284,7 @@
   padding: 0.55rem 0.65rem;
   border: 1px solid var(--border); border-radius: 8px; background: var(--ring-bg);
 }
-.mt-tot-n { font-size: 0.72rem; text-transform: uppercase; letter-spacing: 0.04em; opacity: 0.78; }
+.mt-tot-n { font-size: 0.72rem; text-transform: uppercase; letter-spacing: 0.04em; color: var(--muted); }
 .mt-tot-v { font-size: 1.15rem; font-weight: 600; font-variant-numeric: tabular-nums; }
 .mt-tot-u { font-size: 0.72rem; font-weight: 400; color: var(--muted); margin-left: 0.15rem; }
 .mt-tot-why { font-size: 0.71rem; color: var(--muted); line-height: 1.4; }
@@ -295,7 +295,7 @@
    one - the route sends 0 for "nothing known contributed", and a 0 rendered as a value
    would claim the day was empty when it was only unmeasured. */
 .mt-tot-blank { border-style: dashed; background: transparent; }
-.mt-tot-na { font-size: 0.9rem; font-weight: 500; opacity: 0.65; font-style: italic; }
+.mt-tot-na { font-size: 0.9rem; font-weight: 500; color: var(--muted); font-style: italic; }
 
 /* --- targets ---------------------------------------------------------------------- */
 .mt-targets { display: flex; flex-direction: column; gap: 0.4rem; }

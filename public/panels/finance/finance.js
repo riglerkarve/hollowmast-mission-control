@@ -490,7 +490,7 @@ async function loadSuspects() {
         — the account’s own trading name, taken from the account label. Anyone in the same
         trade matches it, so this is expected rather than suspicious. Shown rather than
         filtered out, because a check that hides its weak matches looks cleaner than it is.</p>
-      <ul class="fin-s-list fin-dim">${trade.map(row).join('')}</ul>` : ''}
+      <ul class="fin-s-list">${trade.map(row).join('')}</ul>` : ''}
 
     <div class="fin-s-residue">
       <b>What this looked at, and what it did not.</b>

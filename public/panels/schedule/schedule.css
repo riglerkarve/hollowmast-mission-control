@@ -5,17 +5,17 @@
    does not exist is invisible in whichever theme you happen to be testing in, which is how
    five invented token names once shipped dark input boxes onto a white card. */
 
-.sc-h2 { margin: 0 0 0.3rem; font-size: 0.95rem; opacity: 0.85; }
-.sc-h3 { margin: 1.2rem 0 0.5rem; font-size: 0.82rem; opacity: 0.7; font-weight: 600; }
-.sc-hint { font-size: 0.8rem; opacity: 0.7; line-height: 1.5; margin: 0.5rem 0 0; }
-.sc-dim { opacity: 0.55; font-weight: 400; }
+.sc-h2 { margin: 0 0 0.3rem; font-size: 0.95rem; color: var(--muted); }
+.sc-h3 { margin: 1.2rem 0 0.5rem; font-size: 0.82rem; color: var(--muted); font-weight: 600; }
+.sc-hint { font-size: 0.8rem; color: var(--muted); line-height: 1.5; margin: 0.5rem 0 0; }
+.sc-dim { color: var(--muted); font-weight: 400; }
 .sc-quiet { font-size: 0.85rem; color: var(--muted); margin: 0; }
 .sc-error { color: var(--accent); font-size: 0.85rem; line-height: 1.5; margin: 0; }
 .sc-beyond { color: var(--muted); }
 
 /* Reserves its line whether or not it is speaking, so the strip below does not jump up the
    page every time a message clears. */
-.sc-echo { font-size: 0.82rem; opacity: 0.8; line-height: 1.45; margin: 0.7rem 0 0; min-height: 1.2em; }
+.sc-echo { font-size: 0.82rem; color: var(--muted); line-height: 1.45; margin: 0.7rem 0 0; min-height: 1.2em; }
 .sc-echo.ok  { color: var(--short); opacity: 1; }
 .sc-echo.bad { color: var(--accent); opacity: 1; }
 
@@ -53,11 +53,11 @@
 
 .sc-e-main { display: flex; flex-direction: column; gap: 0.15rem; min-width: 0; }
 .sc-e-title { font-size: 0.88rem; font-weight: 600; display: flex; gap: 0.4rem; align-items: baseline; flex-wrap: wrap; }
-.sc-e-when { font-size: 0.78rem; opacity: 0.75; }
-.sc-e-rel  { font-size: 0.78rem; opacity: 0.8; }
-.sc-e-lead { font-size: 0.74rem; opacity: 0.65; line-height: 1.4; }
-.sc-e-note { font-size: 0.74rem; opacity: 0.55; line-height: 1.4; }
-.sc-tag { font-size: 0.62rem; text-transform: uppercase; letter-spacing: 0.04em; opacity: 0.5; font-weight: 600; }
+.sc-e-when { font-size: 0.78rem; color: var(--muted); }
+.sc-e-rel  { font-size: 0.78rem; color: var(--muted); }
+.sc-e-lead { font-size: 0.74rem; color: var(--muted); line-height: 1.4; }
+.sc-e-note { font-size: 0.74rem; color: var(--muted); line-height: 1.4; }
+.sc-tag { font-size: 0.62rem; text-transform: uppercase; letter-spacing: 0.04em; color: var(--muted); font-weight: 600; }
 .sc-tag-status { opacity: 0.75; }
 
 .sc-e-acts { display: flex; gap: 0.3rem; align-items: center; flex: 0 0 auto; flex-wrap: wrap; justify-content: flex-end; }
@@ -84,7 +84,7 @@
   border: 0;
   background: transparent;
   color: inherit;
-  opacity: 0.3;
+  color: var(--muted);
   cursor: pointer;
   font-size: 1rem;
   line-height: 1;

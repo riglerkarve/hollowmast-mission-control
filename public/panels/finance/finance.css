@@ -14,10 +14,10 @@
   font: inherit;
 }
 
-.fin-h2 { margin: 0 0 0.8rem; font-size: 0.95rem; opacity: 0.85; }
+.fin-h2 { margin: 0 0 0.8rem; font-size: 0.95rem; color: var(--muted); }
 
-.fin-note { font-size: 0.8rem; opacity: 0.7; line-height: 1.5; margin: 0.4rem 0 0.9rem; }
-.fin-dim { opacity: 0.45; margin-top: 0.8rem; }
+.fin-note { font-size: 0.8rem; color: var(--muted); line-height: 1.5; margin: 0.4rem 0 0.9rem; }
+.fin-dim { color: var(--muted); margin-top: 0.8rem; }
 
 .fin-warn {
   margin: 0.9rem 0 0;
@@ -114,7 +114,7 @@
 
 /* Services audit (backlog #39). An inventory, never a verdict — nothing here styles a
    service as good or bad, and there is no red for "expensive". */
-.fin-h3 { font-size: 0.85rem; font-weight: 700; margin: 0.9rem 0 0.3rem; opacity: 0.85; }
+.fin-h3 { font-size: 0.85rem; font-weight: 700; margin: 0.9rem 0 0.3rem; color: var(--muted); }
 
 .fin-recur { list-style: none; margin: 0.3rem 0; padding: 0; display: flex; flex-direction: column; gap: 0.45rem; }
 
@@ -128,8 +128,8 @@
 }
 
 .fin-r-name { font-size: 0.85rem; font-weight: 600; }
-.fin-r-when { font-size: 0.76rem; opacity: 0.8; }
-.fin-r-sum  { font-size: 0.74rem; opacity: 0.6; font-variant-numeric: tabular-nums; }
+.fin-r-when { font-size: 0.76rem; color: var(--muted); }
+.fin-r-sum  { font-size: 0.74rem; color: var(--muted); font-variant-numeric: tabular-nums; }
 
 /* The caveat on an irregular median. --ink on the tint measures 12.26:1 light and
    11.04:1 dark; the word carries the meaning, the tint only draws the eye. */
@@ -142,7 +142,7 @@
 }
 
 .fin-more { margin-top: 0.8rem; }
-.fin-more summary { font-size: 0.8rem; cursor: pointer; opacity: 0.8; }
+.fin-more summary { font-size: 0.8rem; cursor: pointer; color: var(--muted); }
 .fin-more summary:hover { opacity: 1; }
 
 /* ---------------------------------------------------------------------------------------

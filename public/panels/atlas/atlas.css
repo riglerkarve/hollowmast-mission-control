@@ -3,14 +3,14 @@
    colour alone at low contrast: both states use --ink and measure above 11:1. */
 .at-figure { display: flex; align-items: baseline; gap: 0.6rem; margin-bottom: 0.5rem; }
 .at-pct { font-size: 2rem; font-weight: 700; letter-spacing: -0.02em; }
-.at-pct-label { font-size: 0.8rem; opacity: 0.7; }
+.at-pct-label { font-size: 0.8rem; color: var(--muted); }
 
 .at-regions { display: flex; flex-wrap: wrap; gap: 0.4rem 1.1rem; margin-bottom: 0.5rem; font-size: 0.8rem; }
 .at-region { opacity: 0.85; }
 
-.at-note { font-size: 0.77rem; opacity: 0.75; margin: 0.4rem 0; }
-.at-dim { opacity: 0.55; }
-.at-h3 { font-size: 0.82rem; font-weight: 700; margin: 0.9rem 0 0.35rem; opacity: 0.85; }
+.at-note { font-size: 0.77rem; color: var(--muted); margin: 0.4rem 0; }
+.at-dim { color: var(--muted); }
+.at-h3 { font-size: 0.82rem; font-weight: 700; margin: 0.9rem 0 0.35rem; color: var(--muted); }
 
 .at-cells { display: flex; flex-wrap: wrap; gap: 0.25rem; }
 

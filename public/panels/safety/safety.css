@@ -14,8 +14,8 @@
 }
 
 .sf-h2 { font-size: 0.95rem; font-weight: 700; margin: 0 0 0.4rem; }
-.sf-note { font-size: 0.78rem; opacity: 0.75; margin: 0.3rem 0; }
-.sf-dim { opacity: 0.55; }
+.sf-note { font-size: 0.78rem; color: var(--muted); margin: 0.3rem 0; }
+.sf-dim { color: var(--muted); }
 
 /* The unconfigured banner. --ink on --accent-soft measures 12.26:1 light and 11.04:1
    dark; the tint is the emphasis and the text carries the meaning. */
@@ -33,7 +33,7 @@
 
 .sf-form { display: flex; flex-wrap: wrap; gap: 0.6rem; align-items: flex-end; margin: 0.5rem 0; }
 .sf-form-row { align-items: center; }
-.sf-label { display: flex; flex-direction: column; gap: 0.25rem; font-size: 0.76rem; opacity: 0.8; }
+.sf-label { display: flex; flex-direction: column; gap: 0.25rem; font-size: 0.76rem; color: var(--muted); }
 
 .sf-in {
   padding: 0.45rem 0.55rem;
@@ -63,7 +63,7 @@
   border: 0;
   background: none;
   color: var(--ink);
-  opacity: 0.5;
+  color: var(--muted);
   cursor: pointer;
   font-size: 0.95rem;
   line-height: 1;
@@ -105,8 +105,8 @@
 
 .sf-log-amt { font-variant-numeric: tabular-nums; font-size: 0.85rem; font-weight: 600; }
 .sf-log-what { font-size: 0.82rem; }
-.sf-log-why { font-size: 0.76rem; opacity: 0.8; }
-.sf-log-at { font-size: 0.72rem; opacity: 0.55; font-variant-numeric: tabular-nums; }
+.sf-log-why { font-size: 0.76rem; color: var(--muted); }
+.sf-log-at { font-size: 0.72rem; color: var(--muted); font-variant-numeric: tabular-nums; }
 
 /* ---------------------------------------------------------------------------------------
    Devices with network access — backlog #M3.

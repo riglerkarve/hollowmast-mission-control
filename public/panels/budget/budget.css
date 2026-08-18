@@ -141,3 +141,27 @@
 }
 
 .bg-l-src-manual { background: var(--accent-soft); }
+
+/* The proposition (backlog #28). Deliberately plain: no colour that reads as approval or
+   warning, because the panel must not lean on the decision. It states facts and stops. */
+.bg-prop:empty { display: none; }
+
+.bg-prop-in {
+  margin: 0.4rem 0;
+  padding: 0.55rem 0.7rem;
+  border: 1px solid var(--border);
+  border-left: 3px solid var(--ring-bg);
+  border-radius: 8px;
+  background: var(--bg);
+}
+
+.bg-prop-row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.15rem 0.5rem;
+  margin-bottom: 0.35rem;
+  font-size: 0.79rem;
+}
+
+.bg-prop-row b { flex: 0 0 auto; }
+.bg-prop-row span { flex: 1 1 14rem; opacity: 0.85; }

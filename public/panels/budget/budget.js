@@ -215,8 +215,10 @@ async function loadWishlist() {
           </span>
           <span class="bg-w-aff ${i.monthsNeeded === 0 ? 'bg-pos' : ''}">${esc(i.affordability)}${i.monthsNeeded > 0 ? ` · about ${i.monthsNeeded} month${i.monthsNeeded === 1 ? '' : 's'} of headroom` : ''}</span>
           ${i.note ? `<span class="bg-w-note">${esc(i.note)}</span>` : ''}
+          ${i.status === 'proposed' ? `<div class="bg-prop" id="bgProp${i.id}"></div>` : ''}
           <span class="bg-w-acts">
             ${i.status === 'proposed' ? `
+              <button class="btn bg-act bg-why" data-prop="${i.id}">Before you decide</button>
               <button class="btn bg-act" data-id="${i.id}" data-to="approved">Approve</button>
               <button class="btn bg-act" data-id="${i.id}" data-to="declined">Not now</button>` : ''}
             ${i.status === 'approved' ? `<button class="btn bg-act" data-id="${i.id}" data-to="bought">Got it</button>` : ''}
@@ -255,6 +257,49 @@ async function loadWishlist() {
     });
     load();
   }));
+  // The proposition. Backlog #28: what you need in front of you before deciding, fetched
+  // on demand rather than for every row — it is a per-item question, and pre-loading eight
+  // of them would put eight sets of arithmetic on screen that nobody asked for.
+  el.querySelectorAll('.bg-why').forEach((b) => b.addEventListener('click', async () => {
+    const box = el.querySelector(`#bgProp${b.dataset.prop}`);
+    if (box.dataset.open === '1') { box.innerHTML = ''; box.dataset.open = '0'; return; }
+    box.innerHTML = '<p class="bg-note">…</p>';
+    box.dataset.open = '1';
+    let p;
+    try {
+      p = await api(`/wishlist/${b.dataset.prop}/proposition`);
+    } catch (err) {
+      box.innerHTML = `<p class="bg-error">Could not build the proposition: ${esc(err.message)}</p>`;
+      return;
+    }
+
+    const fit = p.budgetFit;
+    box.innerHTML = `
+      <div class="bg-prop-in">
+        <div class="bg-prop-row">
+          <b>${fit.fitsNow ? 'Fits in what is left' : 'Does not fit this month'}</b>
+          <span>${gbp(p.cost.pricePence)} of ${gbp(fit.remainingPence)} remaining${
+            fit.fitsNow ? ` · ${gbp(fit.remainingAfterPence)} would be left` : ''}</span>
+        </div>
+        ${!fit.fitsNow && p.costOfWaiting.months ? `<div class="bg-prop-row">
+          <b>Cost of waiting</b>
+          <span>${p.costOfWaiting.months} month${p.costOfWaiting.months === 1 ? '' : 's'} of headroom.
+            ${esc(p.costOfWaiting.note)}</span></div>` : ''}
+        <div class="bg-prop-row">
+          <b>${p.displaces.length ? 'Approving this displaces' : 'Displaces nothing'}</b>
+          <span>${p.displaces.length
+            ? `${p.displaces.map((d) => `${esc(d.name)} (${gbp(d.pricePence)})`).join(', ')} — ${esc(p.displacesNote)}`
+            : esc(p.displacesNote)}</span>
+        </div>
+        <div class="bg-prop-row">
+          <b>Automatable</b>
+          <span>${esc(p.safety.meaning)}</span>
+        </div>
+        <p class="bg-note bg-dim">${esc(fit.basis)}</p>
+        <p class="bg-note bg-dim">${esc(p.nothingHereBuys)}</p>
+      </div>`;
+  }));
+
   el.querySelectorAll('.bg-retag').forEach((b) => b.addEventListener('click', async () => {
     await api(`/wishlist/${b.dataset.id}/scope`, {
       method: 'POST', headers: { 'content-type': 'application/json' },

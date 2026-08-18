@@ -93,7 +93,7 @@ async function load() {
   if (!root) return;
   let d;
   try {
-    const r = await fetch('/api/work/items', { headers: { 'X-MC-By': 'work-panel' } });
+    const r = await fetch('/api/work/items', { headers: { 'X-MC-By': 'you' } });
     d = await r.json();
     if (!r.ok) throw new Error(d.error || `HTTP ${r.status}`);
   } catch (err) {
@@ -136,7 +136,7 @@ async function onClick(ev) {
     say('queueing…');
     const r = await fetch('/api/work/items', {
       method: 'POST',
-      headers: { 'content-type': 'application/json', 'X-MC-By': 'work-panel' },
+      headers: { 'content-type': 'application/json', 'X-MC-By': 'you' },
       body: JSON.stringify({ prompt, flags: flags() }),
     });
     const b = await r.json();
@@ -151,7 +151,7 @@ async function onClick(ev) {
   if (run) {
     say('running…');
     const r = await fetch('/api/work/run', {
-      method: 'POST', headers: { 'content-type': 'application/json', 'X-MC-By': 'work-panel' },
+      method: 'POST', headers: { 'content-type': 'application/json', 'X-MC-By': 'you' },
       body: JSON.stringify({ limit: 5 }),
     });
     const b = await r.json();
@@ -164,7 +164,7 @@ async function onClick(ev) {
 
   if (cancel) {
     await fetch(`/api/work/items/${cancel.dataset.id}/cancel`, {
-      method: 'POST', headers: { 'X-MC-By': 'work-panel' },
+      method: 'POST', headers: { 'X-MC-By': 'you' },
     });
     if (!root) return;
     load();

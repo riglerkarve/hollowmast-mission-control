@@ -30,7 +30,7 @@ async function loadLedger() {
   if (!root) return;
   let d;
   try {
-    const r = await fetch('/api/mail/vs-ledger', { headers: { 'X-MC-By': 'mail-panel' } });
+    const r = await fetch('/api/mail/vs-ledger', { headers: { 'X-MC-By': 'you' } });
     d = await r.json();
     if (!r.ok) throw new Error(d.error || `HTTP ${r.status}`);
   } catch (err) {
@@ -69,7 +69,7 @@ async function load() {
   if (!root) return;
   let d;
   try {
-    const r = await fetch('/api/mail/attention', { headers: { 'X-MC-By': 'mail-panel' } });
+    const r = await fetch('/api/mail/attention', { headers: { 'X-MC-By': 'you' } });
     d = await r.json();
     if (!r.ok) throw new Error(d.error || `HTTP ${r.status}`);
   } catch (err) {

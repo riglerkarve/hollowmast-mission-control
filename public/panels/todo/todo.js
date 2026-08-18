@@ -325,7 +325,7 @@ async function loadClusters() {
   if (!host) return;
   let d;
   try {
-    const r = await fetch('/api/todo/clusters', { headers: { 'X-MC-By': 'todo-panel' } });
+    const r = await fetch('/api/todo/clusters', { headers: { 'X-MC-By': 'you' } });
     d = await r.json();
     if (!r.ok) throw new Error(d.error || `HTTP ${r.status}`);
   } catch (err) {

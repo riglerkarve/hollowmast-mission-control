@@ -76,7 +76,7 @@ async function load() {
   if (!root) return;
   let d;
   try {
-    const r = await fetch('/api/exercise', { headers: { 'X-MC-By': 'exercise-panel' } });
+    const r = await fetch('/api/exercise', { headers: { 'X-MC-By': 'you' } });
     d = await r.json();
     if (!r.ok) throw new Error(d.error || `HTTP ${r.status}`);
   } catch (err) {
@@ -128,7 +128,7 @@ async function onClick(ev) {
     };
     const r = await fetch('/api/exercise/sessions', {
       method: 'POST',
-      headers: { 'content-type': 'application/json', 'X-MC-By': 'exercise-panel' },
+      headers: { 'content-type': 'application/json', 'X-MC-By': 'you' },
       body: JSON.stringify(body),
     });
     if (!root) return;
@@ -140,7 +140,7 @@ async function onClick(ev) {
 
   if (del) {
     await fetch(`/api/exercise/sessions/${del.dataset.id}`, {
-      method: 'DELETE', headers: { 'X-MC-By': 'exercise-panel' },
+      method: 'DELETE', headers: { 'X-MC-By': 'you' },
     });
     if (!root) return;
     load();

@@ -28,6 +28,8 @@ const todo = require('../server/routes/todo');
 const sessions = require('../server/routes/sessions');
 const lifestyle = require('../server/routes/lifestyle');
 const wellbeing = require('../server/routes/wellbeing');
+const schedule = require('../server/routes/schedule');
+const health = require('../server/routes/health');
 
 const ROOT = path.join(__dirname, '..');
 const HOST = 'http://127.0.0.1:11434';
@@ -166,7 +168,16 @@ function gatherFacts() {
     handover,
   };
 
+  // Two modules that were never asked. schedule.upcoming() already existed and nothing
+  // consumed it; health owns its own reading so the briefing does not recompute one.
+  let scheduleDue = null;
+  try { scheduleDue = schedule.upcoming(7); } catch (e) { scheduleDue = { error: e.message }; }
+  let healthDay = null;
+  try { healthDay = health.lastDay(); } catch (e) { healthDay = { error: e.message }; }
+
   return {
+    scheduleDue,
+    healthDay,
     deferralsDue,
     date: TODAY,
     work,
@@ -286,6 +297,46 @@ function render(facts, prose) {
 
   const c = facts.choresDue;
   if (c && c.total) {
+    // The diary, from the schedule module. Overdue is listed before upcoming because an
+    // appointment that has already slipped is the only one you can still do something about
+    // today. Rendered only when there is something in it -- an empty heading every morning
+    // is how a reader learns to skip the section.
+    const sd = facts.scheduleDue;
+    if (sd && !sd.error && (sd.overdue.length || sd.upcoming.length)) {
+      L.push('## Diary\n');
+      for (const e of sd.overdue) {
+        L.push(`- **OVERDUE** ${e.title}${e.day ? ` — was ${e.day}` : ''}`);
+      }
+      for (const e of sd.upcoming) {
+        const when = e.day === sd.today ? '**today**' : e.day;
+        L.push(`- ${when} — ${e.title}${e.location ? ` (${e.location})` : ''}`);
+      }
+      L.push('');
+    } else if (sd && sd.error) {
+      // Could not look is not the same as nothing on. Say which.
+      L.push('## Diary\n');
+      L.push(`- The schedule could not be read: ${sd.error}`);
+      L.push('');
+    }
+
+    // Yesterday's body, from the health module. Two things it must never do: present a stale
+    // reading as current, and report an unworn watch as a sedentary day.
+    const hd = facts.healthDay;
+    if (hd && !hd.error && hd.date) {
+      const bits = [];
+      if (hd.steps != null) bits.push(`${hd.steps.toLocaleString('en-GB')} steps`);
+      if (hd.sleepMinutes != null) {
+        bits.push(`${Math.floor(hd.sleepMinutes / 60)}h ${hd.sleepMinutes % 60}m asleep`);
+      }
+      if (bits.length) {
+        const stale = hd.ageDays > 1 ? ` — but that is ${hd.ageDays} days old` : '';
+        L.push(`## Body\n`);
+        L.push(`- ${hd.date}: ${bits.join(', ')}${stale}`);
+        if (hd.note) L.push(`- ${hd.note}`);
+        L.push('');
+      }
+    }
+
     L.push('## Due today\n');
     if (c.due.length) {
       for (const ch of c.due) {

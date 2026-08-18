@@ -167,5 +167,46 @@ router.post('/metrics', (req, res) => {
   res.status(201).json({ date: d, metric, value: v, source: 'manual' });
 });
 
+// The most recent day that has any reading, for the briefing.
+//
+// IT RETURNS THE DATE, always. A briefing line saying "8,200 steps" with no date reads as
+// yesterday even when the watch last synced a week ago, and a stale figure presented as current
+// is worse than no figure.
+//
+// AND IT REPORTS WHETHER THE WATCH WAS WORN, which is the whole reason this is not a one-line
+// query. A zero-step day with a heart rate is a day spent sitting down. A zero-step day with NO
+// heart rate is a watch on the side. Those are opposite facts and they look identical in the
+// steps column alone -- 27 such days were misread that way before. `worn` is the independent
+// witness, so the briefing can say "not worn" instead of implying you did not move.
+function lastDay() {
+  const row = db.prepare('SELECT MAX(date) AS d FROM health_metrics').get();
+  if (!row || !row.d) return { date: null, why: 'no health readings have ever been imported' };
+
+  const rows = db.prepare('SELECT metric, value FROM health_metrics WHERE date = ?').all(row.d);
+  const by = {};
+  for (const r of rows) by[r.metric] = r.value;
+
+  const steps = by.steps == null ? null : by.steps;
+  const sleepMin = by.sleep_minutes == null ? null : by.sleep_minutes;
+  const worn = by.hr_median != null || by.hr_min != null;
+
+  // How stale is it? The briefing decides what to do with that; this only reports it.
+  const today = new Date().toISOString().slice(0, 10);
+  const ageDays = Math.round((Date.parse(today) - Date.parse(row.d)) / 86400000);
+
+  return {
+    date: row.d,
+    ageDays,
+    steps,
+    sleepMinutes: sleepMin,
+    worn,
+    // Stated rather than inferred by the caller, so every surface says the same thing.
+    note: !worn && (steps === 0 || steps == null)
+      ? 'no heart rate recorded, so the watch was probably not worn — this is not a sedentary day'
+      : null,
+  };
+}
+
 module.exports = router;
 module.exports.METRICS = METRICS;
+module.exports.lastDay = lastDay;

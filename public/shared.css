@@ -219,3 +219,20 @@
 .bar-chart.compact .bar-label {
   display: none;
 }
+
+/* The last bar's tooltip is anchored to its RIGHT edge instead of centred — #M7.
+   Measured 18 Aug: at a 689px viewport the page had an 11px horizontal scroll and exactly
+   one element overflowed, .bar-tooltip, right edge 700. It is opacity:0 until hover, so
+   nothing was visible off-screen: an invisible element was producing a real scrollbar,
+   which is why it survived so long.
+   shell.css already removes it below 640px with display:none, and its comment records why
+   opacity and visibility do not help — neither removes an element from layout. That fixed
+   phones and left every width above it broken.
+   Centring is what overflows, so only the last column is re-anchored. overflow:hidden on
+   the chart was rejected: it clips the tooltip vertically, which is the one direction it
+   has to escape in. */
+.bar-col:last-child .bar-tooltip {
+  left: auto;
+  right: 0;
+  transform: translate(0, -100%);
+}

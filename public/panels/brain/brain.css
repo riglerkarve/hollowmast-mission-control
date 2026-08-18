@@ -204,4 +204,4 @@
 /* Used in three places by the JS and never defined until now — an invented class renders
    as nothing at all and shows no error, which is why classes get audited against the
    sheet rather than assumed. */
-.brain-dim { color: var(--muted); color: var(--muted); }
+.brain-dim { color: var(--muted); }

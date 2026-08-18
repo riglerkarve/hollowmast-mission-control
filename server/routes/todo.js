@@ -676,6 +676,11 @@ router.patch('/items/:id', (req, res) => {
       error: `send status, priority, or one of ${TEXT_FIELDS.join(', ')}`,
     });
   }
+  // Trimmed ONCE, here, and everything downstream uses the trimmed value. Validating on
+  // the trimmed string and then storing the raw one meant " Fix the thing " passed, was
+  // stored with its spaces, and a later PATCH sending the clean text compared unequal --
+  // writing a note that said "title replaced" over a difference nobody can see.
+  const clean = {};
   for (const f of texts) {
     if (typeof req.body[f] !== 'string' || !req.body[f].trim()) {
       // Clearing a field and omitting it are different requests. Neither is supported
@@ -683,6 +688,7 @@ router.patch('/items/:id', (req, res) => {
       // wrote a rationale for this".
       return res.status(400).json({ error: `${f} must be a non-empty string` });
     }
+    clean[f] = req.body[f].trim();
   }
   if (status !== undefined && !STATUSES.includes(status)) {
     return res.status(400).json({ error: `status must be one of ${STATUSES.join(', ')}` });
@@ -710,8 +716,8 @@ router.patch('/items/:id', (req, res) => {
   const kept = [];
   for (const f of texts) {
     const was = before[f];
-    if (String(was == null ? '' : was) === req.body[f]) continue;   // no change, no note
-    sets.push(`${f} = ?`); args.push(req.body[f]);
+    if (String(was == null ? '' : was) === clean[f]) continue;      // no change, no note
+    sets.push(`${f} = ?`); args.push(clean[f]);
     kept.push([f, was]);
   }
   if (!sets.length) {
@@ -725,8 +731,19 @@ router.patch('/items/:id', (req, res) => {
   }
   args.push(req.params.id);
 
+  // `began` exists so the catch cannot roll back somebody else's transaction. node:sqlite
+  // hands out ONE connection, three routes call BEGIN, and if one is already open this
+  // BEGIN throws -- at which point an unconditional ROLLBACK aborts the OUTER transaction
+  // and discards writes this route never made.
+  //
+  // It cannot happen today only because every BEGIN..COMMIT block in this codebase is
+  // fully synchronous, so the event loop cannot interleave two. That is a real constant
+  // and it is written down nowhere else: PUT NO `await` BETWEEN BEGIN AND COMMIT, here or
+  // in alerts.js or budget.js.
+  let began = false;
   try {
     db.exec('BEGIN');
+    began = true;
     for (const [field, was] of kept) {
       db.prepare('INSERT INTO todo_notes (item_id, note, by_whom) VALUES (?, ?, ?)').run(
         req.params.id,
@@ -737,7 +754,7 @@ router.patch('/items/:id', (req, res) => {
     db.prepare(`UPDATE todo_items SET ${sets.join(', ')} WHERE id = ?`).run(...args);
     db.exec('COMMIT');
   } catch (err) {
-    try { db.exec('ROLLBACK'); } catch { /* already rolled back */ }
+    if (began) { try { db.exec('ROLLBACK'); } catch { /* already rolled back */ } }
     return res.status(500).json({ error: err.message });
   }
   res.json({

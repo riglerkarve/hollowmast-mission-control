@@ -47,7 +47,24 @@ async function mountPanel(name) {
   activePanel = null;
   panelRoot.innerHTML = '';
 
-  const mod = await loader();
+  let mod;
+  try {
+    mod = await loader();
+  } catch (err) {
+    // A failed import and an empty panel are NOT the same thing, and by this point the
+    // root is already cleared and activePanel already null -- so without this the pane
+    // goes blank, the nav button never lights, and the only trace is an unhandled
+    // rejection in a console nobody has open. Say what happened, in the pane.
+    if (token !== mountToken) return;
+    panelRoot.innerHTML = `<div class="panel"><div class="panel-header"><h1>${name}</h1></div>`
+      + '<section class="card"><p class="empty-hint">This panel failed to load: '
+      + `${String(err && err.message ? err.message : err).replace(/[&<>"]/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]))}`
+      + '<br>That is a failure to load, not an empty panel. Reload the page; if it persists '
+      + 'the panel module itself is broken.</p></section></div>';
+    navItems.forEach((btn) => btn.classList.toggle('active', btn.dataset.panel === name));
+    history.replaceState(null, '', `#${name}`);
+    return;
+  }
   // Superseded while importing. The switch that overtook us has already unmounted us,
   // cleared the root and mounted its own panel; writing now would overwrite it.
   if (token !== mountToken) return;

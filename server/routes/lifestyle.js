@@ -26,8 +26,27 @@ const finance = require('./finance');
 //
 //     - Nothing is scored, weighted, ranked, streaked, trended or interpreted. Every
 //       figure below is a COUNT of rows you wrote yourself.
-//     - No nudge, no encouragement, no reaction to a bad week, no calorie judgement, and
-//       nothing that reads as advice about the user's body or eating.
+//     - No nudge, no encouragement, no reaction to a bad week, and nothing that reads as
+//       advice about the user's body or eating.
+//
+//   AMENDED 18 Aug 2026, BY THE OWNER, OPENLY. This block used to also say "no calorie
+//   judgement". They asked for a meal tracker with nutrition lookup, were shown that it
+//   collided with this rule, were offered a narrower per-item-facts-only version, and
+//   chose totals and targets. A feature request does not overturn a rule quietly; the rule
+//   is changed in the open, attributed, or it is not changed at all.
+//
+//   WHAT THE AMENDMENT DOES AND DOES NOT PERMIT — the distinction is the whole safeguard:
+//     - Nutrition figures are LOOKED UP and attributed to a source and a date. Never
+//       estimated, never inferred from a similar item.
+//     - Totals are ARITHMETIC OVER ROWS YOU WROTE. Adding up what you logged is not a
+//       judgement; it is a sum you could do yourself.
+//     - A target is YOURS. This module does not choose one, does not suggest one, and does
+//       not defend one — exactly as FLOOR_MEALS already works. There is no default. An
+//       unset target means no comparison is shown at all.
+//     - STILL FORBIDDEN, and not up for amendment: reacting to being over or under. No
+//       nudge, no colour that means "bad", no streak, no trend, no "you are doing well".
+//       The comparison is displayed and never commented on.
+//     - A day with no record is still "not recorded", never a day of zero calories.
 //     - The local model never touches this module. Not for tagging, not for prose.
 //     - A day with NO RECORD is "not recorded". It is never counted as a day below the
 //       floor. Nothing here knows what happened on a day that was not written down, and
@@ -92,6 +111,60 @@ db.migrate('lifestyle', [
   (d) => {
     provenance.addColumn(d, 'lifestyle_done');
     provenance.addColumn(d, 'lifestyle_intake');
+  },
+
+  // v4 — the meal tracker. Owner's request, 18 Aug 2026. See the amended header above for
+  // what was permitted and what stays forbidden.
+  //
+  // TWO TABLES, NOT ONE, and the split is the design. `lifestyle_foods` is a cache of
+  // figures published by SOMEONE ELSE — it carries where each number came from and when it
+  // was fetched, so a value can always be traced back or re-checked. `lifestyle_meals` is
+  // what you ate. Merging them would mean a corrected product figure silently rewriting
+  // history, and a meal you logged in August would change because a database was edited in
+  // October.
+  (d) => {
+    d.exec(`
+      CREATE TABLE lifestyle_foods (
+        id           INTEGER PRIMARY KEY AUTOINCREMENT,
+        name         TEXT NOT NULL,
+        brand        TEXT,
+        barcode      TEXT,
+        serving      TEXT,                    -- '1 scoop (50g)' as the source words it
+        kcal         REAL,                    -- per serving. NULL means NOT FOUND, never zero.
+        protein_g    REAL,
+        carbs_g      REAL,
+        fat_g        REAL,
+        fibre_g      REAL,
+        source       TEXT NOT NULL,           -- 'openfoodfacts' | 'manufacturer' | 'you'
+        source_ref   TEXT,                    -- URL or product code the figures came from
+        fetched_at   TEXT NOT NULL DEFAULT (datetime('now','localtime')),
+        by_whom      TEXT NOT NULL DEFAULT 'unknown'
+      );
+      CREATE INDEX idx_lf_foods_name ON lifestyle_foods(name);
+      CREATE UNIQUE INDEX idx_lf_foods_barcode ON lifestyle_foods(barcode);
+
+      CREATE TABLE lifestyle_meals (
+        id          INTEGER PRIMARY KEY AUTOINCREMENT,
+        date        TEXT NOT NULL,
+        food_id     INTEGER REFERENCES lifestyle_foods(id) ON DELETE SET NULL,
+        label       TEXT NOT NULL,            -- what you called it, kept even if food_id is null
+        servings    REAL NOT NULL DEFAULT 1,
+        note        TEXT,
+        recorded_at TEXT NOT NULL DEFAULT (datetime('now','localtime')),
+        by_whom     TEXT NOT NULL DEFAULT 'unknown'
+      );
+      CREATE INDEX idx_lf_meals_date ON lifestyle_meals(date);
+
+      -- Targets. One row per nutrient, and the table starts EMPTY on purpose: an unset
+      -- target shows no comparison at all. This module does not choose a target, does not
+      -- suggest one, and does not defend one — the same contract FLOOR_MEALS already has.
+      CREATE TABLE lifestyle_targets (
+        nutrient   TEXT PRIMARY KEY,          -- 'kcal' | 'protein_g' | ...
+        amount     REAL NOT NULL,
+        set_at     TEXT NOT NULL DEFAULT (datetime('now','localtime')),
+        set_by     TEXT NOT NULL DEFAULT 'you'
+      );
+    `);
   },
 ]);
 
@@ -566,26 +639,11 @@ router.get('/', (req, res) => {
   });
 });
 
-// Express 4 wildcard — a bare '*', with the matched remainder in req.params[0].
-// (Express 5's '/*splat' form throws on this version.) It exists so a mistyped endpoint
-// answers with a named failure in JSON, instead of falling through to the static handler
-// and returning an HTML 404 that a panel would read as a parse error of unknown origin.
-router.all('*', (req, res) => {
-  const attempted = req.params[0] ? `/${String(req.params[0]).replace(/^\/+/, '')}` : req.path;
-  res.status(404).json({
-    error: `no such lifestyle endpoint: ${req.method} ${attempted}`,
-    endpoints: [
-      'GET    /               what is due, what is coming, and 14 days of intake',
-      'GET    /chores         every chore with its computed due state',
-      'POST   /chores         { name, intervalDays }',
-      'PUT    /chores/:id     { name?, intervalDays?, active? }',
-      'DELETE /chores/:id',
-      'POST   /chores/:id/done  { date? }',
-      'GET    /intake?days=N',
-      'POST   /intake         { date?, meals, note? }',
-    ],
-  });
-});
+// NOTE: the catch-all 404 handler that used to sit here has MOVED TO THE BOTTOM of this
+// file. It matched everything, so every route added after it was unreachable — the meal
+// tracker's endpoints answered "no such lifestyle endpoint" while being perfectly well
+// defined. Third occurrence of this shape in the project. Anything added later goes ABOVE
+// the handler at the end, never below it.
 
 // Asked for by the briefing. Counts of recorded rows only — never a state, never a
 // judgement about whether the week was good.
@@ -625,6 +683,293 @@ function dueSummary() {
     total: all.length,
   };
 }
+
+// ---------------------------------------------------------------------------------------
+// THE MEAL TRACKER — #M12. Read the amended header at the top of this file first.
+//
+// NULL IS NOT ZERO, and every query below is written around that. A food whose figures
+// could not be found stores NULL kcal, and a total over meals containing one of those is
+// reported as INCOMPLETE with the unknown items named. Summing NULL as 0 would produce a
+// total that looks like a measurement and is a guess — the exact failure this project has
+// been bitten by more than once.
+const NUTRIENTS = ['kcal', 'protein_g', 'carbs_g', 'fat_g', 'fibre_g'];
+
+// Open Food Facts: free, open, no key. Coverage is community-maintained, so a miss is
+// expected and is reported rather than filled in.
+const OFF = 'https://world.openfoodfacts.org/api/v2';
+
+// TWO ENDPOINTS, AND THE REASON IS A TRAP WORTH RECORDING.
+//
+// The v2 /search endpoint IGNORES search_terms. It answers HTTP 200 with a perfectly
+// well-formed product list — and `count: 4688963`, which is the entire database. It is
+// paginating everything and filtering nothing. Searching "huel black edition" returned
+// Fromage Blanc Nature, Sidi Ali and Perly: three real products, none of them related to
+// the query, with no error anywhere to suggest the search had not happened.
+//
+// The legacy /cgi/search.pl DOES filter — the same query returns count 70 and the actual
+// Huel products. So barcode lookups use v2 (which works) and text search uses the CGI
+// endpoint (which is the one that searches).
+//
+// The count is checked below as a guard: a result set the size of the whole database is
+// not a search result, and reporting it as one would be confidently wrong.
+const OFF_SEARCH = 'https://world.openfoodfacts.org/cgi/search.pl';
+const UNFILTERED_COUNT = 1000000;   // no real query matches a million products
+
+async function lookupFood(query) {
+  const isBarcode = /^\d{8,14}$/.test(String(query).trim());
+  const url = isBarcode
+    ? `${OFF}/product/${encodeURIComponent(query)}?fields=code,product_name,brands,serving_size,nutriments`
+    : `${OFF_SEARCH}?search_terms=${encodeURIComponent(query)}&search_simple=1&action=process&json=1&page_size=5`
+      + '&fields=code,product_name,brands,serving_size,nutriments';
+
+  const ctl = new AbortController();
+  const t = setTimeout(() => ctl.abort(), 15000);
+  try {
+    const res = await fetch(url, {
+      signal: ctl.signal,
+      headers: { 'user-agent': 'MissionControl/1.0 (personal dashboard; single user)' },
+    });
+    clearTimeout(t);
+    if (!res.ok) return { state: 'error', why: `Open Food Facts returned ${res.status}` };
+    const body = await res.json();
+
+    // The guard against a search that did not search. If the backend reports a match count
+    // the size of the whole database, it filtered nothing, and its "results" are simply the
+    // first page of everything. That is worse than an error because it looks like an answer.
+    if (!isBarcode && typeof body.count === 'number' && body.count > UNFILTERED_COUNT) {
+      return {
+        state: 'error',
+        why: `the search returned ${body.count.toLocaleString('en-GB')} matches — it did not filter on the query`,
+      };
+    }
+
+    const products = isBarcode
+      ? (body.product ? [body.product] : [])
+      : (body.products || []);
+    if (!products.length) return { state: 'not_found' };
+
+    // Per SERVING where the source gives it, per 100g otherwise — and which one is said
+    // out loud, because the two are different numbers for the same food.
+    return {
+      state: 'found',
+      matches: products.slice(0, 5).map((p) => {
+        const n = p.nutriments || {};
+        const per = n['energy-kcal_serving'] != null ? 'serving' : '100g';
+        const g = (k) => {
+          const v = per === 'serving' ? n[`${k}_serving`] : n[`${k}_100g`];
+          return typeof v === 'number' ? v : null;
+        };
+        return {
+          barcode: p.code || null,
+          name: p.product_name || '(unnamed product)',
+          brand: p.brands || null,
+          serving: per === 'serving' ? (p.serving_size || 'one serving') : 'per 100g',
+          basis: per,
+          kcal: g('energy-kcal'),
+          protein_g: g('proteins'),
+          carbs_g: g('carbohydrates'),
+          fat_g: g('fat'),
+          fibre_g: g('fiber'),
+          source: 'openfoodfacts',
+          source_ref: p.code ? `https://world.openfoodfacts.org/product/${p.code}` : null,
+        };
+      }),
+    };
+  } catch (err) {
+    clearTimeout(t);
+    // Could-not-look, never not-found. A timeout is a fact about the network.
+    return { state: 'error', why: err.name === 'AbortError' ? 'no answer in 15s' : err.message.slice(0, 90) };
+  }
+}
+
+router.get('/foods/lookup', async (req, res) => {
+  const q = String(req.query.q || '').trim();
+  if (!q) return res.status(400).json({ error: 'q is required' });
+  const r = await lookupFood(q);
+  res.json({
+    query: q,
+    ...r,
+    note: r.state === 'not_found'
+      ? 'Open Food Facts does not have this. You can still log the meal — it will be recorded with no nutrition attached, and you can type the figures from the packet later.'
+      : r.state === 'error'
+        ? 'Could not reach the database. That is a failure to look, NOT a statement that this food has no nutrition.'
+        : undefined,
+  });
+});
+
+// Save a food — either one the lookup returned, or figures typed off a packet.
+router.post('/foods', express.json(), (req, res) => {
+  const b = req.body || {};
+  const name = String(b.name || '').trim();
+  if (!name) return res.status(400).json({ error: 'name is required' });
+  const source = ['openfoodfacts', 'manufacturer', 'you'].includes(b.source) ? b.source : 'you';
+
+  const num = (v) => (v === null || v === undefined || v === '' ? null : Number(v));
+  const vals = NUTRIENTS.map((k) => {
+    const v = num(b[k]);
+    return Number.isFinite(v) ? v : null;   // NULL, never 0
+  });
+
+  const info = db.prepare(
+    `INSERT INTO lifestyle_foods (name, brand, barcode, serving, kcal, protein_g, carbs_g, fat_g, fibre_g, source, source_ref, by_whom)
+     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+     ON CONFLICT(barcode) DO UPDATE SET
+       name = excluded.name, kcal = excluded.kcal, protein_g = excluded.protein_g,
+       carbs_g = excluded.carbs_g, fat_g = excluded.fat_g, fibre_g = excluded.fibre_g,
+       source = excluded.source, source_ref = excluded.source_ref,
+       fetched_at = datetime('now','localtime')`
+  ).run(
+    name, b.brand || null, b.barcode || null, b.serving || null,
+    ...vals, source, b.source_ref || null, req.by
+  );
+
+  res.status(201).json({ id: Number(info.lastInsertRowid), name, source });
+});
+
+router.post('/meals', express.json(), (req, res) => {
+  const b = req.body || {};
+  const label = String(b.label || '').trim();
+  if (!label) return res.status(400).json({ error: 'label is required — what did you eat?' });
+  const date = /^\d{4}-\d{2}-\d{2}$/.test(String(b.date || '')) ? b.date : new Date().toLocaleDateString('en-CA');
+  const servings = Number(b.servings);
+
+  let foodId = null;
+  if (b.foodId != null) {
+    const f = db.prepare('SELECT id FROM lifestyle_foods WHERE id = ?').get(Number(b.foodId));
+    if (!f) return res.status(400).json({ error: `no food ${b.foodId}` });
+    foodId = f.id;
+  }
+
+  const info = db.prepare(
+    'INSERT INTO lifestyle_meals (date, food_id, label, servings, note, by_whom) VALUES (?, ?, ?, ?, ?, ?)'
+  ).run(date, foodId, label, Number.isFinite(servings) && servings > 0 ? servings : 1, b.note || null, req.by);
+
+  res.status(201).json({
+    id: Number(info.lastInsertRowid), date, label, foodId,
+    // Logging without nutrition is a first-class outcome, not a degraded one.
+    nutrition: foodId ? 'attached' : 'none attached — the meal is recorded either way',
+  });
+});
+
+router.delete('/meals/:id', (req, res) => {
+  const r = db.prepare('DELETE FROM lifestyle_meals WHERE id = ?').run(Number(req.params.id));
+  if (!r.changes) return res.status(404).json({ error: 'no such meal' });
+  res.json({ deleted: Number(req.params.id) });
+});
+
+// Targets. Setting one is the owner's act; there is no default and no suggestion.
+router.get('/targets', (req, res) => {
+  res.json({
+    targets: db.prepare('SELECT * FROM lifestyle_targets').all(),
+    nutrients: NUTRIENTS,
+    note: 'Empty by design. Nothing here proposes a target — with none set, no comparison '
+      + 'is shown at all.',
+  });
+});
+
+router.put('/targets/:nutrient', express.json(), (req, res) => {
+  const n = String(req.params.nutrient);
+  if (!NUTRIENTS.includes(n)) return res.status(400).json({ error: `nutrient must be one of ${NUTRIENTS.join(', ')}` });
+  const amount = Number((req.body || {}).amount);
+  if (!Number.isFinite(amount) || amount <= 0) return res.status(400).json({ error: 'amount must be a positive number' });
+  db.prepare(
+    `INSERT INTO lifestyle_targets (nutrient, amount, set_by) VALUES (?, ?, 'you')
+     ON CONFLICT(nutrient) DO UPDATE SET amount = excluded.amount, set_at = datetime('now','localtime')`
+  ).run(n, amount);
+  res.json({ nutrient: n, amount });
+});
+
+router.delete('/targets/:nutrient', (req, res) => {
+  db.prepare('DELETE FROM lifestyle_targets WHERE nutrient = ?').run(String(req.params.nutrient));
+  res.json({ cleared: req.params.nutrient });
+});
+
+// A day's meals, with totals that refuse to lie about what they could not count.
+router.get('/meals', (req, res) => {
+  const date = /^\d{4}-\d{2}-\d{2}$/.test(String(req.query.date || ''))
+    ? req.query.date : new Date().toLocaleDateString('en-CA');
+
+  const meals = db.prepare(`
+    SELECT m.id, m.label, m.servings, m.note, m.by_whom,
+           f.id AS foodId, f.name AS foodName, f.brand, f.serving, f.source, f.source_ref, f.fetched_at,
+           f.kcal, f.protein_g, f.carbs_g, f.fat_g, f.fibre_g
+      FROM lifestyle_meals m
+      LEFT JOIN lifestyle_foods f ON f.id = m.food_id
+     WHERE m.date = ? ORDER BY m.id
+  `).all(date);
+
+  const targets = Object.fromEntries(
+    db.prepare('SELECT nutrient, amount FROM lifestyle_targets').all().map((t) => [t.nutrient, t.amount])
+  );
+
+  // Totals are arithmetic over rows YOU wrote. Anything with an unknown value is excluded
+  // from the sum AND named, so the number is never quietly short.
+  const totals = {};
+  const incomplete = {};
+  for (const n of NUTRIENTS) {
+    let sum = 0; const missing = [];
+    for (const m of meals) {
+      if (!m.foodId || m[n] === null || m[n] === undefined) { missing.push(m.label); continue; }
+      sum += m[n] * m.servings;
+    }
+    totals[n] = meals.length ? Math.round(sum * 10) / 10 : null;
+    if (missing.length) incomplete[n] = missing;
+  }
+
+  res.json({
+    date,
+    meals,
+    totals,
+    targets,
+    // Named separately from the totals so a partial sum can never be read as a full one.
+    incomplete,
+    complete: Object.keys(incomplete).length === 0,
+    caveat: Object.keys(incomplete).length
+      ? 'These totals EXCLUDE the items listed under "incomplete" — their figures are not '
+        + 'known. The real amount is higher by an unknown margin, so do not read a total '
+        + 'below a target as a shortfall.'
+      : meals.length
+        ? 'Every logged item had figures, so these totals cover everything you recorded today.'
+        : 'Nothing recorded for this day. That is not a day of zero — it is a day with no record.',
+    // Stated so a reader knows the totals are theirs, not a verdict.
+    contract: 'Totals are a sum of what you logged. Targets are yours and were not '
+      + 'suggested by this system. Nothing here reacts to being over or under.',
+  });
+});
+
+// --- the catch-all, LAST -----------------------------------------------------------
+// Express 4 wildcard — a bare '*', with the matched remainder in req.params[0].
+// (Express 5's '/*splat' form throws on this version.) It exists so a mistyped endpoint
+// answers with a named failure in JSON, instead of falling through to the static handler
+// and returning an HTML 404 that a panel would read as a parse error of unknown origin.
+//
+// IT MUST STAY THE LAST ROUTE IN THIS FILE. It matches everything, so anything registered
+// below it is dead. The meal tracker was written above it, worked perfectly, and answered
+// 404 on every endpoint until this was moved down here.
+router.all('*', (req, res) => {
+  const attempted = req.params[0] ? `/${String(req.params[0]).replace(/^\/+/, '')}` : req.path;
+  res.status(404).json({
+    error: `no such lifestyle endpoint: ${req.method} ${attempted}`,
+    endpoints: [
+      'GET    /               what is due, what is coming, and 14 days of intake',
+      'GET    /chores         every chore with its computed due state',
+      'POST   /chores         { name, intervalDays }',
+      'PUT    /chores/:id     { name?, intervalDays?, active? }',
+      'DELETE /chores/:id',
+      'POST   /chores/:id/done  { date? }',
+      'GET    /intake?days=N',
+      'POST   /intake         { date?, meals, note? }',
+      'GET    /foods/lookup?q=  search Open Food Facts by name or barcode',
+      'POST   /foods          save a food, from the lookup or typed off the packet',
+      'GET    /meals?date=    a day\'s meals, with totals that name what they could not count',
+      'POST   /meals          { label, date?, foodId?, servings?, note? }',
+      'DELETE /meals/:id',
+      'GET    /targets        yours; empty by default, and nothing here suggests one',
+      'PUT    /targets/:nutrient    { amount }',
+      'DELETE /targets/:nutrient',
+    ],
+  });
+});
 
 module.exports = router;
 module.exports.activitySince = activitySince;

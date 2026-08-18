@@ -1,6 +1,13 @@
 const express = require('express');
 const db = require('../db');
 
+// The Claude-exclusion filter is IMPORTED, never retyped. focus_sessions is read in eight
+// places here, and once Claude's own work started being recorded (18 Aug 2026) every one of
+// them would otherwise have folded an agent's hours into the owner's streaks and totals.
+// A shared constant means grep can prove all eight are converted; eight hand-typed copies
+// means one is eventually forgotten, and a forgotten one does not error.
+const { NOT_CLAUDE } = require('./sessions');
+
 const router = express.Router();
 
 function localDateStr(date) {
@@ -16,7 +23,8 @@ function localDateStr(date) {
 // never drift out of sync the way the old localStorage counter could.
 function computeStreak() {
   const rows = db
-    .prepare(`SELECT DISTINCT date(completed_at) AS d FROM focus_sessions WHERE kind = 'work'`)
+    .prepare(`SELECT DISTINCT date(completed_at) AS d FROM focus_sessions
+       WHERE kind = 'work' AND ${NOT_CLAUDE}`)
     .all();
   const dateSet = new Set(rows.map((r) => r.d));
 
@@ -37,7 +45,8 @@ function computeStreak() {
 router.get('/summary', (req, res) => {
   const todayRow = db
     .prepare(
-      `SELECT COUNT(*) AS c FROM focus_sessions WHERE kind = 'work' AND date(completed_at) = date('now', 'localtime')`
+      `SELECT COUNT(*) AS c FROM focus_sessions
+         WHERE kind = 'work' AND ${NOT_CLAUDE} AND date(completed_at) = date('now', 'localtime')`
     )
     .get();
   res.json({ today: todayRow.c, streak: computeStreak() });
@@ -50,7 +59,7 @@ router.get('/daily', (req, res) => {
     .prepare(
       `SELECT date(completed_at) AS d, COUNT(*) AS count, SUM(duration_minutes) AS minutes
        FROM focus_sessions
-       WHERE kind = 'work' AND date(completed_at) >= date('now', 'localtime', ?)
+       WHERE kind = 'work' AND ${NOT_CLAUDE} AND date(completed_at) >= date('now', 'localtime', ?)
        GROUP BY d`
     )
     .all(`-${days - 1} days`);
@@ -84,7 +93,7 @@ router.get('/monthly', (req, res) => {
     .prepare(
       `SELECT strftime('%Y-%m', completed_at) AS m, COUNT(*) AS count, SUM(duration_minutes) AS minutes
        FROM focus_sessions
-       WHERE kind = 'work'
+       WHERE kind = 'work' AND ${NOT_CLAUDE}
        GROUP BY m`
     )
     .all();
@@ -115,7 +124,7 @@ router.get('/all-time', (req, res) => {
   const row = db
     .prepare(
       `SELECT COUNT(*) AS sessions, COALESCE(SUM(duration_minutes), 0) AS minutes, MIN(date(completed_at)) AS since
-       FROM focus_sessions WHERE kind = 'work'`
+       FROM focus_sessions WHERE kind = 'work' AND ${NOT_CLAUDE}`
     )
     .get();
   res.json({ totalSessions: row.sessions, totalMinutes: row.minutes, trackingSince: row.since });
@@ -127,6 +136,7 @@ router.get('/export', (req, res) => {
       `SELECT s.id, s.kind, s.duration_minutes, s.completed_at, t.text AS task_text
        FROM focus_sessions s
        LEFT JOIN tasks t ON t.id = s.task_id
+       WHERE ${NOT_CLAUDE}
        ORDER BY s.completed_at ASC`
     )
     .all();
@@ -244,11 +254,11 @@ function standing() {
   // A streak is consecutive days ending today or yesterday — ending yesterday still counts
   // as live, because a streak that breaks at midnight before you have had the day is a
   // punishment for the clock rather than a fact about you.
-  const streak = (table, col) => {
+  const streak = (table, col, where = null) => {
     let rows = [];
     try {
       rows = db.prepare(
-        `SELECT DISTINCT date(${col}) AS d FROM ${table} ORDER BY d DESC`
+        `SELECT DISTINCT date(${col}) AS d FROM ${table}${where ? ` WHERE ${where}` : ''} ORDER BY d DESC`
       ).all().map((r) => r.d);
     } catch { return { days: 0, reason: 'no such table yet' }; }
     if (!rows.length) return { days: 0, reason: 'nothing recorded' };
@@ -269,7 +279,7 @@ function standing() {
   const done = q("SELECT COUNT(*) c FROM todo_items WHERE status = 'done'");
   const chores = q('SELECT COUNT(*) c FROM lifestyle_done');
   const journal = q('SELECT COUNT(*) c FROM wellbeing_entries');
-  const focus = q('SELECT COUNT(*) c, COALESCE(SUM(duration_minutes),0) m FROM focus_sessions');
+  const focus = q(`SELECT COUNT(*) c, COALESCE(SUM(duration_minutes),0) m FROM focus_sessions WHERE ${NOT_CLAUDE}`);
   const countries = q('SELECT COUNT(*) c FROM atlas_countries WHERE visited = 1');
   const countriesAll = q('SELECT COUNT(*) c FROM atlas_countries');
 
@@ -286,7 +296,7 @@ function standing() {
     streaks: [
       { label: 'days with a chore recorded', ...streak('lifestyle_done', 'done_on') },
       { label: 'days with a journal entry', ...streak('wellbeing_entries', 'date') },
-      { label: 'days with a focus session', ...streak('focus_sessions', 'completed_at') },
+      { label: 'days with a focus session', ...streak('focus_sessions', 'completed_at', NOT_CLAUDE) },
     ],
     refuses: 'No XP, no level, no composite. Those need weights — is a shipped module worth '
       + 'five chores or fifty? — and the weights would be mine, making it the one figure here '

@@ -650,10 +650,39 @@ router.get('/export.csv', (req, res) => {
 });
 
 // --------------------------------------------------------------------- PATCH /items/:id
+// Editable fields, and why the list is not simply "all of them".
+//
+// status and priority were the only two for a long time, which was right while items came
+// from a spreadsheet: the rationale is the editorial judgement that produced the priority,
+// and silently rewriting it is how a backlog loses its reasoning.
+//
+// It became wrong once items were filed programmatically. On 18 Aug I filed one whose
+// rationale had been mangled by shell quoting -- three code snippets executed instead of
+// quoted, leaving a bare "." where a CSS selector should have been -- and the only remedy
+// was DELETE and re-POST, which changed the id. Any reference to the old id then pointed
+// at nothing.
+//
+// So the text fields are editable AND THE PREVIOUS TEXT IS KEPT. Replacing a rationale
+// writes the old one into todo_notes first, dated and attributed, so the change is visible
+// rather than silent. That is the same shape as the rest of this project: a correction is
+// made openly, never by quietly overwriting.
+const TEXT_FIELDS = ['title', 'cluster', 'effort', 'owner', 'rationale'];
+
 router.patch('/items/:id', (req, res) => {
   const { status, priority } = req.body || {};
-  if (status === undefined && priority === undefined) {
-    return res.status(400).json({ error: 'send status, priority, or both' });
+  const texts = TEXT_FIELDS.filter((f) => req.body && req.body[f] !== undefined);
+  if (status === undefined && priority === undefined && !texts.length) {
+    return res.status(400).json({
+      error: `send status, priority, or one of ${TEXT_FIELDS.join(', ')}`,
+    });
+  }
+  for (const f of texts) {
+    if (typeof req.body[f] !== 'string' || !req.body[f].trim()) {
+      // Clearing a field and omitting it are different requests. Neither is supported
+      // here, and saying so beats writing an empty string that later reads as "nobody
+      // wrote a rationale for this".
+      return res.status(400).json({ error: `${f} must be a non-empty string` });
+    }
   }
   if (status !== undefined && !STATUSES.includes(status)) {
     return res.status(400).json({ error: `status must be one of ${STATUSES.join(', ')}` });
@@ -675,14 +704,47 @@ router.patch('/items/:id', (req, res) => {
       ? "decided_at = datetime('now','localtime')" : 'decided_at = NULL');
   }
   if (priority !== undefined) { sets.push('priority = ?'); args.push(priority); }
+
+  // The old text is preserved BEFORE the update, in the same transaction, so a failed
+  // write cannot leave a note describing a change that did not happen.
+  const kept = [];
+  for (const f of texts) {
+    const was = before[f];
+    if (String(was == null ? '' : was) === req.body[f]) continue;   // no change, no note
+    sets.push(`${f} = ?`); args.push(req.body[f]);
+    kept.push([f, was]);
+  }
+  if (!sets.length) {
+    // Every field sent already had that value. Not an error, and not a silent no-op
+    // either -- say so, or a caller cannot tell "applied" from "nothing to apply".
+    return res.json({
+      item: plain(db.prepare(`SELECT *, ${AGE} FROM todo_items WHERE id = ?`).get(req.params.id)),
+      changed: [],
+      note: 'every field sent already held that value',
+    });
+  }
   args.push(req.params.id);
 
   try {
+    db.exec('BEGIN');
+    for (const [field, was] of kept) {
+      db.prepare('INSERT INTO todo_notes (item_id, note, by_whom) VALUES (?, ?, ?)').run(
+        req.params.id,
+        `${field} replaced. Previous text: ${was == null ? '(empty)' : was}`,
+        req.by,
+      );
+    }
     db.prepare(`UPDATE todo_items SET ${sets.join(', ')} WHERE id = ?`).run(...args);
+    db.exec('COMMIT');
   } catch (err) {
+    try { db.exec('ROLLBACK'); } catch { /* already rolled back */ }
     return res.status(500).json({ error: err.message });
   }
-  res.json({ item: plain(db.prepare(`SELECT *, ${AGE} FROM todo_items WHERE id = ?`).get(req.params.id)) });
+  res.json({
+    item: plain(db.prepare(`SELECT *, ${AGE} FROM todo_items WHERE id = ?`).get(req.params.id)),
+    changed: sets.map((x) => x.split(' ')[0]).filter((f) => f !== 'decided_at'),
+    previousTextKeptAsNotes: kept.map(([f]) => f),
+  });
 });
 
 // --------------------------------------------------------------------- POST /items

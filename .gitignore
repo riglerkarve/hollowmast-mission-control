@@ -10,6 +10,17 @@
 # The LAN access key. Minted on first boot; committing it would publish the gate.
 data/gate-key.txt
 
+# Google OAuth (#9). BY CATEGORY, and written BEFORE either file could exist — a
+# credential that is committed once is committed for good, and the window in which the
+# rule is missing is the window in which it gets committed.
+#   data/google-client.json  the OAuth client you download from Google Cloud Console
+#   data/google-token.json   the refresh token, written after you grant consent
+# A refresh token is a long-lived key to a live mailbox. It is worth more than the LAN
+# gate key above, because revoking it needs Google's console rather than deleting a file.
+data/google-client.json
+data/google-token.json
+data/oauth-*.json
+
 # --- real financial and personal data ----------------------------------------------
 # dashboard.db holds ten account-years — 6,839 real bank transactions — plus health
 # metrics and the wellbeing journal. The -wal and -shm files hold the same data mid-write.

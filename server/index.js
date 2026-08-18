@@ -22,6 +22,7 @@ const browsingRouter = require('./routes/browsing');
 const atlasRouter = require('./routes/atlas');
 const goalsRouter = require('./routes/goals');
 const scheduleRouter = require('./routes/schedule');
+const projectsRouter = require('./routes/projects');
 const heartbeat = require('./heartbeat');
 const gate = require('./gate');
 const provenance = require('./provenance');
@@ -81,6 +82,7 @@ app.use('/api/browsing', browsingRouter);
 app.use('/api/atlas', atlasRouter);
 app.use('/api/goals', goalsRouter);
 app.use('/api/schedule', scheduleRouter);
+app.use('/api/projects', projectsRouter);
 app.use('/garage', garageRouter);
 
 app.use(express.static(path.join(__dirname, '..', 'public')));

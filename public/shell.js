@@ -13,6 +13,7 @@ const PANELS = {
   atlas: () => import('/panels/atlas/atlas.js'),
   goals: () => import('/panels/goals/goals.js'),
   schedule: () => import('/panels/schedule/schedule.js'),
+  projects: () => import('/panels/projects/projects.js'),
 };
 
 const panelRoot = document.getElementById('panelRoot');

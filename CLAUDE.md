@@ -360,9 +360,36 @@ saw came from `curl -d` in the shell, not from the app.
 
 ## The Backlog module, and the one-writer rule
 
-`/api/todo` + `public/panels/todo/` hold the 93-item backlog that used to live in
-`claude todo.ods` on the Desktop. One store, two views: **Yours — decisions** (owner
-`YOU`, 26 items) and **The build queue** (everything else, 67 items).
+`/api/todo` + `public/panels/todo/` hold the backlog that used to live in `claude todo.ods`
+on the Desktop. One store, two views: **Yours — decisions** (owner `YOU`) and **The
+build queue** (everything else).
+
+**It has no nav entry. It lives inside Focus** — owner instruction, 18 Aug 2026: *"move
+the entire backlog to the focus app"*, following *"tasks on the focus app should show the
+todo lists, this is its more native home"*.
+
+**The panel is NOT reimplemented there.** `todo.js` already exported the `{ mount,
+unmount }` contract, so `focus.js` mounts the real panel into `#focusBacklog` with
+`{ embedded: true }` — which drops its outer `.panel` wrapper and demotes its `h1`. One
+implementation, one owner. Copying the list rendering into Focus would have been the
+two-stores failure this module was built to end, one level up.
+
+Focus keeps exactly one fact of its own: which item the timer records against. The
+**Focus** button on each item **writes nothing** — it dispatches a bubbling `td:focus`
+event and the host decides, so `todo.js` still knows nothing about a timer and still works
+standalone if it is ever put back in the nav. Every mutation also emits `td:changed`, so a
+timer pointed at an item closed elsewhere in the list stops pointing at it.
+
+**Both panels use `.mode-tab`** — the timer’s work/short/long and the backlog’s
+mine/build. Focus captures its three with `querySelectorAll` **before** the backlog mounts,
+and the backlog scopes its own to its root. Verified both directions in the browser, and
+verified leak-free: three away-and-back cycles leave exactly one `.td-panel`, one `h1` and
+one click handler. `focus.unmount()` must keep calling `backlogPanel.unmount()` — without
+it the embedded panel’s in-flight fetch resolves into a dead DOM.
+
+`todo` was removed from the `PANELS` registry, so an old `#todo` deep link falls back to
+Focus, which is where the backlog now is. `todo.css` is still loaded from `index.html` —
+the embedded panel needs it.
 
 **The spreadsheet is now a DERIVED artefact. Regenerate it from `Export CSV`; never
 edit it alongside the store.** This is not housekeeping — the drift is already on
@@ -748,7 +775,7 @@ one is "Other" at £75.50 against a £3.00 budget — a category whose median is
 turns a trivial sum into an enormous percentage. Any absolute threshold that fixed it
 would be a number I chose. Those go in the briefing, which you read; they are not pushed
 at you. **Also not a trigger: "26 items are blocked on you"** — true every day, so it is a
-standing condition, not an event. It already leads the Backlog panel.
+standing condition, not an event. It already leads the backlog list inside Focus.
 
 Each trigger has its own alert kind, so muting the briefing does not mute an overdue
 appointment. The two-ignores auto-mute in `notify.cjs` is per kind, which is the point of

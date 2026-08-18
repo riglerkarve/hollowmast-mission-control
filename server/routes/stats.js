@@ -148,3 +148,81 @@ router.get('/export', (req, res) => {
 });
 
 module.exports = router;
+
+// DERIVED ACTIVITY — backlog #38, second half. The first half was provenance; this is what
+// it makes possible.
+//
+// It reconstructs when YOU were working from rows you actually wrote, across every module
+// that records a human action. It is not a focus timer and does not pretend to be: it says
+// "you were doing something at these times", which is the honest version of the question
+// the timer kept failing to answer by asking you to press start.
+//
+// IT COUNTS ONLY by_whom = 'you'. That is the entire point. Before provenance existed, the
+// same query would have been dominated by a Claude session's own writes and would have
+// reported my working hours as yours.
+//
+// A SESSION IS A CLUSTER, NOT A CLAIM. Consecutive actions less than gapMinutes apart are
+// treated as one stretch. That is a grouping rule stated in the output, not a measurement
+// of attention — two actions 20 minutes apart do not prove 20 minutes of work, and the
+// response says so rather than quietly implying it.
+function derivedActivity({ days = 14, gapMinutes = 45 } = {}) {
+  const SOURCES = [
+    ['todo_notes', 'created_at', 'backlog note'],
+    ['wellbeing_entries', 'created_at', 'journal entry'],
+    ['lifestyle_done', 'recorded_at', 'chore recorded'],
+    ['lifestyle_intake', 'recorded_at', 'meal recorded'],
+    ['wishlist_items', 'added_at', 'wishlist item'],
+  ];
+
+  const events = [];
+  for (const [table, col, label] of SOURCES) {
+    let rows = [];
+    try {
+      rows = db.prepare(
+        `SELECT ${col} AS at FROM ${table}
+          WHERE by_whom = 'you' AND ${col} >= datetime('now','localtime','-' || ? || ' days')`
+      ).all(days);
+    } catch { /* table or column absent — reported below, never silently zero */ }
+    for (const r of rows) events.push({ at: r.at, kind: label });
+  }
+
+  events.sort((a, b) => String(a.at).localeCompare(String(b.at)));
+
+  const stretches = [];
+  for (const e of events) {
+    const last = stretches[stretches.length - 1];
+    const t = Date.parse(e.at.replace(' ', 'T'));
+    if (last && (t - last.endMs) <= gapMinutes * 60000) {
+      last.endMs = t; last.end = e.at; last.actions++;
+    } else {
+      stretches.push({ start: e.at, end: e.at, endMs: t, startMs: t, actions: 1 });
+    }
+  }
+
+  return {
+    state: events.length ? 'ok' : 'no-activity',
+    days,
+    gapMinutes,
+    actions: events.length,
+    stretches: stretches.map((s) => ({
+      start: s.start,
+      end: s.end,
+      actions: s.actions,
+      spanMinutes: Math.round((s.endMs - s.startMs) / 60000),
+    })),
+    basis: `Rows you wrote yourself (by_whom = 'you') across ${SOURCES.length} tables, `
+      + `clustered with a ${gapMinutes}-minute gap. A cluster is a GROUPING, not a measure `
+      + 'of attention: two actions 20 minutes apart do not prove 20 minutes of work.',
+    note: events.length ? undefined
+      : 'Nothing attributed to you in this window. That is ABSENCE, not zero activity — '
+        + 'provenance began on 18 Aug, so anything before it is unattributed rather than '
+        + 'not yours, and a module you have not used yet records nothing at all.',
+  };
+}
+
+router.get('/activity', (req, res) => {
+  const days = Math.min(90, Math.max(1, Number(req.query.days) || 14));
+  res.json(derivedActivity({ days }));
+});
+
+module.exports.derivedActivity = derivedActivity;

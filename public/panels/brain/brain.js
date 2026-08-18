@@ -34,6 +34,30 @@ const TEMPLATE = `
         <p class="empty-hint">Select a memory to read it.</p>
       </section>
     </div>
+
+    <section class="card">
+      <h2 class="brain-h2">Your own entries</h2>
+      <p class="brain-note-intro">Everything above was written by Claude — lessons from
+        getting something wrong. This is the half you write. Entries here are not memories
+        and are not guesses about you: they are read back at the start of every session as
+        <em>fact and instruction</em>. Use <code>[[name]]</code> to point at any memory, and
+        it will show up on that memory as a link back.</p>
+      <form class="brain-note-form" id="brainNoteForm">
+        <div class="brain-note-row">
+          <input id="brainNoteTitle" class="brain-in" placeholder="Title" required maxlength="120">
+          <select id="brainNoteKind" class="brain-sort" aria-label="Kind of entry">
+            <option value="note">note</option>
+            <option value="reference">reference</option>
+            <option value="decision">decision</option>
+          </select>
+        </div>
+        <textarea id="brainNoteBody" class="brain-in brain-ta" rows="4" required
+                  placeholder="What is worth keeping? Link with [[a-memory-name]]."></textarea>
+        <button class="btn primary" type="submit">Save entry</button>
+      </form>
+      <div id="brainNoteResult" class="brain-result"></div>
+      <div id="brainNotes"></div>
+    </section>
   </div>
 `;
 
@@ -115,6 +139,11 @@ async function selectMemory(name) {
     <div id="brainFlagResult" class="brain-result"></div>
     <pre class="brain-body">${esc(body)}</pre>
     ${m.links.length ? `<p class="brain-meta">Links to: ${m.links.map((l) => `<a href="#" data-goto="${esc(l)}">${esc(l)}</a>`).join(', ')}</p>` : ''}
+    ${(m.backlinks && m.backlinks.length)
+    // The direction you cannot get by reading the file in front of you. Outbound links
+    // were always shown; nothing computed the reverse until #M2.
+    ? `<p class="brain-meta">Linked from: ${m.backlinks.map((b) => `<a href="#" data-goto="${esc(b.from)}">${esc(b.from)}</a>${b.kind === 'note' ? ' <b>(your note)</b>' : ''}`).join(', ')}</p>`
+    : '<p class="brain-meta brain-dim">Nothing links here yet.</p>'}
   `;
 
   detail.querySelectorAll('.brain-set').forEach((b) => {
@@ -122,6 +151,54 @@ async function selectMemory(name) {
   });
   detail.querySelectorAll('[data-goto]').forEach((a) => {
     a.addEventListener('click', (e) => { e.preventDefault(); selectMemory(a.dataset.goto); });
+  });
+}
+
+// Backlog #M2. The owner's own entries. This is the only place in the whole panel that
+// WRITES something that is not a flag.
+async function renderNotes() {
+  const box = root.querySelector('#brainNotes');
+  let d;
+  try {
+    d = await api('/notes');
+  } catch (err) {
+    box.innerHTML = `<p class="brain-error">Could not read your entries: ${esc(err.message)}
+      — that is a failure to look, not a report that you have written none.</p>`;
+    return;
+  }
+
+  const reach = d.reachesClaude === null
+    ? `<span class="brain-warn">${esc(d.reachesNote)}</span>`
+    : `<span class="brain-dim">${esc(d.reachesNote)}</span>`;
+
+  box.innerHTML = !d.notes.length
+    ? `<p class="empty-hint">You have not written anything yet. ${reach}</p>`
+    : `<p class="brain-meta">${d.notes.length}
+         entr${d.notes.length === 1 ? 'y' : 'ies'} ·
+         ${Object.entries(d.byKind).filter(([, n]) => n).map(([k, n]) => `${n} ${esc(k)}`).join(' · ')}
+         · ${reach}</p>
+       <ul class="brain-note-list">${d.notes.map((n) => `
+         <li>
+           <div class="brain-note-head">
+             <span class="brain-note-title">${esc(n.title)}</span>
+             <span class="brain-note-kind">${esc(n.kind)}</span>
+             <button class="btn brain-note-del" data-id="${n.id}">Delete</button>
+           </div>
+           <pre class="brain-note-body">${esc(n.body)}</pre>
+           <span class="brain-meta brain-dim">[[${esc(n.slug)}]] · updated ${esc(n.updated_at)}</span>
+         </li>`).join('')}</ul>`;
+
+  box.querySelectorAll('.brain-note-del').forEach((b) => {
+    b.addEventListener('click', async () => {
+      b.disabled = true;
+      try {
+        await api(`/notes/${b.dataset.id}`, { method: 'DELETE', headers: { 'x-mc-by': 'you' } });
+        renderNotes();
+      } catch (err) {
+        b.disabled = false;
+        root.querySelector('#brainNoteResult').innerHTML = `<p class="brain-error">${esc(err.message)}</p>`;
+      }
+    });
   });
 }
 
@@ -227,7 +304,39 @@ export default {
       load(search.value);
     });
 
+    el.querySelector('#brainNoteForm').addEventListener('submit', async (ev) => {
+      ev.preventDefault();
+      const out = el.querySelector('#brainNoteResult');
+      const title = el.querySelector('#brainNoteTitle').value.trim();
+      const body = el.querySelector('#brainNoteBody').value.trim();
+      const kind = el.querySelector('#brainNoteKind').value;
+      if (!title || !body) return;
+
+      out.innerHTML = '';
+      try {
+        const r = await api('/notes', {
+          method: 'POST',
+          headers: { 'content-type': 'application/json', 'x-mc-by': 'you' },
+          body: JSON.stringify({ title, body, kind }),
+        });
+        el.querySelector('#brainNoteTitle').value = '';
+        el.querySelector('#brainNoteBody').value = '';
+        // Says what actually happened, including the part that matters: it reached the
+        // file Claude reads. "Saved" alone would not distinguish stored from surfaced.
+        out.innerHTML = `<p class="brain-ok">Saved as <code>[[${esc(r.slug)}]]</code> and
+          written to the memory directory — Claude reads it at the start of the next session.</p>`;
+        renderNotes();
+        // A new note can add a backlink to whatever is open, so refresh the detail too.
+        if (selected) selectMemory(selected);
+      } catch (err) {
+        out.innerHTML = `<p class="brain-error">${esc(err.message)}</p>`;
+      }
+    });
+
     load('');
+    // Called separately from load(): the notes list comes from a different route and must
+    // not disappear because the memory store failed to read.
+    renderNotes();
   },
 
   // Not optional: the debounce timer would otherwise keep firing against a detached DOM

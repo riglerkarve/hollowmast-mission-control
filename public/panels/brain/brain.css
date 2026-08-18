@@ -134,3 +134,74 @@
 /* The .brain-sort rule above was written for exactly this control and the markup was
    never added — see brain.js. Only the focus ring was missing. */
 .brain-sort:focus-visible { outline: 2px solid var(--accent); outline-offset: 1px; }
+
+/* ---------------------------------------------------------------------------------------
+   Your own entries — backlog #M2.
+   Appended at the end of the sheet, where a later rule WINS. Every class is prefixed
+   .brain-note- (or .brain-h2 / .brain-ok / .brain-in / .brain-ta) and was grepped against
+   public/ first. Tokens are only ones that exist in shell.css.
+   --------------------------------------------------------------------------------------- */
+.brain-h2 { margin: 0 0 0.35rem; font-size: 1rem; }
+
+.brain-note-intro { margin: 0 0 0.9rem; color: var(--muted); font-size: 0.9em; max-width: 70ch; }
+.brain-note-intro code { font-family: ui-monospace, Consolas, monospace; font-size: 0.92em; }
+
+.brain-note-form { display: flex; flex-direction: column; gap: 0.5rem; max-width: 70ch; }
+.brain-note-row { display: flex; gap: 0.5rem; }
+.brain-note-row .brain-in { flex: 1; }
+
+.brain-in {
+  padding: 0.55rem 0.7rem;
+  color: var(--ink);
+  background: var(--bg);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  font: inherit;
+}
+.brain-in:focus { outline: 2px solid var(--accent); outline-offset: 1px; }
+.brain-ta { resize: vertical; min-height: 5rem; font-family: inherit; }
+
+.brain-note-list { list-style: none; margin: 1rem 0 0; padding: 0; display: flex; flex-direction: column; gap: 0.6rem; }
+
+.brain-note-list li {
+  padding: 0.7rem 0.85rem;
+  background: var(--bg);
+  border: 1px solid var(--border);
+  /* Marked on the left so an owner-written entry is distinguishable at a glance from the
+     132 Claude wrote. The whole point of the section is that these are a different kind
+     of thing, and a list that looked identical would lose that. */
+  border-left: 3px solid var(--accent);
+  border-radius: 8px;
+}
+
+.brain-note-head { display: flex; align-items: center; gap: 0.6rem; flex-wrap: wrap; }
+.brain-note-title { font-weight: 600; }
+
+.brain-note-kind {
+  padding: 0.05rem 0.4rem; border-radius: 4px;
+  background: var(--accent-soft); color: var(--ink);
+  font-size: 0.72em; font-weight: 700;
+}
+
+.brain-note-del { margin-left: auto; }
+
+.brain-note-body {
+  margin: 0.45rem 0 0.35rem;
+  white-space: pre-wrap;
+  overflow-wrap: break-word;
+  font: inherit;
+  color: var(--ink);
+}
+
+.brain-ok { margin: 0.5rem 0 0; color: var(--ink); font-size: 0.9em; }
+.brain-ok code { font-family: ui-monospace, Consolas, monospace; }
+
+@media (max-width: 620px) {
+  .brain-note-row { flex-direction: column; }
+  .brain-note-del { margin-left: 0; }
+}
+
+/* Used in three places by the JS and never defined until now — an invented class renders
+   as nothing at all and shows no error, which is why classes get audited against the
+   sheet rather than assumed. */
+.brain-dim { color: var(--muted); opacity: 0.85; }

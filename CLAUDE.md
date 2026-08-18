@@ -311,6 +311,53 @@ only; the other twelve still under-attribute their reads, which is harmless whil
 `unknown` is a real value and is never assumed to be you — same rule as the rest of
 provenance.
 
+## The second brain — and the half you write
+
+`/api/brain` + `public/panels/brain/`. Backlog #M2, 18 Aug 2026: *"make sure the second
+brain is storing more than just memories."*
+
+**Measured before building, and I was wrong twice.** I guessed the `type` vocabulary was
+unused — it is not (feedback 92, project 21, reference 19, all 132 files typed). I then
+guessed the panel did not render types — it already had type tabs, filtering and counts.
+The actual gap was narrower and worse: **the only write path in the whole module was
+`POST /:name/flag`.** Every entry was a lesson *I* wrote after getting something wrong, and
+the 19 tagged `reference` are facts about tooling, not resources. `user` had zero entries
+because there had never been a way to create one.
+
+**Owner entries live in SQLite, not as `.md` files, and that follows the rule already at
+the top of `brain.js` rather than overriding it:** the store is hand-maintained across
+sessions with no merge, and a second writer is how it rots. So `brain_notes` is Mission
+Control's, and it reaches Claude through **one generated file this module owns** —
+`_notes.md`, rebuilt in full on every change, deleted when the last entry goes. Exactly the
+contract `_flags.md` already had.
+
+**Backlinks are the derivation that makes it more than a text box.** Outbound links were
+always shown; nothing computed the reverse. Now a `[[name]]` written in your note appears
+*on that memory* as "Linked from — your note", so writing one changes what the store shows
+you, not just what it stores.
+
+**Three bugs caught while building it, all of the silent kind:**
+
+- **`GET /:name` was registered above `/notes`.** Express matches in order, so
+  `/api/brain/notes` resolved as a memory named "notes" and 404'd. The catch-all now sits
+  at the **bottom of the file** with a comment saying why; anything specific added later
+  must go above it.
+- **`_notes.md` appeared as a 133rd memory**, type `unknown` — the file filter excluded
+  `_flags.md` *by name*. Now excluded by `_` prefix, so the next generated file cannot
+  repeat it. Verified: API reports 132, disk reports 132, types sum to 132.
+- **`.brain-dim` was used in three places and never defined.** An invented class renders as
+  nothing and raises no error. Every static class in the panel is now audited against the
+  sheet.
+
+**`MEMORY.md` now points at both generated files.** It is the file that loads at session
+start, so a generated file nobody points at is a file nobody reads — `_flags.md` had that
+gap too, silently, since it was built.
+
+**Left empty.** Your entries start with yours, same rule as the atlas and the wishlist
+scopes. One thing worth knowing about encoding, since it looked like a bug and was not:
+`£`, `—`, `’`, `é` and `→` all survive HTTP → SQLite → disk intact. The corruption I first
+saw came from `curl -d` in the shell, not from the app.
+
 ## The Backlog module, and the one-writer rule
 
 `/api/todo` + `public/panels/todo/` hold the 93-item backlog that used to live in

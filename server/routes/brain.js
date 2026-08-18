@@ -22,7 +22,36 @@ db.migrate('brain', [
       );
     `);
   },
+  // Backlog #M2, 18 Aug 2026: "make sure the second brain is storing more than just
+  // memories". Measured first, and the request is right — every one of the 132 files in
+  // the store is a lesson CLAUDE wrote after getting something wrong. The `type` field
+  // (feedback 91, project 21, reference 19) distinguishes what KIND of lesson, not what
+  // kind of thing, and the 19 'reference' entries are facts about tooling, not resources.
+  // `user` has zero entries because there has never been a way for the owner to write one:
+  // the only write path in this module was POST /:name/flag.
+  //
+  // STORED HERE RATHER THAN AS .md FILES IN THE MEMORY DIRECTORY, and that follows the rule
+  // already stated at the top of this file rather than overriding it. The store is
+  // hand-maintained across sessions with no merge; a second writer is how it rots. So the
+  // owner's entries live in Mission Control's own database and reach Claude through ONE
+  // generated file this module owns, exactly as flags already do.
+  (d) => {
+    d.exec(`
+      CREATE TABLE brain_notes (
+        id         INTEGER PRIMARY KEY AUTOINCREMENT,
+        slug       TEXT NOT NULL UNIQUE,   -- so [[slug]] can point at it like any memory
+        title      TEXT NOT NULL,
+        kind       TEXT NOT NULL,          -- 'note' | 'reference' | 'decision'
+        body       TEXT NOT NULL,
+        created_at TEXT NOT NULL DEFAULT (datetime('now', 'localtime')),
+        updated_at TEXT NOT NULL DEFAULT (datetime('now', 'localtime'))
+      );
+      CREATE INDEX idx_brain_notes_kind ON brain_notes(kind);
+    `);
+  },
 ]);
+
+const NOTE_KINDS = ['note', 'reference', 'decision'];
 
 const router = express.Router();
 
@@ -49,7 +78,12 @@ function parseFrontmatter(text) {
 function readStore() {
   let files;
   try {
-    files = fs.readdirSync(MEMORY_DIR).filter((f) => f.endsWith('.md') && f !== 'MEMORY.md' && f !== '_flags.md');
+    // Generated files are excluded BY PREFIX, not by name. The original list named
+    // '_flags.md' explicitly, so adding _notes.md (#M2) immediately made it appear as a
+    // 133rd "memory" with type 'unknown' — a file this module writes, counted as something
+    // Claude learned. Any future generated file would have repeated it.
+    files = fs.readdirSync(MEMORY_DIR)
+      .filter((f) => f.endsWith('.md') && f !== 'MEMORY.md' && !f.startsWith('_'));
   } catch (err) {
     // Could-not-look must never render as found-nothing.
     const e = new Error(`memory directory unreadable at ${MEMORY_DIR}: ${err.message}`);
@@ -146,14 +180,11 @@ router.get('/', (req, res) => {
   });
 });
 
-router.get('/:name', (req, res) => {
-  let store;
-  try { store = readStore(); } catch (err) { return res.status(503).json({ error: err.message }); }
-  const m = store.find((x) => x.name === req.params.name);
-  if (!m) return res.status(404).json({ error: `no memory named "${req.params.name}"` });
-  const text = fs.readFileSync(path.join(MEMORY_DIR, m.file), 'utf8');
-  res.json({ ...m, markdown: text });
-});
+// NOTE: `GET /:name` is deliberately registered at the BOTTOM of this file, not here.
+// Express matches in registration order, so a catch-all parameter route placed above the
+// specific ones swallows them: with it here, GET /api/brain/notes resolved as a memory
+// named "notes" and answered 404. Caught while adding the notes routes (#M2). Anything
+// specific added later must also go above it.
 
 // --- steering ---------------------------------------------------------------------
 const STATUSES = ['wrong', 'stale', 'important'];
@@ -187,6 +218,153 @@ function writeFlagsFile() {
   return rows.length;
 }
 
+// ---------------------------------------------------------------------------- your notes
+// Backlog #M2. Everything above this line is Claude's. Everything below it is yours.
+
+const slugify = (s) => String(s).toLowerCase().trim()
+  .replace(/[^a-z0-9]+/g, '-').replace(/^-+|-+$/g, '').slice(0, 60);
+
+function uniqueSlug(base, ignoreId) {
+  const root = base || 'note';
+  for (let n = 0; n < 200; n += 1) {
+    const slug = n ? `${root}-${n + 1}` : root;
+    const clash = db.prepare('SELECT id FROM brain_notes WHERE slug = ?').get(slug);
+    if (!clash || clash.id === ignoreId) return slug;
+  }
+  return `${root}-${Date.now()}`;
+}
+
+// Rebuilt IN FULL from the database on every change, never appended to, so it cannot drift
+// from what it represents. Same contract as _flags.md — one writer, one direction.
+function writeNotesFile() {
+  const rows = db.prepare('SELECT * FROM brain_notes ORDER BY kind, updated_at DESC').all();
+  const file = path.join(MEMORY_DIR, '_notes.md');
+
+  if (!rows.length) { try { fs.unlinkSync(file); } catch { /* nothing to remove */ } return 0; }
+
+  const L = [
+    '# The owner\'s own entries — written by them, via Mission Control',
+    '',
+    'GENERATED FILE. Written by `mission-control/server/routes/brain.js`; do not hand-edit,',
+    'it is rebuilt in full from the database on every change.',
+    '',
+    'Everything else in this directory was written by Claude — lessons learned from getting',
+    'something wrong. **These were written by the user.** They are not lessons and were not',
+    'inferred from anything; they are what the owner wanted kept. Treat them as instruction',
+    'and fact, not as observation.',
+    '',
+  ];
+  for (const kind of NOTE_KINDS) {
+    const of = rows.filter((r) => r.kind === kind);
+    if (!of.length) continue;
+    L.push(`## ${kind}`, '');
+    for (const r of of) {
+      L.push(`### ${r.title}  _([[${r.slug}]], updated ${r.updated_at})_`, '', r.body.trim(), '');
+    }
+  }
+  fs.writeFileSync(file, L.join('\n'));
+  return rows.length;
+}
+
+// Backlinks across BOTH sides of the store. This is the derivation that makes an entry more
+// than a text box: writing [[a-cap-is-a-biased-sample]] in a note makes that note visible
+// FROM the memory, which is the direction you cannot get by reading the file you wrote.
+// Nothing computed backlinks before — only outbound links were ever shown.
+function linkGraph(store) {
+  const notes = db.prepare('SELECT slug, title, body FROM brain_notes').all();
+
+  const nodes = [
+    ...store.map((m) => ({ id: m.name, kind: 'memory', links: m.links })),
+    ...notes.map((n) => ({
+      id: n.slug,
+      kind: 'note',
+      links: [...String(n.body).matchAll(/\[\[([^\]]+)\]\]/g)].map((x) => x[1]),
+    })),
+  ];
+
+  const backlinks = new Map();
+  for (const n of nodes) {
+    for (const target of new Set(n.links)) {
+      if (!backlinks.has(target)) backlinks.set(target, []);
+      backlinks.get(target).push({ from: n.id, kind: n.kind });
+    }
+  }
+  return { nodes, backlinks };
+}
+
+router.get('/notes', (req, res) => {
+  const rows = db.prepare('SELECT * FROM brain_notes ORDER BY updated_at DESC').all();
+  let reaches = null;
+  try { reaches = fs.existsSync(path.join(MEMORY_DIR, '_notes.md')); } catch { reaches = null; }
+
+  res.json({
+    notes: rows,
+    kinds: NOTE_KINDS,
+    byKind: NOTE_KINDS.reduce((a, k) => ({ ...a, [k]: rows.filter((r) => r.kind === k).length }), {}),
+    // Three states, not two: written and confirmed on disk / none written / could not look.
+    reachesClaude: reaches,
+    reachesNote: reaches === null
+      ? 'Could not check whether the generated file exists — that is a failure to look.'
+      : reaches
+        ? 'Written to _notes.md in the memory directory, which Claude reads alongside its own.'
+        : 'Nothing written yet, so no file exists. It appears with your first entry.',
+  });
+});
+
+router.post('/notes', express.json(), (req, res) => {
+  const title = String((req.body && req.body.title) || '').trim();
+  const body = String((req.body && req.body.body) || '').trim();
+  const kind = String((req.body && req.body.kind) || 'note').trim();
+
+  if (!title) return res.status(400).json({ error: 'a title is required' });
+  if (!body) return res.status(400).json({ error: 'a body is required — a title alone is not worth keeping' });
+  if (!NOTE_KINDS.includes(kind)) {
+    return res.status(400).json({ error: `kind must be one of ${NOTE_KINDS.join(', ')}` });
+  }
+
+  const slug = uniqueSlug(slugify(title));
+  const info = db.prepare(
+    'INSERT INTO brain_notes (slug, title, kind, body) VALUES (?, ?, ?, ?)'
+  ).run(slug, title, kind, body);
+
+  const written = writeNotesFile();
+  res.status(201).json({ id: Number(info.lastInsertRowid), slug, written });
+});
+
+router.patch('/notes/:id', express.json(), (req, res) => {
+  const id = Number(req.params.id);
+  const row = db.prepare('SELECT * FROM brain_notes WHERE id = ?').get(id);
+  if (!row) return res.status(404).json({ error: 'no such note' });
+
+  const title = req.body && req.body.title !== undefined ? String(req.body.title).trim() : row.title;
+  const body = req.body && req.body.body !== undefined ? String(req.body.body).trim() : row.body;
+  const kind = req.body && req.body.kind !== undefined ? String(req.body.kind).trim() : row.kind;
+
+  if (!title || !body) return res.status(400).json({ error: 'title and body cannot be emptied' });
+  if (!NOTE_KINDS.includes(kind)) {
+    return res.status(400).json({ error: `kind must be one of ${NOTE_KINDS.join(', ')}` });
+  }
+
+  // The slug only moves if the title does, because anything that already wrote [[slug]]
+  // is pointing at this row and a silent rename would break those links with no error.
+  const slug = title === row.title ? row.slug : uniqueSlug(slugify(title), id);
+
+  db.prepare(
+    `UPDATE brain_notes SET title = ?, body = ?, kind = ?, slug = ?,
+            updated_at = datetime('now','localtime') WHERE id = ?`
+  ).run(title, body, kind, slug, id);
+
+  writeNotesFile();
+  res.json({ id, slug, renamed: slug !== row.slug });
+});
+
+router.delete('/notes/:id', (req, res) => {
+  const r = db.prepare('DELETE FROM brain_notes WHERE id = ?').run(Number(req.params.id));
+  if (!r.changes) return res.status(404).json({ error: 'no such note' });
+  const written = writeNotesFile();
+  res.json({ deleted: Number(req.params.id), remaining: written });
+});
+
 router.post('/:name/flag', (req, res) => {
   const { status, note } = req.body || {};
   const name = req.params.name;
@@ -219,6 +397,27 @@ router.post('/:name/flag', (req, res) => {
   }
 
   res.json({ name, status, note: note || null, flagsFile: `${written} flag(s) written to _flags.md` });
+});
+
+// --- the catch-all, LAST ------------------------------------------------------------
+// Must stay the final GET registered. It matches any single path segment, so every
+// specific route has to be declared above it or Express never reaches them.
+router.get('/:name', (req, res) => {
+  let store;
+  try { store = readStore(); } catch (err) { return res.status(503).json({ error: err.message }); }
+  const m = store.find((x) => x.name === req.params.name);
+  if (!m) return res.status(404).json({ error: `no memory named "${req.params.name}"` });
+  const text = fs.readFileSync(path.join(MEMORY_DIR, m.file), 'utf8');
+
+  // Backlinks: what points AT this memory, from Claude's own store and from the owner's
+  // notes alike. The store has always exposed outbound links; nothing computed the reverse
+  // direction, which is the half you cannot get by reading the file in front of you.
+  const { backlinks } = linkGraph(store);
+  res.json({
+    ...m,
+    markdown: text,
+    backlinks: backlinks.get(m.name) || [],
+  });
 });
 
 module.exports = router;

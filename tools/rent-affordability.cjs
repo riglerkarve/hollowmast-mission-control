@@ -4,15 +4,28 @@
 // Its rationale set the shape: "affordability from the real ledger including bills, not a
 // listings scrape." So this reads the ledger and reports what it can and cannot support.
 //
+// THIS ITEM IS HELD. The owner asked on 18 Aug for Universal Credit statements to be
+// imported first, and that hold still stands — see the note on backlog #25. Nothing here
+// is an answer, and it must not be read as one.
+//
 // IT DOES NOT PRINT A FIGURE YOU CAN AFFORD, and refusing to is the main design decision.
 // 77.6% of measured spending is cash or person-to-person with no purpose recorded, so a
 // single "you can afford £X" would be built on under a quarter of the evidence and would
 // look exactly as confident as one built on all of it. What it does instead:
 //
-//   1. States the arithmetic that IS solid  — evidenced income, and the reconciliation.
-//   2. States what is opaque, and how big   — a filter must report its residue.
-//   3. Names the one question that unlocks it — where £741/month actually goes.
-//   4. Runs the sensitivity for a rent YOU supply, from a real listing.
+//   1. Splits income into EXPLICIT SCENARIOS and refuses to choose between them.
+//   2. States the arithmetic that IS solid  — the reconciliation.
+//   3. States what is opaque, and how big   — a filter must report its residue.
+//   4. Names the one question that unlocks it — where £741/month actually goes.
+//   5. Runs the sensitivity for a rent YOU supply, from a real listing.
+//
+// THE SCENARIOS ARE NOT DECORATION and this file lost them once, on 18 Aug, when I rewrote
+// it without reading the held note first. A single "evidenced income" line silently counts
+// £22,613 from named individuals as income. "Income - people" is a DIRECTION label, not a
+// purpose: money from a person can be earnings, a repayment, a share of a bill or a gift,
+// and a bank export cannot tell them apart. £14,511 of it came from ONE counterparty across
+// 49 payments. Collapsing that into one total makes an interpretation on the owner's behalf,
+// on a 12-month commitment that is expensive and slow to reverse.
 //
 // Usage:
 //   node tools/rent-affordability.cjs
@@ -99,6 +112,8 @@ const L = [];
 const say = (s = '') => { L.push(s); console.log(s); };
 
 say('RENT AFFORDABILITY, FROM YOUR OWN LEDGER');
+ say('*** THIS ITEM IS HELD: Universal Credit statements are to be imported first ***');
+ say('*** Nothing below is an answer. The scenarios narrow once that data exists.  ***');
 say('='.repeat(78));
 say(`Twelve complete months, ${FROM} to ${TO}.`);
 if (TO !== ledgerEnd) {
@@ -109,14 +124,91 @@ say('');
 say('This does NOT tell you what you can afford, and the reason is the finding.');
 say('');
 
-say('WHAT IS SOLID: MONEY IN');
+say('MONEY IN — AND WHY THERE IS NO SINGLE INCOME FIGURE');
 say('-'.repeat(78));
 say(`  ${'category'.padEnd(22)}${pad('per year', 15)}${pad('per month', 14)}   n`);
 income.forEach((r) => say(`  ${r.c.padEnd(22)}${perYear(r.p)}${perMonth(r.p)}   ${r.n}`));
-say(`  ${'EVIDENCED INCOME'.padEnd(22)}${perYear(incomeTotal)}${perMonth(incomeTotal)}`);
 say('');
 say('  Own transfers in are excluded: money arriving from your own other accounts is not');
 say('  income, and counting it would inflate this by roughly a seventh.');
+say('');
+say('  "Income - people" is a DIRECTION, not a purpose. Money from a named person can be');
+say('  earnings, a repayment, a share of a bill or a gift, and a bank export cannot tell');
+say('  them apart. Which it is decides everything below, so it is never assumed.');
+say('');
+const peopleDetail = db.prepare(
+  "SELECT counterparty, COUNT(*) AS n, SUM(amount_pence) AS p, MIN(date) AS a, MAX(date) AS b "
+  + "FROM finance_transactions WHERE date >= ? AND date <= ? AND category = 'Income - people' "
+  + "AND amount_pence > 0 GROUP BY counterparty ORDER BY p DESC"
+).all(FROM, TO);
+say('  who it came from, largest first:');
+peopleDetail.slice(0, 6).forEach((p) => say(
+  `    ${String(p.counterparty).slice(0, 24).padEnd(26)}${pad('GBP ' + gbp(p.p), 12)}  ${pad(p.n, 3)} payments  ${p.a} -> ${p.b}`));
+if (peopleDetail.length > 6) {
+  const rest = peopleDetail.slice(6).reduce((s, p) => s + p.p, 0);
+  say(`    ${('and ' + (peopleDetail.length - 6) + ' others').padEnd(26)}${pad('GBP ' + gbp(rest), 12)}`);
+}
+say('');
+
+// A MEAN IS THE WRONG STATISTIC WHEN THE SERIES IS NOT FLAT, so print the series before
+// any average built on it. This is the finding that changed the whole answer: person-money
+// has not stopped -- the last payment is days before the ledger ends -- but it has
+// COLLAPSED, and a twelve-month mean carries a January spike into every month of a
+// twelve-month tenancy.
+const monthly = (cat) => db.prepare(
+  "SELECT substr(date,1,7) AS m, COUNT(*) AS n, SUM(amount_pence) AS p "
+  + 'FROM finance_transactions WHERE date >= ? AND date <= ? AND category = ? '
+  + 'AND amount_pence > 0 GROUP BY m ORDER BY m'
+).all(FROM, TO, cat);
+
+const peopleMonthly = monthly('Income - people');
+const benefitsMonthly = monthly('Benefits');
+const lastN = (rows, n) => rows.slice(-n).reduce((s, r) => s + r.p, 0) / n;
+
+say('  MONTH BY MONTH — because an average of an uneven series hides its own shape');
+say(`    ${'month'.padEnd(10)}${pad('from people', 14)}${pad('benefits', 14)}`);
+peopleMonthly.forEach((r) => {
+  const b = benefitsMonthly.find((x) => x.m === r.m);
+  say(`    ${r.m.padEnd(10)}${pad('GBP ' + gbp(r.p), 14)}${pad('GBP ' + gbp(b ? b.p : 0), 14)}`);
+});
+say('');
+const p3 = lastN(peopleMonthly, 3), p6 = lastN(peopleMonthly, 6);
+const peopleMean = income.find((r) => r.c === 'Income - people').p / MONTHS;
+const lastPerson = db.prepare(
+  "SELECT MAX(date) AS d FROM finance_transactions WHERE category = 'Income - people' AND amount_pence > 0"
+).get().d;
+say(`  Person-money has NOT stopped -- the most recent is ${lastPerson}, days before the ledger`);
+say('  ends. But it has collapsed, and the twelve-month mean is dominated by one month:');
+say(`    12-month mean      GBP ${gbp(peopleMean)}/month`);
+say(`    last 6 months      GBP ${gbp(p6)}/month`);
+say(`    last 3 months      GBP ${gbp(p3)}/month`);
+say('  Both windows are shown so neither is privileged, and the series above lets you pick');
+say('  your own. Benefits, by contrast, are flat and are the one dependable line here.');
+say('');
+
+// THE SCENARIOS. Never collapsed into one figure -- see the header. Each is a reading of
+// the same rows, and the spread between them is the honest measure of what is not known.
+const benefits = income.find((r) => r.c === 'Benefits').p;
+const people = income.find((r) => r.c === 'Income - people').p;
+const otherInc = incomeTotal - benefits - people;
+const SCENARIOS = [
+  ['Benefits only', benefits,
+    'Counts nothing from individuals. The most cautious reading.'],
+  ['Benefits + other', benefits + otherInc,
+    'Adds refunds and the rest, still no person-to-person money.'],
+  ['+ recent people', benefits + otherInc + (p3 * MONTHS),
+    'Adds person-money at the LAST THREE MONTHS rate, not the annual mean. The likeliest reading if the recent trend holds.'],
+  ['Everything', incomeTotal,
+    'Treats every credit as sustainable income at the 12-month mean. Requires the January level to return AND continue.'],
+];
+say('  INCOME UNDER EACH READING');
+SCENARIOS.forEach(([label, amt, why]) => {
+  say(`    ${label.padEnd(20)}${perYear(amt)}${perMonth(amt)}`);
+  say(`    ${' '.repeat(20)}${why}`);
+});
+say('');
+say(`  The spread is GBP ${gbp((incomeTotal - benefits) / MONTHS)} a month. That is not a rounding difference; it is`);
+say('  the whole question, and it is yours to settle rather than mine to assume.');
 say('');
 
 say('WHAT IS SOLID: THE RECONCILIATION');
@@ -197,38 +289,43 @@ if (!RENTS.length) {
   say('  No default is offered, deliberately. A plausible-looking rent invented here would');
   say('  become the figure you remember, and it would be mine rather than the market\'s.');
 } else {
-  const incomeM = incomeTotal / MONTHS / 100;
   const opaqueM = spendOpaque.p / MONTHS / 100;
   const itemisedM = itemised / MONTHS / 100;
   const movedM = movedOut / MONTHS / 100;
-  say(`  Against evidenced income of GBP ${incomeM.toFixed(2)}/month.`);
+  // Derived from SCENARIOS.length, not typed. I wrote "THREE" here, then added a fourth
+  // scenario, and the prose kept saying three -- a count in prose beside the list it counts
+  // is a stale number waiting to happen.
+  const N_WORD = ['no', 'one', 'two', 'THREE', 'FOUR', 'FIVE', 'SIX'][SCENARIOS.length] || String(SCENARIOS.length);
+  say(`  Every rent is shown under ALL ${N_WORD} readings of income, because picking one is the`);
+  say('  interpretation this file exists not to make. Each cell is what is left after the');
+  say(`  rent, the GBP ${itemisedM.toFixed(2)} of itemised spending AND the GBP ${opaqueM.toFixed(2)} of undescribed spending --`);
+  say('  the last is real whether or not it is described, so it is never left out.');
   say('');
-  say(`  ${'rent'.padEnd(10)}${pad('% of income', 12)}${pad('left after rent', 18)}${pad('+ itemised spend', 18)}${pad('and the opaque', 16)}`);
+  say(`  ${'rent'.padEnd(11)}${SCENARIOS.map(([l]) => pad(l, 20)).join('')}`);
   RENTS.forEach((r) => {
-    const afterRent = incomeM - r;
-    const afterItem = afterRent - itemisedM;
-    const afterOpaque = afterItem - opaqueM;
-    say(`  ${('GBP ' + r.toFixed(0)).padEnd(10)}${pad((100 * r / incomeM).toFixed(1) + '%', 12)}`
-      + `${pad('GBP ' + afterRent.toFixed(2), 18)}${pad('GBP ' + afterItem.toFixed(2), 18)}`
-      + `${pad('GBP ' + afterOpaque.toFixed(2), 16)}`);
+    const cells = SCENARIOS.map(([, amt]) => {
+      const left = (amt / MONTHS / 100) - r - itemisedM - opaqueM;
+      return pad((left >= 0 ? '+' : '') + left.toFixed(2), 20);
+    });
+    say(`  ${('GBP ' + r.toFixed(0)).padEnd(11)}${cells.join('')}`);
   });
   say('');
-  say(`  The last column subtracts the GBP ${opaqueM.toFixed(2)}/month you currently spend without a`);
-  say('  recorded purpose. It is the honest column, because that spending is real whether or');
-  say('  not it is described.');
+  // Not a threshold anyone chose: it is where each column crosses zero, one subtraction
+  // from figures printed above. Per scenario, because a single crossover would smuggle
+  // back exactly the choice the scenarios exist to avoid.
+  say('  THE CROSSOVER UNDER EACH READING — the rent at which the column reaches zero:');
+  SCENARIOS.forEach(([label, amt]) => {
+    const x = (amt / MONTHS / 100) - itemisedM - opaqueM;
+    say(`    ${label.padEnd(20)}${pad('GBP ' + x.toFixed(2), 12)}/month`
+      + (x < 0 ? '   <- already negative before any rent' : ''));
+  });
   say('');
-  // Not a threshold anyone chose: it is where the last column crosses zero, which is one
-  // subtraction from three figures printed above. Stated so the reader does not have to
-  // interpolate between the rows they happened to ask for.
-  const crossover = incomeM - itemisedM - opaqueM;
-  say(`  THE CROSSOVER IS GBP ${crossover.toFixed(2)}/MONTH.`);
-  say(`  ${incomeM.toFixed(2)} income - ${itemisedM.toFixed(2)} itemised - ${opaqueM.toFixed(2)} opaque. Above that rent, your`);
-  say('  current spending no longer fits inside your current income. It is arithmetic on');
-  say('  three numbers printed above, not a rule of thumb and not a limit anyone chose.');
+  say('  Arithmetic on figures printed above: income minus itemised minus opaque. Not a rule');
+  say(`  of thumb, not a limit anyone chose, and deliberately ${SCENARIOS.length} numbers rather than one.`);
   say('');
-  say('  It is NOT "the rent you can afford". It is the rent at which SOMETHING HAS TO');
-  say('  CHANGE -- and since 77.6% of that spending has no recorded purpose, neither of us');
-  say('  currently knows whether it is easy to change or impossible.');
+  say('  NONE of them is "the rent you can afford". Each is the rent at which SOMETHING HAS');
+  say('  TO CHANGE under that reading -- and since 77.6% of the spending it would come from');
+  say('  has no recorded purpose, neither of us knows whether changing it is easy.');
   say('');
   say(`  None of these columns include council tax, water, energy or broadband, because you`);
   say(`  currently record GBP ${(adjacent.find((a) => a.c === 'Phone & internet').p / MONTHS / 100).toFixed(2)}/month of Phone & internet and nothing else. A tenancy`);

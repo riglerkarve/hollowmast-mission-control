@@ -275,6 +275,52 @@ own last row, because a tidy grid implies a confidence the data does not support
 
 ---
 
+## The services audit, and the classifier I nearly built twice
+
+`GET /api/finance/recurring`, surfaced in the Money panel. Backlog #39 — derived from the
+ledger, never typed.
+
+**The first version was useless in an instructive way.** It grouped every counterparty by
+recurrence, and returned Tesco (175 charges) as "stopped charging", Co-op as "every ~2
+days", KFC as "every ~329 days", and several friends as services. Shopping recurs, so
+shops dominate any list built on recurrence alone.
+
+The tempting rescue was a second signal — subscriptions charge a consistent amount.
+Measured, it does not separate: Spotify scores 0.00 and Netflix 0.14 on
+median-absolute-deviation over the median, but **Google Play scores 0.60** (it is many app
+purchases, not one subscription) and lands among the supermarkets, while repeated
+round-number transfers to a person score 0.34 and land among the services. Any cut-off
+would have been a number I chose.
+
+**The categoriser already answers this question**, with 108 auditable rules over 95.3% of
+the ledger. Building a second classifier would have been a second owner for "what kind of
+thing is this". So the category is the gate — `Subscriptions` and `Phone & internet` — and
+recurrence is only the fact reported inside it. 170 noisy rows became 21 real services.
+
+Three things it refuses to fake:
+
+- **It does not claim a billing cycle.** Netflix's gaps run 28…927 days, median 41, which
+  is the average of a subscription that lapsed twice. The spread is returned beside the
+  median and the panel prints it as *"irregular: 28–927d, so that is an average, not a
+  cycle"*. A median is shown and then undermined rather than left looking authoritative.
+- **It measures staleness from the ledger's end, not today.** The ledger is an import;
+  counting from today would add the import lag to every row and make live services look
+  abandoned.
+- **It reports its residue.** A counterparty with fewer than 3 charges has no gap to
+  measure, but dropping it silently hid the single most recent service charge in the whole
+  ledger — **Anthropic, £18.00, one charge, 9 days before the ledger ends**. A subscription
+  that started last month is indistinguishable from one that never recurred, so it is shown
+  in its own bucket instead of filtered into nothing.
+
+`unclear` is a real status and is folded into neither: five counterparties have a median
+gap of 0 because most charges land the same day as the one before, so no answer would be
+honest.
+
+**It is an inventory, not a verdict.** Nothing in the route or the panel comments on what
+any service is for, and there is no styling for "expensive".
+
+---
+
 ## The daily triggers
 
 `scripts/triggers.cjs` — the things worth interrupting you for. Run it bare to see what

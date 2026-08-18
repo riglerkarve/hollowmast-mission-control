@@ -31,6 +31,11 @@ const TEMPLATE = `
     </section>
 
     <section class="card" id="finCash"></section>
+
+    <section class="card">
+      <h2 class="fin-h2">Services still charging you</h2>
+      <div id="finRecurring"></div>
+    </section>
   </div>
 `;
 
@@ -140,6 +145,64 @@ function renderCash(d) {
   `;
 }
 
+// The services audit. Backlog #39, and it is an INVENTORY, not a verdict — nothing here
+// comments on what anything is for. What it can honestly answer is which services are
+// still taking money and which quietly stopped.
+async function loadRecurring() {
+  const box = root.querySelector('#finRecurring');
+  let d;
+  try {
+    d = await api('/recurring');
+  } catch (err) {
+    box.innerHTML = `<p class="fin-error">Could not read the services audit: ${esc(err.message)}</p>`;
+    return;
+  }
+  if (d.state !== 'ok') { box.innerHTML = '<p class="empty-hint">No ledger to read yet.</p>'; return; }
+
+  const live = d.services.filter((s) => s.status === 'still charging');
+  const stopped = d.services.filter((s) => s.status === 'stopped charging');
+  const unclear = d.services.filter((s) => s.status === 'unclear');
+
+  const row = (s) => `
+    <li>
+      <span class="fin-r-name">${esc(s.name)}</span>
+      <span class="fin-r-when">last charged ${s.daysSinceLast} day${s.daysSinceLast === 1 ? '' : 's'} before the ledger ends${
+        s.medianGapDays > 0 ? ` · usually every ~${s.medianGapDays}d` : ''}${
+        s.medianGapDays > 0 && !s.gapsAreRegular
+          // The median is shown and then undermined, because a wide spread means it is not
+          // a billing cycle. Hiding the spread would make a noisy figure look authoritative.
+          ? ` <b class="fin-r-warn">(irregular: ${s.gapRange.min}–${s.gapRange.max}d, so that is an average, not a cycle)</b>`
+          : ''}</span>
+      <span class="fin-r-sum">${s.charges} charges · ${gbp(s.totalPence)} total · last ${gbp(s.lastPence)}</span>
+    </li>`;
+
+  box.innerHTML = `
+    <p class="fin-note">Measured to <b>${esc(d.asOf)}</b>, where the ledger ends — not to today.
+      Counting from today would add the ${d.ledgerStaleDays}-day import lag to every row.</p>
+
+    <h3 class="fin-h3">Still charging (${live.length})</h3>
+    ${live.length ? `<ul class="fin-recur">${live.map(row).join('')}</ul>`
+    : '<p class="empty-hint">Nothing in these categories has charged within twice its own typical gap.</p>'}
+
+    ${d.notEnoughHistory.length ? `
+      <h3 class="fin-h3">Too few charges to judge (${d.notEnoughHistory.length})</h3>
+      <p class="fin-note">Shown rather than filtered away: a subscription that started recently
+        is indistinguishable from one that never recurred, and dropping it would hide the newest thing here.</p>
+      <ul class="fin-recur">${d.notEnoughHistory.slice(0, 6).map((s) => `
+        <li><span class="fin-r-name">${esc(s.name)}</span>
+          <span class="fin-r-when">${s.charges} charge${s.charges === 1 ? '' : 's'} · last ${gbp(s.lastPence)}, ${s.daysSinceLast} days before the ledger ends</span></li>`).join('')}</ul>` : ''}
+
+    <details class="fin-more">
+      <summary>Stopped charging (${stopped.length})${unclear.length ? ` · unclear (${unclear.length})` : ''}</summary>
+      ${stopped.length ? `<ul class="fin-recur">${stopped.map(row).join('')}</ul>` : ''}
+      ${unclear.length ? `<p class="fin-note">Unclear, kept separate rather than guessed:
+        ${unclear.map((s) => esc(s.name)).join(', ')} — most of their charges land on the same day as
+        the one before, so there is no gap to measure and neither answer would be honest.</p>` : ''}
+    </details>
+
+    <p class="fin-note fin-dim">${esc(d.basis)}</p>`;
+}
+
 async function load() {
   const notice = root.querySelector('#finNotice');
   let d;
@@ -166,6 +229,10 @@ async function load() {
   renderTotals(d);
   renderCategories(d);
   renderCash(d);
+
+  // The services audit does not depend on the month or account selectors — it reads the
+  // whole ledger — but it is loaded here so it can never be defined and left uncalled.
+  loadRecurring();
 }
 
 export default {

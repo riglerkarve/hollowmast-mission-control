@@ -147,6 +147,12 @@ router.get('/summary', (req, res) => {
 // Months that actually have data, newest first. The panel picks its default from this
 // rather than from today's date — the ledger is an import and ends when the last
 // statement ended, so "this month" and "the latest month with data" are different things.
+// The services audit — what is still charging you. Backlog #39.
+router.get('/recurring', (req, res) => {
+  const min = Math.min(12, Math.max(2, Number(req.query.minCharges) || 3));
+  res.json(recurring({ minCharges: min }));
+});
+
 router.get('/months', (req, res) => {
   res.json(db.prepare(
     `SELECT substr(date, 1, 7) AS month, COUNT(*) AS n, MAX(date) AS last_day
@@ -494,7 +500,137 @@ function ledgerSpan(asOf) {
   };
 }
 
+// RECURRING PAYMENTS — the services audit, derived rather than typed. Backlog #39.
+//
+// It answers one question the ledger can actually answer: WHAT IS STILL CHARGING YOU.
+// Nothing here judges what anything is for. It is an inventory, not a verdict.
+//
+// WHY IT DOES NOT CLAIM A BILLING CYCLE. The obvious version reports "every 30 days" from
+// the median gap. Measured on this ledger, Netflix's gaps run 28, 33, 35, 35, 35, 36, 39,
+// 41, 42, 43, 47, 49, 51, 164, 927 — median 41, which is not a billing cycle. It is the
+// average of a subscription that lapsed twice and resumed. A tidy "every 41 days" would be
+// a plausible figure describing nothing real, so the SPREAD is returned beside the median
+// and the panel shows both. A wide spread is meant to visibly undermine its own median.
+//
+// STALENESS IS MEASURED FROM THE LEDGER END, NOT TODAY. The ledger is an import, not a
+// feed. Counting from today would add the import lag to every single row and make live
+// subscriptions look abandoned.
+// WHICH COUNTERPARTIES COUNT AS A SERVICE IS DECIDED BY THE CATEGORY, NOT BY ME.
+//
+// The first version of this grouped EVERY counterparty by recurrence, and the result was
+// useless in an instructive way: Tesco (175 charges) came back as "stopped charging",
+// Co-op as "every ~2 days", KFC as "every ~329 days", and several friends appeared as
+// services. Shopping recurs, so shops dominate any list built on recurrence alone.
+//
+// The obvious rescue was a second signal — subscriptions charge a consistent amount. It
+// does not separate cleanly either: measured here, Spotify scores 0.00 and Netflix 0.14 on
+// median-absolute-deviation over the median, but Google Play scores 0.60 (it is many app
+// purchases, not one subscription) and lands among the supermarkets, while repeated
+// round-number transfers to a person score 0.34 and land among the services. Any cut-off
+// between them would have been a number I chose.
+//
+// The categoriser already answers "what kind of thing is this", with 108 auditable rules
+// covering 95.3% of the ledger. Building a second classifier here would have been a second
+// owner for that question. So the category is the gate, and recurrence is only the derived
+// fact reported inside it.
+const SERVICE_CATEGORIES = ['Subscriptions', 'Phone & internet'];
+
+function recurring({ minCharges = 3, categories = SERVICE_CATEGORIES } = {}) {
+  const span = ledgerSpan();
+  if (!span.rows) return { state: 'empty', asOf: null, services: [] };
+
+  const cats = Array.isArray(categories) && categories.length ? categories : SERVICE_CATEGORIES;
+  const rows = db.prepare(
+    `SELECT counterparty, date, -amount_pence AS pence, category
+       FROM finance_transactions
+      WHERE amount_pence < 0
+        AND counterparty IS NOT NULL AND TRIM(counterparty) <> ''
+        AND category IN (${cats.map(() => '?').join(',')})
+      ORDER BY counterparty, date`
+  ).all(...cats);
+
+  const byName = new Map();
+  for (const r of rows) {
+    if (!byName.has(r.counterparty)) byName.set(r.counterparty, []);
+    byName.get(r.counterparty).push(r);
+  }
+
+  const services = [];
+  // THE RESIDUE. A counterparty with one or two charges is not yet recurrence and must not
+  // be given a median gap — but dropping it silently hides exactly the thing worth seeing:
+  // a subscription that started last month. Measured here, the single most recent service
+  // charge in the whole ledger was Anthropic, £18.00, ONE charge — invisible under any
+  // minimum. So it is reported beside the list rather than filtered into nothing.
+  const notEnoughHistory = [];
+  for (const [name, charges] of byName) {
+    if (charges.length < minCharges) {
+      const last = charges[charges.length - 1];
+      notEnoughHistory.push({
+        name,
+        charges: charges.length,
+        lastOn: last.date,
+        lastPence: last.pence,
+        daysSinceLast: Math.round((Date.parse(span.last) - Date.parse(last.date)) / 86400000),
+        why: `Only ${charges.length} charge${charges.length === 1 ? '' : 's'} on record, so there is no gap to measure. `
+          + 'That is not the same as "not recurring" — a subscription that started recently looks identical.',
+      });
+      continue;
+    }
+
+    const gaps = [];
+    for (let i = 1; i < charges.length; i++) {
+      gaps.push(Math.round((Date.parse(charges[i].date) - Date.parse(charges[i - 1].date)) / 86400000));
+    }
+    const sorted = [...gaps].sort((a, b) => a - b);
+    const medianGap = sorted[Math.floor(sorted.length / 2)];
+    const last = charges[charges.length - 1];
+    const daysSinceLast = Math.round((Date.parse(span.last) - Date.parse(last.date)) / 86400000);
+
+    // The only inference, and it is one division. Anything past twice its own typical gap
+    // has missed at least one charge — that is arithmetic, not a prediction about intent.
+    // 'unclear' is a real answer and is not folded into either of the others.
+    const status = medianGap <= 0 ? 'unclear'
+      : daysSinceLast <= medianGap * 2 ? 'still charging'
+        : 'stopped charging';
+
+    services.push({
+      name,
+      charges: charges.length,
+      totalPence: charges.reduce((s, c) => s + c.pence, 0),
+      lastPence: last.pence,
+      firstOn: charges[0].date,
+      lastOn: last.date,
+      daysSinceLast,
+      medianGapDays: medianGap,
+      gapRange: sorted.length ? { min: sorted[0], max: sorted[sorted.length - 1] } : null,
+      // Stated so the median can be distrusted where it deserves to be.
+      gapsAreRegular: sorted.length > 1 && sorted[sorted.length - 1] <= medianGap * 2,
+      categories: [...new Set(charges.map((c) => c.category).filter(Boolean))],
+      status,
+    });
+  }
+
+  services.sort((a, b) => a.daysSinceLast - b.daysSinceLast || b.charges - a.charges);
+
+  return {
+    state: 'ok',
+    asOf: span.last,
+    ledgerStaleDays: span.staleDays,
+    minCharges,
+    counted: services.length,
+    notEnoughHistory: notEnoughHistory.sort((a, b) => a.daysSinceLast - b.daysSinceLast),
+    categories: cats,
+    basis: `Counterparties in ${cats.join(' and ')} with ${minCharges}+ charges. The CATEGORY decides what counts as a service — those rules already exist and are auditable; recurrence alone would rank supermarkets above subscriptions. `
+      + `"Days since last" is measured from the ledger's end (${span.last}), not from today — `
+      + 'the ledger is an import, so counting from today would add the import lag to every row. '
+      + 'Status is one division: past twice its own median gap means at least one charge was missed. '
+      + 'Where the gap range is wide the median is not a billing cycle and should not be read as one.',
+    services,
+  };
+}
+
 module.exports = router;
+module.exports.recurring = recurring;
 module.exports.monthlySpend = monthlySpend;
 module.exports.monthlyIncome = monthlyIncome;
 module.exports.typicalMonthly = typicalMonthly;

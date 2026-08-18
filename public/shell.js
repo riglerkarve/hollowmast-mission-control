@@ -9,6 +9,7 @@ const PANELS = {
   wellbeing: () => import('/panels/wellbeing/wellbeing.js'),
   brain: () => import('/panels/brain/brain.js'),
   safety: () => import('/panels/safety/safety.js'),
+  browsing: () => import('/panels/browsing/browsing.js'),
   goals: () => import('/panels/goals/goals.js'),
   schedule: () => import('/panels/schedule/schedule.js'),
 };

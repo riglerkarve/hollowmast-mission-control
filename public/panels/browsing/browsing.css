@@ -1,0 +1,38 @@
+/* Browsing panel. Neutral throughout: no colour that reads as good or bad time spent. */
+.br-h2 { font-size: 0.95rem; font-weight: 700; margin: 0 0 0.4rem; }
+.br-note { font-size: 0.78rem; opacity: 0.8; margin: 0.3rem 0; }
+.br-dim { opacity: 0.55; }
+
+.br-list, .br-cross { list-style: none; margin: 0.5rem 0; padding: 0; display: flex; flex-direction: column; gap: 0.3rem; }
+
+.br-list li {
+  position: relative;
+  display: flex;
+  justify-content: space-between;
+  align-items: baseline;
+  gap: 1rem;
+  padding: 0.35rem 0.55rem;
+  border-radius: 7px;
+  overflow: hidden;
+}
+
+/* The bar sits BEHIND the text rather than beside it, so a long domain never squeezes the
+   figure off the row. --ring-bg, not the accent: this is a magnitude, not a warning. */
+.br-bar {
+  position: absolute;
+  left: 0; top: 0; bottom: 0;
+  background: var(--ring-bg);
+  z-index: 0;
+}
+
+.br-name { position: relative; z-index: 1; font-size: 0.83rem; font-weight: 600; }
+.br-n { position: relative; z-index: 1; font-size: 0.75rem; opacity: 0.75; white-space: nowrap; font-variant-numeric: tabular-nums; }
+
+.br-cross li {
+  display: flex;
+  flex-direction: column;
+  gap: 0.1rem;
+  padding: 0.4rem 0.55rem;
+  border: 1px solid var(--border);
+  border-radius: 7px;
+}

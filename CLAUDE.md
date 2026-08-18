@@ -349,6 +349,45 @@ own last row, because a tidy grid implies a confidence the data does not support
 
 ---
 
+## Browsing — domains only, and why that is the whole design
+
+`/api/browsing` + `tools/import-browsing.cjs`. Backlog #12.
+
+**No URLs and no page titles are read into the database — ever, by either file.** This is
+not squeamishness. `dashboard.db` is served on `0.0.0.0` behind one shared secret and
+already holds ten account-years of bank transactions; a full URL history would mean a
+single leaked key exposes every page you have read, which is a materially different loss
+from a spending total. Domain-level aggregates answer what the item asks and cost far less
+if they escape. The domain is extracted **in SQL**, so no URL reaches the importer process.
+
+Current import: 811 domains, 14,172 visits, 2026-06-30 to 2026-08-18. Edge only; Chrome and
+Firefox are not installed and are reported as absent rather than as zero.
+
+**What it derives**, because an import that only stores fails the gate: where attention
+concentrates, and **paid for but not visited** — services the ledger charges for that never
+appear in browsing. That is the one question neither module can answer alone, so browsing
+asks finance rather than duplicating its figures. Eight came back, all already
+`stopped charging` — so the honest reading is historical, not live waste.
+
+The match is crude and says so on its own face: comparing a merchant name to a domain is a
+guess about a string, so the list is captioned as candidates to check, never as proof a
+service went unused.
+
+**Two machine facts this depends on, both found the hard way:**
+
+- **The History file is locked while Edge runs**, and Edge runs as ~14 processes. It is
+  copied first and the copy read read-only — which is why this works without asking you to
+  close the browser. The copy is deleted in a `finally`, so it goes even if the read throws.
+- **Timestamps are Windows FILETIME**, microseconds since 1601-01-01. A raw value is about
+  1.34e16, larger than `Number.MAX_SAFE_INTEGER`, and `node:sqlite` throws
+  `ERR_OUT_OF_RANGE` rather than rounding silently. The conversion to unix seconds is done
+  **in SQL**, so the oversized number never reaches JavaScript.
+
+It does not judge what is on the list. No "wasted time" figure, now or later — that would be
+a weighting I invented, presented back as a measurement.
+
+---
+
 ## The services audit, and the classifier I nearly built twice
 
 `GET /api/finance/recurring`, surfaced in the Money panel. Backlog #39 — derived from the

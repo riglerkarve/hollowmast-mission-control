@@ -64,6 +64,7 @@ const income = require('../server/routes/income');
 const budget = require('../server/routes/budget');
 const safety = require('../server/routes/safety');
 const machine = require('../server/routes/machine');
+const finance = require('../server/routes/finance');
 const projects = require('../server/routes/projects');
 const goals = require('../server/routes/goals');
 const alerts = require('../server/routes/alerts');
@@ -232,6 +233,7 @@ function gatherFacts() {
     authorised: ask(() => safety.authorisedThisMonth()),
   };
   const pressure = ask(() => machine.pressureNow());
+  const cashPos = ask(() => finance.netWorth());
   const projectsProgress = ask(() => projects.progressSince(sinceStamp));
   const goalSteps = ask(() => goals.nextSteps());
   const alertsRaised = ask(() => alerts.raisedSince(sinceStamp));
@@ -242,6 +244,7 @@ function gatherFacts() {
     earned,
     moneyGuard,
     pressure,
+    cashPos,
     goalSteps,
     alertsRaised,
     sitesDown,
@@ -459,6 +462,30 @@ function render(facts, prose) {
           const auth = mg.authorised && !mg.authorised.error ? mg.authorised : null;
           L.push(`- spending guard: ${gbp(lim.per_transaction_pence.pence)} per transaction`
             + (auth ? `, ${auth.n} authorised this month` : ''));
+      // WHAT IS ACTUALLY IN THE ACCOUNT, printed beside the headroom rather than instead of it.
+      //
+      // These two numbers answer different questions and only one of them was ever on screen.
+      // Headroom is budget minus spend; it says what the PLAN allows. Cash is the ledger's last
+      // known balance; it says what is THERE. On 18 Aug the briefing read "£191.52 headroom"
+      // every morning while the last recorded balance was three pence -- both correct, and
+      // reading only the first would have been badly misleading two days after committing £40
+      // to advertising.
+      //
+      // THE STALENESS IS PART OF THE FIGURE, never a footnote. The ledger is an import: a
+      // balance eight days old is a fact about 11 August, not about today, and money may well
+      // have arrived since. Printing it without the age would replace one misleading number
+      // with another.
+      const cashPos = facts.cashPos;
+      if (cashPos && !cashPos.error && cashPos.cash && cashPos.cash.length) {
+        const total = cashPos.cash.reduce((a, c) => a + c.pence, 0);
+        const oldest = Math.max(...cashPos.cash.map((c) => c.staleDays || 0));
+        L.push(`- last known balance **${gbp(total)}** across ${cashPos.cash.length} account(s)`
+          + `, ${oldest} day(s) old — the ledger is an import, so today's real figure may differ`);
+        for (const c of cashPos.cash) {
+          L.push(`  - ${c.label}: ${gbp(c.pence)} as of ${c.asOf}`);
+        }
+        if (cashPos.caveat) L.push(`- ${cashPos.caveat}`);
+      }
         }
         L.push('');
       }

@@ -20,7 +20,7 @@
 'use strict';
 
 const path = require('node:path');
-const { execFileSync } = require('node:child_process');
+const { execFileSync, execFile } = require('node:child_process');
 
 const args = process.argv.slice(2);
 const DRY = args.includes('--dry');
@@ -28,6 +28,9 @@ const sayIdx = args.indexOf('--say');
 
 const PS1 = path.join(__dirname, 'say.ps1');
 
+// SYNCHRONOUS, and only safe from the CLI. execFileSync blocks the whole thread until the
+// sentence finishes being spoken, which is correct for a script that exits afterwards and
+// catastrophic inside the server — see speakAsync below.
 function speak(text) {
   if (DRY) { console.log(`would say: ${text}`); return { spoken: false, dry: true }; }
   try {
@@ -39,6 +42,31 @@ function speak(text) {
     console.error(`could not speak: ${String(err.stderr || err.message).trim().slice(0, 200)}`);
     return { spoken: false, error: true };
   }
+}
+
+// THE VERSION THE SERVER MUST USE. Measured 18 Aug 2026 with the sync one wired to a route:
+// a single sentence stalled /api/status for 5,084 ms. Node is one thread, so the entire
+// dashboard served nothing for the length of the sentence — and the watchdog probes that
+// exact endpoint every five minutes and treats a timeout as DOWN, so speaking could have
+// triggered a spurious restart of the service.
+//
+// This spawns the same command without blocking the event loop, so other requests are
+// served while PowerShell talks. The caller still awaits a real result, so "spoken" and
+// "speech is unavailable" stay distinguishable.
+function speakAsync(text) {
+  return new Promise((resolve) => {
+    execFile('powershell.exe',
+      ['-NoProfile', '-ExecutionPolicy', 'Bypass', '-File', PS1, '-Text', text],
+      { timeout: 30000 },
+      (err, stdout, stderr) => {
+        if (!err) return resolve({ spoken: true });
+        resolve({
+          spoken: false,
+          error: true,
+          reason: String(stderr || err.message).trim().slice(0, 200),
+        });
+      });
+  });
 }
 
 // Built from the modules' own accessors, never by reading their tables.
@@ -82,9 +110,17 @@ function line() {
   return bits.join(' ');
 }
 
-const text = sayIdx >= 0 ? String(args[sayIdx + 1] || '').trim() : line();
-if (!text) { console.error('nothing to say'); process.exit(2); }
+// Guarded so this file can be REQUIRED by a route without speaking on import. Without the
+// guard, requiring it would talk at whoever restarted the server — and the module was
+// written, verified and then never called by anything, which is how it sat silent since it
+// was built. Connecting it is the actual work of #22; the speaking was already done.
+if (require.main === module) {
+  const text = sayIdx >= 0 ? String(args[sayIdx + 1] || '').trim() : line();
+  if (!text) { console.error('nothing to say'); process.exit(2); }
 
-const r = speak(text);
-if (!DRY && r.spoken) console.log(`said: ${text}`);
-if (r.error) process.exit(1);
+  const r = speak(text);
+  if (!DRY && r.spoken) console.log(`said: ${text}`);
+  if (r.error) process.exit(1);
+}
+
+module.exports = { line, speak, speakAsync };

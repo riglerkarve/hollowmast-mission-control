@@ -1,0 +1,47 @@
+/* Machine — live hardware readings. Every colour comes from the shared token set; none are
+   invented here. An absent reading is styled DOWN rather than out: it stays the same size and
+   in the same place as a present one, so a gap reads as "this cannot be measured" instead of
+   looking like a panel that failed to render. */
+
+.mc-age { font-size: 12px; color: var(--muted); font-variant-numeric: tabular-nums; }
+.mc-age.is-stale { color: var(--long); }
+
+.mc-h2 { font-size: 13px; text-transform: uppercase; letter-spacing: .08em;
+  color: var(--muted); margin: 0 0 12px; font-weight: 600; }
+
+.mc-grid { display: grid; gap: 14px; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); }
+
+.mc-tile { display: flex; flex-direction: column; gap: 6px; min-width: 0; }
+.mc-label { font-size: 12px; color: var(--muted); text-transform: uppercase; letter-spacing: .06em; }
+.mc-value { font-size: 26px; line-height: 1.1; color: var(--ink);
+  font-variant-numeric: tabular-nums; }
+.mc-unit { font-size: 14px; color: var(--muted); margin-left: 2px; }
+.mc-detail { font-size: 12px; color: var(--muted); overflow-wrap: anywhere; }
+
+/* An unmeasurable tile: the number becomes the word, and the reason sits under it. */
+.mc-tile.is-absent .mc-value { font-size: 15px; color: var(--muted); padding-top: 7px; }
+.mc-why { color: var(--muted); }
+
+.mc-track { height: 4px; border-radius: 2px; background: var(--ring-bg); overflow: hidden; }
+.mc-track > i { display: block; height: 100%; background: var(--accent); }
+/* Zero-width fill on an absent tile would be indistinguishable from a real 0%, so the track
+   itself is dimmed instead — the tile is not reporting a low value, it is not reporting. */
+.mc-tile.is-absent .mc-track { opacity: .35; }
+
+.mc-trend { display: grid; gap: 10px; }
+.mc-spark { display: grid; grid-template-columns: 84px 1fr 52px; align-items: center; gap: 10px; }
+.mc-spark svg { width: 100%; height: 34px; display: block; }
+.mc-spark polyline { fill: none; stroke: var(--accent); stroke-width: 1.5;
+  vector-effect: non-scaling-stroke; }
+.mc-last { font-size: 12px; color: var(--ink); text-align: right;
+  font-variant-numeric: tabular-nums; }
+.mc-spark.is-absent { color: var(--muted); font-size: 12px; }
+
+.mc-note { font-size: 12px; color: var(--muted); margin: 10px 0 0; }
+.mc-notes { margin: 0; padding-left: 18px; font-size: 12px; color: var(--muted); }
+.mc-notes li { margin: 4px 0; }
+
+@media (max-width: 560px) {
+  .mc-spark { grid-template-columns: 70px 1fr 44px; gap: 8px; }
+  .mc-value { font-size: 22px; }
+}

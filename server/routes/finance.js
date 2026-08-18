@@ -857,15 +857,19 @@ function derivedCash() {
   // The closing balance is the balance_pence on each account's most recent row. Summing
   // amount_pence instead would give a different number whenever an import starts partway
   // through an account's life, and there would be no way to tell which was right.
+  //
+  // ROW_NUMBER, not a correlated subquery. The first version of this asked "is this row the
+  // latest for its account?" once per row — 6,839 inner sorts — and took 7.5 SECONDS,
+  // enough that a 5s health probe recorded it as unreachable. The window function does one
+  // pass. Measured after the change rather than assumed.
   return db.prepare(`
-    SELECT t.account_id AS id, a.label, a.kind, t.balance_pence AS pence, t.date AS asOf
-      FROM finance_transactions t
-      JOIN finance_accounts a ON a.id = t.account_id
-     WHERE t.id = (
-       SELECT id FROM finance_transactions
-        WHERE account_id = t.account_id
-        ORDER BY date DESC, id DESC LIMIT 1)
-     ORDER BY a.kind, a.label
+    SELECT id, label, kind, pence, asOf FROM (
+      SELECT t.account_id AS id, a.label, a.kind, t.balance_pence AS pence, t.date AS asOf,
+             ROW_NUMBER() OVER (PARTITION BY t.account_id ORDER BY t.date DESC, t.id DESC) AS rn
+        FROM finance_transactions t
+        JOIN finance_accounts a ON a.id = t.account_id
+    ) WHERE rn = 1
+      ORDER BY kind, label
   `).all().map((r) => ({ ...r, staleDays: daysSince(r.asOf) }));
 }
 

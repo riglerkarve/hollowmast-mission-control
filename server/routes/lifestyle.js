@@ -318,6 +318,7 @@ function decorate(r, gaps) {
   const base = {
     id: r.id,
     name: r.name,
+    scheduleKind: 'interval',
     intervalDays: r.interval_days,
     active: !!r.active,
     addedOn: String(r.created_at).slice(0, 10),
@@ -377,6 +378,7 @@ function decorateAnchored(r, gaps) {
     lastDone: r.last_done,
     daysSinceDone: r.days_since,
 
+    scheduleKind: 'anchored',
     anchored: true,
     anchorDate: r.anchor_date,
     leadDays: lead,

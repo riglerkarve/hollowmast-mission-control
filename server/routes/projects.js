@@ -28,7 +28,7 @@
 const express = require('express');
 const fs = require('node:fs');
 const path = require('node:path');
-const { execFile } = require('node:child_process');
+const { execFile, execFileSync } = require('node:child_process');
 
 const router = express.Router();
 const ROOT = path.resolve(__dirname, '..', '..', '..');   // the workspace, one above mission-control
@@ -161,5 +161,86 @@ router.get('/:id/dash/*', (req, res) => {
   });
 });
 
+// What actually moved, per project, for the briefing.
+//
+// Owner request 18 Aug 2026: the briefing should encompass all projects and their progress.
+// It knew a great deal about the owner's data and nothing about the twelve things on the disk.
+//
+// PROGRESS IS COMMITS, and that is a deliberate narrowing rather than the best available
+// measure. A commit is a fact with a timestamp that nobody has to remember to record. Anything
+// richer -- percent complete, velocity, "on track" -- would be a weighting I chose, presented
+// back as a measurement, which is the one figure nobody can audit.
+//
+// FOUR PROJECTS ARE NOT REPOSITORIES AT ALL: thin-air, emberfall, Fallow and
+// high-society-420-tycoon. Work on those is INVISIBLE here, and they are reported as
+// unmeasurable rather than as zero. A project with no version control and a project nobody
+// touched look identical to any commit count, and calling both "no progress" would quietly
+// libel the first.
+function progressSince(sinceISO) {
+  const since = String(sinceISO || '').slice(0, 10);
+  const moved = [];
+  const quiet = [];
+  const unmeasurable = [];
+
+  for (const p of PROJECTS) {
+    const cwd = path.join(ROOT, p.dir);
+    if (!fs.existsSync(cwd)) {
+      unmeasurable.push({ id: p.id, name: p.name, why: 'directory not found' });
+      continue;
+    }
+    if (!fs.existsSync(path.join(cwd, '.git'))) {
+      unmeasurable.push({ id: p.id, name: p.name, track: p.track, why: 'not under version control' });
+      continue;
+    }
+    const git = (args) => {
+      try {
+        return execFileSync('git', ['-C', cwd].concat(args), { encoding: 'utf8', timeout: 8000 }).trim();
+      } catch (e) { return null; }
+    };
+
+    // THE TIME IS NOT OPTIONAL. `--since=2026-08-18` returns 0 on a repository with 119
+    // commits that same day; `--since=2026-08-18T00:00` returns all 119. Measured here, on
+    // this repo, minutes after committing to it. A bare ISO date is parsed by approxidate in a
+    // way that excludes the day it names, and it fails SILENTLY -- the briefing would have
+    // reported "nothing moved" on a day with thirty commits, which is a flattering lie rather
+    // than an error.
+    const inWindow = since ? git(['rev-list', '--count', `--since=${since}T00:00`, 'HEAD']) : null;
+    const total = git(['rev-list', '--count', 'HEAD']);
+    const last = git(['log', '-1', '--format=%cd|%s', '--date=format:%Y-%m-%d %H:%M']);
+    if (total === null) {
+      unmeasurable.push({ id: p.id, name: p.name, track: p.track, why: 'git would not answer' });
+      continue;
+    }
+    const [lastAt, lastSubject] = String(last || '|').split('|');
+    const n = Number(inWindow || 0);
+    const row = {
+      id: p.id,
+      name: p.name,
+      track: p.track,
+      commits: n,
+      total: Number(total),
+      lastAt: lastAt || null,
+      lastSubject: (lastSubject || '').slice(0, 72),
+      uncommitted: (git(['status', '--porcelain']) || '').split('\n').filter(Boolean).length,
+    };
+    if (n > 0) moved.push(row); else quiet.push(row);
+  }
+
+  moved.sort((a, b) => b.commits - a.commits);
+  quiet.sort((a, b) => String(b.lastAt).localeCompare(String(a.lastAt)));
+
+  return {
+    since,
+    moved,
+    quiet,
+    unmeasurable,
+    totalCommits: moved.reduce((a, r) => a + r.commits, 0),
+    note: 'Progress is commits in the window. Projects with no repository are listed as '
+      + 'unmeasurable, never as zero: work there is real and simply invisible to this.',
+  };
+}
+
+
 module.exports = router;
 module.exports.PROJECTS = PROJECTS;
+module.exports.progressSince = progressSince;

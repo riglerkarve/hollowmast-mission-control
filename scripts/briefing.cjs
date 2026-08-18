@@ -64,6 +64,7 @@ const income = require('../server/routes/income');
 const budget = require('../server/routes/budget');
 const safety = require('../server/routes/safety');
 const machine = require('../server/routes/machine');
+const projects = require('../server/routes/projects');
 const goals = require('../server/routes/goals');
 const alerts = require('../server/routes/alerts');
 const analytics = require('../server/routes/analytics');
@@ -231,11 +232,13 @@ function gatherFacts() {
     authorised: ask(() => safety.authorisedThisMonth()),
   };
   const pressure = ask(() => machine.pressureNow());
+  const projectsProgress = ask(() => projects.progressSince(sinceStamp));
   const goalSteps = ask(() => goals.nextSteps());
   const alertsRaised = ask(() => alerts.raisedSince(sinceStamp));
   const sitesDown = ask(() => analytics.notOk());
 
   return {
+    projects: projectsProgress,
     earned,
     moneyGuard,
     pressure,
@@ -369,6 +372,35 @@ function render(facts, prose) {
     // is how a reader learns to skip the section.
     const sd = facts.scheduleDue;
     if (sd && !sd.error && (sd.overdue.length || sd.upcoming.length)) {
+    // PROJECTS. Owner request: the briefing should cover all of them, not just this one.
+    //
+    // Progress is commits, which is a deliberate narrowing: a commit is a fact with a
+    // timestamp that nobody has to remember to record. A percent-complete or an "on track"
+    // would be a weighting I chose, presented back as a measurement.
+    const pr = facts.projects;
+    if (pr && !pr.error) {
+      L.push('## Projects\n');
+      if (pr.moved.length) {
+        for (const m of pr.moved) {
+          L.push(`- **${m.name}** (${m.track}) — ${m.commits} commit${m.commits === 1 ? '' : 's'}`
+            + (m.uncommitted ? `, ${m.uncommitted} uncommitted` : '')
+            + (m.lastSubject ? `\n  _${m.lastSubject}_` : ''));
+        }
+      } else {
+        L.push('- Nothing committed anywhere today.');
+      }
+      if (pr.quiet.length) {
+        L.push(`- Quiet: ${pr.quiet.map((q) => `${q.name} (last ${q.lastAt || 'unknown'})`).join(', ')}`);
+      }
+      // Never folded into "no progress". A project with no repository and a project nobody
+      // touched are indistinguishable by commit count, and calling both zero libels the first.
+      if (pr.unmeasurable.length) {
+        L.push(`- Not measurable here — no version control, so work on them is invisible rather`
+          + ` than absent: ${pr.unmeasurable.map((u) => u.name).join(', ')}`);
+      }
+      L.push('');
+    }
+
       L.push('## Diary\n');
       for (const e of sd.overdue) {
         L.push(`- **OVERDUE** ${e.title}${e.day ? ` — was ${e.day}` : ''}`);

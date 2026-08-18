@@ -20,16 +20,38 @@ const navItems = document.querySelectorAll('.nav-item');
 
 let activePanel = null;
 
+// Two switches can be in flight at once, because this function AWAITS the dynamic import
+// before it mounts. Leave a panel and come straight back while its module is still loading
+// and the two calls interleave: the second one mounts, then the first one's import resolves
+// and mounts ON TOP, overwriting the panel that legitimately won.
+//
+// The panel that got clobbered then crashes, and its own generation guard cannot see this,
+// because the damage was done by a different module writing to the shared root. Measured:
+// with an uncached module and a 0 ms gap between clicks, projects.js threw
+// "Cannot set properties of null (setting 'textContent')" and #prjCount was absent from
+// the DOM entirely. It only reproduces on a FIRST visit -- once the module is cached the
+// await resolves in a microtask and the window closes, which is why it reads as random.
+let mountToken = 0;
+
 async function mountPanel(name) {
   const loader = PANELS[name];
   if (!loader) return;
+  const token = ++mountToken;
 
   if (activePanel && typeof activePanel.unmount === 'function') {
     activePanel.unmount();
   }
+  // Nothing is mounted from here until we mount. Without this, a superseded call that
+  // returns below would leave activePanel pointing at a panel it already unmounted, and
+  // the next switch would unmount it a second time.
+  activePanel = null;
   panelRoot.innerHTML = '';
 
   const mod = await loader();
+  // Superseded while importing. The switch that overtook us has already unmounted us,
+  // cleared the root and mounted its own panel; writing now would overwrite it.
+  if (token !== mountToken) return;
+
   activePanel = mod.default;
   activePanel.mount(panelRoot);
 

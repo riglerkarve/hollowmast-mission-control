@@ -92,7 +92,14 @@ async function api(p, opts) {
 
 // Rendered from the server's fixed block, never from anything derived. It is drawn before
 // the data loads and is not removed or reordered by any later render.
+//
+// The guard is not a formality: this runs from a promise started in mount(), so leaving
+// the panel before /support answers used to throw here. Returning when the panel is gone
+// is not hiding a failure -- there is no DOM left to draw into. The failure that MUST
+// stay visible is /support not answering while the panel IS open, and that is the catch
+// block in mount(), which falls back to the fixed text rather than to nothing.
 function renderSupport(s) {
+  if (!root) return;
   root.querySelector('#wbSupport').innerHTML = `
     <h2 class="wb-h2">If you need to talk to someone</h2>
     <p class="wb-emergency">${esc(s.emergency)}</p>
@@ -150,13 +157,16 @@ async function save(mood) {
 }
 
 async function loadPatterns() {
+  if (!root) return;
   const el = root.querySelector('#wbPatterns');
   let p;
   try { p = await api('/patterns'); } catch (err) {
+    if (!root) return;
     el.innerHTML = `<p class="wb-error">Could not read your entries: ${esc(err.message)}</p>`;
     return;
   }
 
+  if (!root) return;                       // left the panel while /patterns was in flight
   if (p.support) renderSupport(p.support);
 
   if (p.state === 'empty') {
@@ -202,9 +212,11 @@ async function loadPatterns() {
 }
 
 async function loadEntries() {
+  if (!root) return;
   const el = root.querySelector('#wbEntries');
   let d;
   try { d = await api('/entries?limit=30'); } catch (err) {
+    if (!root) return;                     // left the panel while the fetch was in flight
     el.innerHTML = `<p class="wb-error">Could not load entries: ${esc(err.message)}</p>`;
     return;
   }
@@ -239,6 +251,7 @@ export default {
     // Draw the support card immediately from the server's fixed block, before any data
     // loads and regardless of whether it loads at all.
     api('/support').then(renderSupport).catch(() => {
+      if (!root) return;
       root.querySelector('#wbSupport').innerHTML =
         '<h2 class="wb-h2">If you need to talk to someone</h2>'
         + '<p class="wb-emergency">If life is in danger, call 999 or go to A&amp;E.</p>'

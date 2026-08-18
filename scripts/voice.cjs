@@ -61,7 +61,8 @@ function line() {
   try {
     const up = schedule.upcoming(2);
     if (up.overdue && up.overdue.length) {
-      bits.push(`${up.overdue.length} thing${up.overdue.length === 1 ? '' : 's'} on the schedule ${up.overdue.length === 1 ? 'is' : 'are'} past its day.`);
+      const n = up.overdue.length;
+      bits.push(`${n} thing${n === 1 ? ' on the schedule is past its day' : 's on the schedule are past their day'}.`);
     }
   } catch { /* same */ }
 

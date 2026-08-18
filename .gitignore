@@ -20,6 +20,10 @@ data/*.db-wal
 # 41 MB of VACUUM INTO copies of exactly the same thing.
 backups/
 
+# Session telemetry for this workspace (backlog #6). Derived metrics about sessions that
+# read the bank ledger; the owner chose gitignored over committed on 18 Aug.
+data/telemetry/
+
 # Runtime state, rewritten every 30s. Noise in a diff and useless in history.
 data/heartbeat.json
 data/watchdog-state.json

@@ -275,6 +275,7 @@ function wire(el) {
 
 // --------------------------------------------------------------------------- load
 async function load() {
+  if (!root) return;   // may be CALLED after teardown, not only resumed after it
   const mine = token;
   let d;
   try {

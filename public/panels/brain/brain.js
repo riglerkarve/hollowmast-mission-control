@@ -111,6 +111,7 @@ function renderList() {
 }
 
 async function selectMemory(name) {
+  if (!root) return;   // may be CALLED after teardown, not only resumed after it
   selected = name;
   renderList();
   const detail = root.querySelector('#brainDetail');
@@ -118,6 +119,7 @@ async function selectMemory(name) {
 
   let m;
   try { m = await api(`/${encodeURIComponent(name)}`); } catch (err) {
+    if (!root) return;   // the panel was torn down mid-await; root is null now
     detail.innerHTML = `<p class="brain-error">Could not load this memory: ${esc(err.message)}</p>`;
     return;
   }
@@ -157,11 +159,14 @@ async function selectMemory(name) {
 // Backlog #M2. The owner's own entries. This is the only place in the whole panel that
 // WRITES something that is not a flag.
 async function renderNotes() {
+  if (!root) return;   // may be CALLED after teardown, not only resumed after it
   const box = root.querySelector('#brainNotes');
   let d;
   try {
     d = await api('/notes');
+    if (!root) return;   // the panel was torn down mid-await; root is null now
   } catch (err) {
+    if (!root) return;   // the panel was torn down mid-await; root is null now
     box.innerHTML = `<p class="brain-error">Could not read your entries: ${esc(err.message)}
       — that is a failure to look, not a report that you have written none.</p>`;
     return;
@@ -193,8 +198,10 @@ async function renderNotes() {
       b.disabled = true;
       try {
         await api(`/notes/${b.dataset.id}`, { method: 'DELETE', headers: { 'x-mc-by': 'you' } });
+        if (!root) return;   // the panel was torn down mid-await; root is null now
         renderNotes();
       } catch (err) {
+        if (!root) return;   // the panel was torn down mid-await; root is null now
         b.disabled = false;
         root.querySelector('#brainNoteResult').innerHTML = `<p class="brain-error">${esc(err.message)}</p>`;
       }
@@ -203,6 +210,7 @@ async function renderNotes() {
 }
 
 async function setFlag(name, status) {
+  if (!root) return;   // may be CALLED after teardown, not only resumed after it
   const note = root.querySelector('#brainNote')?.value || '';
   const out = root.querySelector('#brainFlagResult');
   out.textContent = 'saving…';
@@ -218,7 +226,9 @@ async function setFlag(name, status) {
     // then immediately destroyed it in the re-render — the confirmation was written, and
     // unreadable, which is indistinguishable from the flag not being saved at all.
     await load(root.querySelector('#brainSearch').value);
+    if (!root) return;   // the panel was torn down mid-await; root is null now
     await selectMemory(name);
+    if (!root) return;   // the panel was torn down mid-await; root is null now
 
     // Report what actually reached Claude, not merely that the click was received.
     const after = root.querySelector('#brainFlagResult');
@@ -229,12 +239,14 @@ async function setFlag(name, status) {
       after.className = 'brain-result ok';
     }
   } catch (err) {
+    if (!root) return;   // the panel was torn down mid-await; root is null now
     out.textContent = `Not saved: ${err.message}`;
     out.className = 'brain-result bad';
   }
 }
 
 async function load(q) {
+  if (!root) return;   // may be CALLED after teardown, not only resumed after it
   const stats = root.querySelector('#brainStats');
   let data;
   try {
@@ -245,7 +257,9 @@ async function load(q) {
     if (sortBy && sortBy !== 'name') params.set('sort', sortBy);
     const qs = params.toString();
     data = await api(`/${qs ? `?${qs}` : ''}`);
+    if (!root) return;   // the panel was torn down mid-await; root is null now
   } catch (err) {
+    if (!root) return;   // the panel was torn down mid-await; root is null now
     // 503 means the directory could not be read. That is a different fact from "there
     // are no memories", and the panel says which.
     root.querySelector('#brainList').innerHTML =

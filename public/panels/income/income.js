@@ -218,6 +218,7 @@ function renderStreams(d) {
 
 // ------------------------------------------------------------------ entries
 async function loadEntries() {
+  if (!root) return;   // may be CALLED after teardown, not only resumed after it
   const mine = token;
   const el = root.querySelector('#incEntries');
   let d;
@@ -251,6 +252,7 @@ async function loadEntries() {
 
 // ------------------------------------------------------------------ load
 async function load() {
+  if (!root) return;   // may be CALLED after teardown, not only resumed after it
   const mine = token;
   let d;
   try {

@@ -117,6 +117,7 @@ function renderSupport(s) {
 }
 
 async function save(mood) {
+  if (!root) return;   // may be CALLED after teardown, not only resumed after it
   const noteEl = root.querySelector('#wbNote');
   // Free text, deliberately. A preset list of self-care items is a list you can fail, and
   // on a bad day that reads as an accusation. Nothing schedules this, nothing counts it,

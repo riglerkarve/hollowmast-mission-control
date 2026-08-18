@@ -29,10 +29,13 @@ async function api(path, opts) {
 }
 
 async function load() {
+  if (!root) return;   // may be CALLED after teardown, not only resumed after it
   let d;
   try {
     d = await api('/');
+    if (!root) return;   // the panel was torn down mid-await; root is null now
   } catch (err) {
+    if (!root) return;   // the panel was torn down mid-await; root is null now
     root.querySelector('#atSummary').innerHTML = `<p class="empty-hint">Could not read the atlas: ${esc(err.message)}</p>`;
     return;
   }
@@ -78,6 +81,7 @@ async function load() {
       });
       load();
     } catch (err) {
+      if (!root) return;   // the panel was torn down mid-await; root is null now
       b.classList.toggle('is-visited');
       root.querySelector('#atSummary').insertAdjacentHTML('afterbegin',
         `<p class="empty-hint">Could not save: ${esc(err.message)}</p>`);

@@ -128,10 +128,12 @@ const priClass = (p) => `pri-${String(p || '').toLowerCase()}`;
 
 // --------------------------------------------------------------------------- summary
 async function loadSummary() {
+  if (!root) return;   // may be CALLED after teardown, not only resumed after it
   const el = root.querySelector('#tdConstraint');
   const shape = root.querySelector('#tdShape');
   let d;
   try { d = await api('/'); } catch (err) { fail(el, 'the backlog summary', err); fail(shape, 'the cluster shape', err); return; }
+    if (!root) return;   // the panel was torn down mid-await; root is null now
 
   if (d.state === 'empty') {
     root.querySelector('#tdBadge').textContent = '0 items';
@@ -250,6 +252,7 @@ function itemHtml(i) {
 }
 
 async function loadItems() {
+  if (!root) return;   // may be CALLED after teardown, not only resumed after it
   const el = root.querySelector('#tdList');
   const next = root.querySelector('#tdNext');
   const q = new URLSearchParams({ view });
@@ -257,6 +260,7 @@ async function loadItems() {
 
   let d;
   try { d = await api(`/items?${q}`); } catch (err) { fail(el, 'the item list', err); fail(next, 'what is actionable now', err); return; }
+    if (!root) return;   // the panel was torn down mid-await; root is null now
 
   root.querySelector('#tdListHead').textContent = VIEWS[view].heading;
 
@@ -286,6 +290,7 @@ async function loadItems() {
 }
 
 function renderFilters() {
+  if (!root) return;   // called from an async path; the panel may already be torn down
   const el = root.querySelector('#tdFilters');
   const opts = (name, list, cur) => `<select class="td-in td-filter" data-filter="${name}">
       <option value="">all ${esc(name)}</option>
@@ -316,11 +321,13 @@ async function reloadAll() {
 // Delegated, so there is exactly one listener per event type to remove on unmount and
 // nothing to rebind after a render.
 async function handleClick(ev) {
+  if (!root) return;   // may be CALLED after teardown, not only resumed after it
   const shapeBtn = ev.target.closest('.td-shape-name');
   if (shapeBtn) {
     filters.cluster = filters.cluster === shapeBtn.dataset.cluster ? '' : shapeBtn.dataset.cluster;
     renderFilters();
     await loadItems();
+    if (!root) return;   // the panel was torn down mid-await; root is null now
     return;
   }
 
@@ -329,6 +336,7 @@ async function handleClick(ev) {
     view = tab.dataset.view;
     root.querySelectorAll('.mode-tab').forEach((t) => t.classList.toggle('active', t === tab));
     await loadItems();
+    if (!root) return;   // the panel was torn down mid-await; root is null now
     return;
   }
 
@@ -353,6 +361,7 @@ async function handleClick(ev) {
       filters = { status: '', cluster: '', priority: '' };
       renderFilters();
       await loadItems();
+      if (!root) return;   // the panel was torn down mid-await; root is null now
       return;
     }
     if (!li) return;
@@ -364,6 +373,7 @@ async function handleClick(ev) {
         body: JSON.stringify({ status: act.dataset.to }),
       });
       await reloadAll();
+      if (!root) return;   // the panel was torn down mid-await; root is null now
     } else if (act.dataset.act === 'note') {
       // eslint-disable-next-line no-alert
       const note = window.prompt(`Note on ${id}:`);
@@ -373,18 +383,23 @@ async function handleClick(ev) {
         body: JSON.stringify({ note }),
       });
       await loadItems();
+      if (!root) return;   // the panel was torn down mid-await; root is null now
     } else if (act.dataset.act === 'delete') {
       // eslint-disable-next-line no-alert
       if (!window.confirm(`Delete ${id}? The seed runs once, so it will not come back — declining keeps the row and its reasoning.`)) return;
       await api(`/items/${encodeURIComponent(id)}`, { method: 'DELETE' });
+      if (!root) return;   // the panel was torn down mid-await; root is null now
       await reloadAll();
+      if (!root) return;   // the panel was torn down mid-await; root is null now
     }
   } catch (err) {
+    if (!root) return;   // the panel was torn down mid-await; root is null now
     fail(root.querySelector('#tdList'), 'the change you just made', err);
   }
 }
 
 async function handleChange(ev) {
+  if (!root) return;   // may be CALLED after teardown, not only resumed after it
   const f = ev.target.closest('.td-filter');
   if (f) {
     filters[f.dataset.filter] = f.value;
@@ -393,6 +408,7 @@ async function handleChange(ev) {
     // through the selects and have no way back that looks like one.
     renderFilters();
     await loadItems();
+    if (!root) return;   // the panel was torn down mid-await; root is null now
     return;
   }
   const p = ev.target.closest('.td-pri');
@@ -404,12 +420,15 @@ async function handleChange(ev) {
       body: JSON.stringify({ priority: p.value }),
     });
     await reloadAll();
+    if (!root) return;   // the panel was torn down mid-await; root is null now
   } catch (err) {
+    if (!root) return;   // the panel was torn down mid-await; root is null now
     fail(root.querySelector('#tdList'), 'the priority change', err);
   }
 }
 
 async function handleSubmit(ev) {
+  if (!root) return;   // may be CALLED after teardown, not only resumed after it
   if (!ev.target.closest('#tdAdd')) return;
   ev.preventDefault();
   const val = (sel) => root.querySelector(sel).value.trim();
@@ -429,7 +448,9 @@ async function handleSubmit(ev) {
     });
     ['#tdTitle', '#tdRationale', '#tdCluster', '#tdEffort'].forEach((s) => { root.querySelector(s).value = ''; });
     await reloadAll();
+    if (!root) return;   // the panel was torn down mid-await; root is null now
   } catch (err) {
+    if (!root) return;   // the panel was torn down mid-await; root is null now
     fail(root.querySelector('#tdList'), 'the new item', err);
   }
 }

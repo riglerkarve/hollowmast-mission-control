@@ -456,6 +456,7 @@ function renderCompose() {
 // fails the second is never sent — a meal pointing at nothing would look like a meal whose
 // figures are unknown, which is a different and untrue statement.
 async function logMeal() {
+  if (!root) return;   // may be CALLED after teardown, not only resumed after it
   const mine = token;
   const label = (root.querySelector('#mtLabel').value || '').trim();
   if (!label) return;
@@ -717,6 +718,7 @@ async function doLookup(q) {
 // Loads the day and the targets together — both feed one render, and fetching them apart
 // would let the totals draw against a target that had just been cleared.
 async function loadDay() {
+  if (!root) return;   // may be CALLED after teardown, not only resumed after it
   const mine = token;
   let d; let t;
   try {
@@ -741,6 +743,7 @@ async function loadDay() {
 
 // --------------------------------------------------------------------------- load
 async function load() {
+  if (!root) return;   // may be CALLED after teardown, not only resumed after it
   const mine = token;
   let d;
   try {

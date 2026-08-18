@@ -51,12 +51,16 @@ async function api(p, opts) {
 }
 
 async function loadBudget() {
+  if (!root) return;   // may be CALLED after teardown, not only resumed after it
   let d;
   try { d = await api('/'); } catch (err) {
+    if (!root) return;   // the panel was torn down mid-await; root is null now
     root.querySelector('#bgLines').innerHTML = `<p class="bg-error">Could not load the budget: ${esc(err.message)}</p>`;
     return null;
   }
 
+  if (!root) return;   // the try above spanned an await on ONE line, so the after-await
+                       // rule (which needed a trailing semicolon) never fired here.
   root.querySelector('#bgMonth').textContent = d.month;
 
   if (d.state === 'no-budget') {
@@ -66,6 +70,7 @@ async function loadBudget() {
     root.querySelector('#bgDerive').addEventListener('click', async (e) => {
       e.target.disabled = true; e.target.textContent = 'deriving…';
       await api('/derive', { method: 'POST', headers: { 'content-type': 'application/json', 'x-mc-by': 'you' }, body: '{"months":12}' });
+      if (!root) return;   // the panel was torn down mid-await; root is null now
       load();
     });
     root.querySelector('#bgTotals').innerHTML = '';
@@ -133,6 +138,7 @@ async function loadBudget() {
         });
         load();
       } catch (err) {
+        if (!root) return;   // the panel was torn down mid-await; root is null now
         root.querySelector('#bgLines').insertAdjacentHTML('afterbegin',
           `<p class="bg-error">Could not save ${esc(inp.dataset.cat)}: ${esc(err.message)}</p>`);
       }
@@ -194,9 +200,11 @@ function scopeSplit(d) {
 }
 
 async function loadWishlist() {
+  if (!root) return;   // may be CALLED after teardown, not only resumed after it
   const el = root.querySelector('#bgWish');
   let d;
   try { d = await api('/wishlist'); } catch (err) {
+    if (!root) return;   // the panel was torn down mid-await; root is null now
     el.innerHTML = `<p class="bg-error">Could not load the wishlist: ${esc(err.message)}</p>`;
     return;
   }
@@ -268,7 +276,9 @@ async function loadWishlist() {
     let p;
     try {
       p = await api(`/wishlist/${b.dataset.prop}/proposition`);
+      if (!root) return;   // the panel was torn down mid-await; root is null now
     } catch (err) {
+      if (!root) return;   // the panel was torn down mid-await; root is null now
       box.innerHTML = `<p class="bg-error">Could not build the proposition: ${esc(err.message)}</p>`;
       return;
     }
@@ -309,6 +319,7 @@ async function loadWishlist() {
   }));
   el.querySelectorAll('.bg-del').forEach((b) => b.addEventListener('click', async () => {
     await api(`/wishlist/${b.dataset.del}`, { method: 'DELETE' });
+    if (!root) return;   // the panel was torn down mid-await; root is null now
     load();
   }));
 }

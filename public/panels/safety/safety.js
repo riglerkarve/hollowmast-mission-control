@@ -106,11 +106,14 @@ const when = (iso) => {
 };
 
 async function renderDevices() {
+  if (!root) return;   // may be CALLED after teardown, not only resumed after it
   const box = root.querySelector('#sfDevices');
   let d;
   try {
     d = await gateApi('/devices');
+    if (!root) return;   // the panel was torn down mid-await; root is null now
   } catch (err) {
+    if (!root) return;   // the panel was torn down mid-await; root is null now
     box.innerHTML = `<p class="sf-banner">Could not read the device list: ${esc(err.message)}
       — that is a failure to look, not a report that no devices are enrolled.</p>`;
     return;
@@ -160,6 +163,7 @@ async function renderDevices() {
         }
         renderDevices();
       } catch (err) {
+        if (!root) return;   // the panel was torn down mid-await; root is null now
         b.disabled = false;
         b.textContent = 'Revoke';
         box.insertAdjacentHTML('afterbegin', `<p class="sf-banner">${esc(err.message)}</p>`);
@@ -234,6 +238,7 @@ function renderLog(d) {
 }
 
 async function load() {
+  if (!root) return;   // may be CALLED after teardown, not only resumed after it
   // Called FIRST and not awaited into the guard's try/catch. The device list comes from a
   // different route and must not vanish because the safety API had a bad day — two
   // independent things failing together is how one outage looks like two.
@@ -242,7 +247,9 @@ async function load() {
   let d;
   try {
     d = await api('/');
+    if (!root) return;   // the panel was torn down mid-await; root is null now
   } catch (err) {
+    if (!root) return;   // the panel was torn down mid-await; root is null now
     root.querySelector('#sfState').innerHTML = `<p class="sf-banner">Could not read the guard: ${esc(err.message)}</p>`;
     return;
   }

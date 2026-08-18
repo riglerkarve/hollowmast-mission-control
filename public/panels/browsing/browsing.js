@@ -25,12 +25,16 @@ const TEMPLATE = `
 `;
 
 async function load() {
+  if (!root) return;   // may be CALLED after teardown, not only resumed after it
   let d;
   try {
     const r = await fetch('/api/browsing');
+    if (!root) return;   // the panel was torn down mid-await; root is null now
     d = await r.json();
+    if (!root) return;   // the panel was torn down mid-await; root is null now
     if (!r.ok) throw new Error(d.error || `HTTP ${r.status}`);
   } catch (err) {
+    if (!root) return;   // the panel was torn down mid-await; root is null now
     root.querySelector('#brTop').innerHTML = `<p class="empty-hint">Could not read browsing: ${esc(err.message)}</p>`;
     return;
   }

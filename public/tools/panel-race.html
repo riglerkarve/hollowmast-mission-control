@@ -1,0 +1,136 @@
+<!doctype html>
+<meta charset="utf-8">
+<title>Panel race — Mission Control</title>
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<link rel="stylesheet" href="/shell.css">
+<style>
+  body { margin: 0; padding: 1.25rem; background: var(--bg); color: var(--ink); font: 14px/1.5 system-ui, sans-serif; }
+  h1 { font-size: 1.15rem; margin: 0 0 .35rem; }
+  .lede { color: var(--muted); max-width: 64ch; margin: 0 0 1rem; }
+  button { font: inherit; padding: .45rem .8rem; border-radius: 6px; border: 1px solid var(--border); background: var(--card); color: var(--ink); cursor: pointer; }
+  button.primary { background: var(--accent-fill); color: #fff; border-color: transparent; }
+  button:disabled { opacity: .5; cursor: default; }
+  table { border-collapse: collapse; width: 100%; font-size: 13px; margin-top: 1rem; }
+  th, td { text-align: left; padding: .3rem .5rem; border-bottom: 1px solid var(--border); }
+  td.n { text-align: right; font-variant-numeric: tabular-nums; }
+  .bad { color: #c0392b; font-weight: 600; }
+  .ok { color: var(--muted); }
+  .box { border: 1px solid var(--border); border-radius: 8px; padding: .75rem 1rem; background: var(--card); margin-bottom: 1rem; }
+  .box.stop { border-color: #c0392b; }
+  code { font-family: ui-monospace, Consolas, monospace; font-size: 12px; }
+  #sink { position: absolute; left: -20000px; top: 0; width: 1200px; }
+</style>
+
+<h1>Panel race</h1>
+<p class="lede">Mounts every panel and tears it down <em>immediately</em>, while its first fetch is
+still in flight, then waits for that fetch to land. Counts what throws.</p>
+
+<div class="box">
+  <b>Why this page exists rather than clicking around.</b> The failure it hunts —
+  <code>unmount()</code> sets <code>root = null</code>, the fetch resolves, the continuation
+  dereferences null — <b>only reproduces with a COLD module</b>. Once a panel module is cached the
+  dynamic import resolves in a microtask, the teardown window closes, and the bug is invisible.
+  So every run here imports with a fresh <code>?v=</code>, which is a different URL and therefore a
+  different module. Clicking around a warm dashboard measures nothing and reads as good news.
+</div>
+
+<button id="run" class="primary">Run</button>
+<button id="clear">Clear</button>
+<span id="status" class="ok"></span>
+<div id="out"></div>
+<div id="sink"></div>
+
+<script type="module">
+const $ = (s) => document.querySelector(s);
+const sink = $('#sink');
+
+// Read the panel list from the shell's own registry so a panel added later is covered here
+// without editing this file.
+const shell = await fetch('/shell.js').then((r) => r.text());
+const NAMES = [...shell.matchAll(/^\s{2}([a-z0-9]+):\s*\(\)\s*=>\s*import/gm)].map((m) => m[1]);
+
+// Every rejection during a run is attributed to the panel that was in flight at the time.
+let current = null;
+const hits = [];
+addEventListener('unhandledrejection', (e) => {
+  const s = (e.reason && e.reason.stack) || String(e.reason);
+  const at = (s.match(/panels\/[a-z0-9]+\/[a-z0-9]+\.js:\d+:\d+/) || ['?'])[0];
+  hits.push({ panel: current, at, msg: String((e.reason && e.reason.message) || e.reason).slice(0, 70) });
+  e.preventDefault();          // keep the page's own console readable
+});
+
+const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
+
+async function race(name, stamp) {
+  current = name;
+  const before = hits.length;
+  let mod;
+  try {
+    mod = await import(`/panels/${name}/${name}.js?v=${stamp}`);   // COLD: a new URL every run
+  } catch (err) {
+    return { name, cold: false, errors: 0, note: 'import failed: ' + err.message.slice(0, 50) };
+  }
+  const p = mod.default;
+  if (!p || typeof p.mount !== 'function') return { name, cold: true, errors: 0, note: 'no mount()' };
+
+  const host = document.createElement('div');
+  sink.appendChild(host);
+  try { p.mount(host); } catch (err) { hits.push({ panel: name, at: 'mount', msg: err.message.slice(0, 70) }); }
+  // Tear down IMMEDIATELY. The panel's first fetch cannot have resolved yet, so this is the
+  // tightest form of the race and reproduces every time the guard is missing.
+  try { if (typeof p.unmount === 'function') p.unmount(); } catch { /* counted below if it rejects */ }
+  host.remove();
+
+  await sleep(900);            // long enough for the abandoned fetch to land and throw
+  return { name, cold: true, errors: hits.length - before, note: '' };
+}
+
+async function run() {
+  $('#run').disabled = true;
+  hits.length = 0;
+
+  // REVALIDATE EVERY PANEL FILE FIRST. The ?v= below only busts the module this harness
+  // imports directly; a panel that imports ANOTHER panel does so at an un-busted URL, so
+  // focus -> todo was being served pre-fix bytes out of the HTTP cache and reporting a line
+  // number from code no longer on disk. cache:'reload' forces a revalidation and refreshes
+  // the entry the nested import will use. Without this the harness has the exact blind spot
+  // it exists to remove.
+  $('#status').textContent = 'revalidating modules…';
+  await Promise.all(NAMES.concat(['todo']).map((n) =>
+    fetch(`/panels/${n}/${n}.js`, { cache: 'reload' }).catch(() => {})));
+  const stamp = String(Math.random()).slice(2) + '-' + performance.now().toFixed(0);
+  const rows = [];
+  for (const n of NAMES) {
+    $('#status').textContent = `racing ${n}…`;
+    rows.push(await race(n, stamp));
+  }
+  $('#status').textContent = '';
+  $('#run').disabled = false;
+  render(rows);
+}
+
+function render(rows) {
+  const total = rows.reduce((a, r) => a + r.errors, 0);
+  const bad = rows.filter((r) => r.errors > 0);
+  let html = `<div class="box ${total ? 'stop' : ''}"><b>${total}</b> rejection(s) across
+    <b>${rows.length}</b> panels — <b>${bad.length}</b> panel(s) affected.
+    ${total ? '' : 'A zero here is only meaningful if a previous run on the same code was non-zero: '
+      + 'establish the BEFORE number before trusting an AFTER.'}</div>`;
+  html += '<table><thead><tr><th>panel</th><th class="n">rejections</th><th>where</th></tr></thead><tbody>'
+    + rows.map((r) => {
+      const where = hits.filter((h) => h.panel === r.name).map((h) => h.at).slice(0, 2).join(', ');
+      return `<tr><td>${r.name}</td><td class="n ${r.errors ? 'bad' : 'ok'}">${r.errors}</td>`
+        + `<td><code>${where || r.note || '—'}</code></td></tr>`;
+    }).join('') + '</tbody></table>';
+  $('#out').innerHTML = html;
+  window.__raceResult = { total, affected: bad.map((r) => r.name), rows };
+  window.__hits = hits;   // full reason text, so a site the regex cannot place is still readable
+}
+
+$('#run').addEventListener('click', () => run().catch((e) => {
+  $('#run').disabled = false;
+  $('#out').innerHTML = `<div class="box stop"><b>The harness itself failed</b>: <code>${e.message}</code>.
+    Nothing was measured — this is not a pass.</div>`;
+}));
+$('#clear').addEventListener('click', () => { $('#out').innerHTML = ''; hits.length = 0; });
+</script>

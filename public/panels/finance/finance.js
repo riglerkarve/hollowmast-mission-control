@@ -109,6 +109,7 @@ async function api(p) {
 }
 
 function renderTotals(d) {
+  if (!root) return;   // called from an async path; the panel may already be torn down
   const net = d.incomePence - d.totalPence;
   const prevNet = d.prevIncomePence - d.prevTotalPence;
   const arrow = (now, was) => {
@@ -135,6 +136,7 @@ function renderTotals(d) {
 }
 
 function renderCategories(d) {
+  if (!root) return;   // called from an async path; the panel may already be torn down
   const el = root.querySelector('#finCats');
   const live = d.categories.filter((c) => c.pence > 0 || c.wasPence > 0);
 
@@ -187,6 +189,7 @@ function renderCategories(d) {
 }
 
 function renderCash(d) {
+  if (!root) return;   // called from an async path; the panel may already be torn down
   root.querySelector('#finCash').innerHTML = `
     <h2 class="fin-h2">Cash</h2>
     <p class="fin-cash-figure">${gbp(d.cash.pence)}</p>
@@ -204,11 +207,14 @@ function renderCash(d) {
 // comments on what anything is for. What it can honestly answer is which services are
 // still taking money and which quietly stopped.
 async function loadRecurring() {
+  if (!root) return;   // may be CALLED after teardown, not only resumed after it
   const box = root.querySelector('#finRecurring');
   let d;
   try {
     d = await api('/recurring');
+    if (!root) return;   // the panel was torn down mid-await; root is null now
   } catch (err) {
+    if (!root) return;   // the panel was torn down mid-await; root is null now
     box.innerHTML = `<p class="fin-error">Could not read the services audit: ${esc(err.message)}</p>`;
     return;
   }
@@ -267,11 +273,14 @@ async function loadRecurring() {
 // projection shown large with its residual in small print is the failure mode — it invites
 // reading the projection as income, which is exactly what it is not.
 async function loadForecast() {
+  if (!root) return;   // may be CALLED after teardown, not only resumed after it
   const box = root.querySelector('#finForecast');
   let d;
   try {
     d = await api('/forecast');
+    if (!root) return;   // the panel was torn down mid-await; root is null now
   } catch (err) {
+    if (!root) return;   // the panel was torn down mid-await; root is null now
     box.innerHTML = `<p class="fin-error">Could not compute the forecast: ${esc(err.message)}
       — a failure to compute, not a report that nothing comes in.</p>`;
     return;
@@ -327,11 +336,14 @@ async function loadForecast() {
 // the ledger, and holdings you typed. The staleness of each is shown, because a total
 // assembled from figures dated across three months is not a figure about today.
 async function loadWorth() {
+  if (!root) return;   // may be CALLED after teardown, not only resumed after it
   const box = root.querySelector('#finWorth');
   let d;
   try {
     d = await api('/net-worth');
+    if (!root) return;   // the panel was torn down mid-await; root is null now
   } catch (err) {
+    if (!root) return;   // the panel was torn down mid-await; root is null now
     box.innerHTML = `<p class="fin-error">Could not read holdings: ${esc(err.message)}
       — a failure to look, not a report that you have nothing.</p>`;
     return;
@@ -382,6 +394,7 @@ async function loadWorth() {
   box.querySelectorAll('[data-del]').forEach((b) => {
     b.addEventListener('click', async () => {
       await api(`/assets/${b.dataset.del}`, { method: 'DELETE', headers: { 'x-mc-by': 'you' } });
+      if (!root) return;   // the panel was torn down mid-await; root is null now
       loadWorth();
     });
   });
@@ -392,11 +405,14 @@ async function loadWorth() {
 // exposure has been misled, so the floor caveat is rendered at full size next to the
 // numbers rather than tucked under them.
 async function loadAccessLog() {
+  if (!root) return;   // may be CALLED after teardown, not only resumed after it
   const box = root.querySelector('#finAccess');
   let d;
   try {
     d = await api('/access-log');
+    if (!root) return;   // the panel was torn down mid-await; root is null now
   } catch (err) {
+    if (!root) return;   // the panel was torn down mid-await; root is null now
     // Could-not-look must not read like nothing-happened.
     box.innerHTML = `<p class="fin-error">Could not read the access log: ${esc(err.message)}
       — that is a failure to look, not a report that nothing read the ledger.</p>`;
@@ -438,11 +454,14 @@ async function loadAccessLog() {
 // test. This names credits whose counterparty resembles a name the ledger already calls
 // the owner, and it CHANGES NOTHING — there is no write path in the route or here.
 async function loadSuspects() {
+  if (!root) return;   // may be CALLED after teardown, not only resumed after it
   const box = root.querySelector('#finSuspects');
   let d;
   try {
     d = await api('/own-transfer-suspects');
+    if (!root) return;   // the panel was torn down mid-await; root is null now
   } catch (err) {
+    if (!root) return;   // the panel was torn down mid-await; root is null now
     box.innerHTML = `<p class="fin-error">Could not run the check: ${esc(err.message)}
       — that is a failure to look, not a report that nothing is mislabelled.</p>`;
     return;
@@ -514,11 +533,14 @@ async function loadSuspects() {
 // fifteenth tab for one input box would be the surface-you-must-feed the workspace gate
 // rejects. The capture is one field and the derivation returns in the same response.
 async function loadCash() {
+  if (!root) return;   // may be CALLED after teardown, not only resumed after it
   const box = root.querySelector('#finCash2');
   let d;
   try {
     d = await (await fetch('/api/cash', { headers: { 'x-mc-by': 'you' } })).json();
+    if (!root) return;   // the panel was torn down mid-await; root is null now
   } catch (err) {
+    if (!root) return;   // the panel was torn down mid-await; root is null now
     box.innerHTML = `<p class="fin-error">Could not read the cash state: ${esc(err.message)}
       — that is a failure to look, not a report that no cash was spent.</p>`;
     return;
@@ -584,11 +606,14 @@ async function loadCash() {
         body: JSON.stringify({ pounds: Number(v) }),
       });
       const out = await r.json();
+      if (!root) return;   // the panel was torn down mid-await; root is null now
       if (!r.ok) throw new Error(out.error || `HTTP ${r.status}`);
       // The value comes straight back rather than after a reload — that is the rule for the
       // manual capture that is genuinely unavoidable.
       await loadCash();
+      if (!root) return;   // the panel was torn down mid-await; root is null now
     } catch (err) {
+      if (!root) return;   // the panel was torn down mid-await; root is null now
       echo.textContent = `Not recorded: ${err.message}`;
       echo.className = 'fin-c2-echo fin-error';
     }
@@ -596,11 +621,14 @@ async function loadCash() {
 }
 
 async function load() {
+  if (!root) return;   // may be CALLED after teardown, not only resumed after it
   const notice = root.querySelector('#finNotice');
   let d;
   try {
     d = await api(`/spending?account=${encodeURIComponent(account)}${month ? `&month=${month}` : ''}`);
+    if (!root) return;   // the panel was torn down mid-await; root is null now
   } catch (err) {
+    if (!root) return;   // the panel was torn down mid-await; root is null now
     root.querySelector('#finCats').innerHTML =
       `<p class="fin-error">Could not load spending: ${esc(err.message)}</p>`;
     root.querySelector('#finTotals').innerHTML = '';

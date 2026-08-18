@@ -245,6 +245,7 @@ function render(d) {
 }
 
 async function load() {
+  if (!root) return;   // may be CALLED after teardown, not only resumed after it
   const mine = token;
   let d;
   try {
@@ -273,6 +274,7 @@ const patch = (path, payload) => api(path, {
 // through here so none of them can fail silently — and the page is left standing, because
 // what is on screen is still the last thing that was genuinely read.
 async function act(fn) {
+  if (!root) return;   // may be CALLED after teardown, not only resumed after it
   const mine = token;
   try {
     await fn();

@@ -518,6 +518,28 @@ router.get('/', (req, res) => {
 });
 
 // ------------------------------------------------------------------------ GET /items
+// The full rationale and every note for ONE item, fetched when the reader opens it.
+//
+// The list deliberately carries a 96-character teaser and a note COUNT (see below), so
+// this is where the rest lives. One item at a time is the right granularity: the panel
+// only ever expands one at a time, and 148 detail requests would only happen if somebody
+// opened all 148, which is not a thing anyone does.
+router.get('/items/:id/detail', (req, res) => {
+  const row = db.prepare(`SELECT *, ${AGE} FROM todo_items WHERE id = ?`).get(req.params.id);
+  if (!row) return res.status(404).json({ error: 'no such item' });
+  const notes = db
+    .prepare('SELECT * FROM todo_notes WHERE item_id = ? ORDER BY created_at, id')
+    .all(req.params.id)
+    .map(plain);
+  const item = plain(row);
+  res.json({
+    id: item.id,
+    // Named rationaleFull, not rationale, so it can never be confused with the teaser the
+    // list sends under the shorter name.
+    rationaleFull: item.rationale || null,
+    notes,
+  });
+});
 router.get('/items', (req, res) => {
   const view = VIEWS.includes(req.query.view) ? req.query.view : null;
   const where = [];
@@ -541,7 +563,26 @@ router.get('/items', (req, res) => {
 
   try {
     const rows = db.prepare(sql).all(...args).map(plain);
-    const notes = db.prepare('SELECT * FROM todo_notes ORDER BY created_at, id').all().map(plain);
+
+    // FULL TEXT IS NOT SENT WITH THE LIST. Measured 18 Aug: this endpoint returned 335 KB
+    // for 148 items — 56% notes, 28% rationale — and the panel shows a 96-character teaser
+    // with the rest inside a collapsed <details>. So a third of a megabyte was being sent
+    // in order to be hidden, on every mount, to a dashboard meant to be opened from a phone.
+    //
+    // Truncating the biggest offenders would not have worked: 106 of 148 items carry notes
+    // and the ten largest hold only 33% of the text, so the weight is spread rather than
+    // concentrated. The split has to be structural.
+    //
+    // ?detail=1 restores the old shape verbatim, so anything that genuinely needs
+    // everything can still ask for it in one request.
+    const detail = req.query.detail === '1';
+    const noteCounts = new Map();
+    for (const r of db.prepare('SELECT item_id, COUNT(*) AS n, MAX(created_at) AS last FROM todo_notes GROUP BY item_id').all()) {
+      noteCounts.set(r.item_id, { n: r.n, last: r.last });
+    }
+    const notes = detail
+      ? db.prepare('SELECT * FROM todo_notes ORDER BY created_at, id').all().map(plain)
+      : [];
     const byItem = new Map();
     for (const n of notes) {
       if (!byItem.has(n.item_id)) byItem.set(n.item_id, []);
@@ -554,14 +595,33 @@ router.get('/items', (req, res) => {
     const nextIds = new Set(act ? act.items.map((i) => i.id) : []);
     const startedIds = new Set(act ? act.started.map((i) => i.id) : []);
 
+    // 96 characters, because that is exactly what the panel renders as its teaser. Sending
+    // a different amount would mean the collapsed view and the expanded view disagree about
+    // where the sentence stops.
+    const TEASER = 96;
     const items = rows.map((r) => {
       const e = parseEffort(r.effort);
+      const nc = noteCounts.get(r.id) || { n: 0, last: null };
+      const why = String(r.rationale || '');
       return {
         ...r,
+        // The teaser replaces the field it is a teaser FOR, so a caller cannot render the
+        // truncated text believing it has the whole thing.
+        rationale: detail ? r.rationale : (why.length > TEASER ? `${why.slice(0, TEASER).trimEnd()}…` : why),
+        rationaleTruncated: !detail && why.length > TEASER,
+        noteCount: nc.n,
+        lastNoteAt: nc.last,
         effortHours: e.hours,
         effortKind: e.kind,
-        notes: byItem.get(r.id) || [],
-        noteCount: (byItem.get(r.id) || []).length,
+        // `notes` is OMITTED entirely in light mode rather than sent as []. An empty array
+        // states 'this item has no notes', which for 106 of 148 items would be false --
+        // absence of the key says 'not sent', which is true. noteCount carries the fact.
+        //
+        // The old `noteCount: (byItem.get(r.id) || []).length` lived HERE, after the one
+        // computed from the GROUP BY above, and silently won as the later duplicate key --
+        // so every count read 0 while lastNoteAt from the same row read correctly. A
+        // duplicate key in an object literal is not an error and not a warning.
+        notes: detail ? (byItem.get(r.id) || []) : undefined,
         seeded: r.source === 'orig' || r.source === 'new',
         isNext: nextIds.has(r.id),
         isStarted: startedIds.has(r.id),

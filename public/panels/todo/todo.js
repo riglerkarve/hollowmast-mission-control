@@ -226,18 +226,11 @@ function itemHtml(i) {
         ${i.isNext && i.status === 'open' ? '<span class="td-state next">next up</span>' : ''}
       </div>
       ${why ? `
-        <details class="td-why">
+        <details class="td-why" data-detail="${esc(String(i.id))}">
           <summary><span class="td-teaser">${esc(teaser)}</span></summary>
-          <p class="td-why-text">${esc(why)}</p>
-          <p class="td-why-label">Editorial judgement, written when the item was triaged — not a score. Argue with it.</p>
+          <div class="td-why-body"><p class="td-dim">reading…</p></div>
         </details>` : '<p class="td-why-none td-dim">No reasoning recorded for this one.</p>'}
-      ${i.notes.length ? `<ul class="td-notes">${i.notes.map((n) => `
-        <li${n.superseded_by ? ' class="td-note-old"' : ''}>${n.superseded_by
-    // A superseded note is NOT hidden and NOT edited — the record stands. It is marked, so
-    // a reader who stops here is told something later corrects it, instead of walking away
-    // with a figure that was withdrawn an hour after it was written.
-    ? `<span class="td-note-flag">superseded by the later note</span> ` : ''}${
-  esc(n.note)} <span class="td-dim">${esc(n.created_at)}</span></li>`).join('')}</ul>` : ''}
+      ${i.noteCount ? `<p class="td-note-count td-dim">${i.noteCount} note${i.noteCount === 1 ? '' : 's'}${i.lastNoteAt ? `, latest ${esc(String(i.lastNoteAt).slice(0, 10))}` : ''} — open the reasoning above to read them</p>` : ''}
       <div class="td-acts">
         ${i.status !== 'in_progress' && i.status !== 'done' ? `<button class="btn td-act" type="button" data-act="status" data-to="in_progress">Start</button>` : ''}
         ${i.status !== 'done' ? `<button class="btn td-act" type="button" data-act="status" data-to="done">Done</button>` : ''}
@@ -495,6 +488,39 @@ async function handleSubmit(ev) {
   }
 }
 
+// The full rationale and the notes are fetched WHEN THE READER OPENS ONE, not with the
+// list. Measured 18 Aug: sending them with every item made this endpoint 335 KB for 148
+// items, 84% of it text that is collapsed or below the fold. It is now 76 KB.
+//
+// Bound on the toggle event, which fires for <details> and does not bubble — hence
+// capture. Once filled, an item is not re-fetched: `filled` is checked before asking.
+const filled = new Set();
+async function openDetail(ev) {
+  const d = ev.target;
+  if (!d || d.tagName !== 'DETAILS' || !d.open || !d.dataset.detail) return;
+  const id = d.dataset.detail;
+  const body = d.querySelector('.td-why-body');
+  if (!body || filled.has(id)) return;
+  filled.add(id);
+  try {
+    const full = await api(`/items/${encodeURIComponent(id)}/detail`);
+    if (!body.isConnected) return;   // closed and re-rendered while the fetch was in flight
+    const notes = (full.notes || []).map((n) => `<li${n.superseded_by ? ' class="td-note-old"' : ''}>`
+      + `${n.superseded_by ? '<span class="td-note-flag">superseded by the later note</span> ' : ''}`
+      + `${esc(n.note)} <span class="td-dim">${esc(n.created_at)}</span></li>`).join('');
+    body.innerHTML = `<p class="td-why-text">${esc(full.rationaleFull || '')}</p>`
+      + '<p class="td-why-label">Editorial judgement, written when the item was triaged — not a score.</p>'
+      + (notes ? `<ul class="td-notes">${notes}</ul>` : '');
+  } catch (err) {
+    filled.delete(id);   // a failed read must be retryable, not permanent
+    if (body.isConnected) {
+      body.innerHTML = '<p class="td-why-none td-dim">Could not read the full reasoning. '
+        + 'That is a failure to look, not an item without reasoning.</p>';
+    }
+  }
+}
+
+
 export default {
   // opts.embedded: rendered inside another panel (Focus), so drop the outer page chrome.
   // The shell calls mount(root) with one argument, so standalone stays the default and
@@ -524,6 +550,9 @@ export default {
     el.addEventListener('click', onClick);
     el.addEventListener('change', onChange);
     el.addEventListener('submit', onSubmit);
+    // CAPTURE: the toggle event fires on <details> and does NOT bubble, so a listener on
+    // the panel root never sees it without this.
+    el.addEventListener('toggle', openDetail, true);
 
     load();
   },
@@ -538,6 +567,7 @@ export default {
       if (onClick) root.removeEventListener('click', onClick);
       if (onChange) root.removeEventListener('change', onChange);
       if (onSubmit) root.removeEventListener('submit', onSubmit);
+      root.removeEventListener('toggle', openDetail, true);
     }
     onClick = onChange = onSubmit = null;
     root = null;

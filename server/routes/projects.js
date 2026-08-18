@@ -43,6 +43,8 @@ const PROJECTS = [
     track: 'Game', note: 'Nearest to shipping. One self-contained HTML file, zero dependencies.' },
   { id: 'printprofit', name: 'PrintProfit', dir: 'income-portfolio', dash: 'dashboard', live: 'https://riglerkarve.github.io/profitprint/', entry: 'index.html',
     track: 'Income', note: 'Live to the public, £0 earned. Blocked on distribution.' },
+  { id: 'dropshipping', name: 'Dropshipping', dir: 'dropshipping', dash: null, entry: null,
+    track: 'Dropshipping', note: 'Registered 18 Aug 2026 as its own track. Nothing built: niche, platform, supplier and budget ceiling are all undecided. First project here that cannot run on zero.' },
   { id: 'mission-control', name: 'Mission Control', dir: 'mission-control', dash: null, entry: null,
     track: 'Ops', note: 'This. Its control centre is the thing you are looking at.' },
   { id: 'garage', name: 'The Garage', dir: '.garage', dash: null, entry: null,

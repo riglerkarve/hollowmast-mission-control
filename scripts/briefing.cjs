@@ -311,6 +311,22 @@ function render(facts, prose) {
 // take the briefing down -- an expired token must cost you the mail figures, never the
 // morning report. A failure is LOGGED rather than swallowed, because a sync that silently
 // stopped and a mailbox with no new mail produce the same row count.
+
+// M43: drain the local-tier work queue as part of the daily pass. Wrapped so a model
+// failure costs the queue and never the briefing, and bounded so a big queue cannot make
+// the morning report take all night. Items write their own results, so a kill leaves every
+// finished item finished.
+async function runWork() {
+  try {
+    const work = require('../server/routes/work');
+    const r = await work.runQueued({ limit: 5 });
+    if (r.attempted) {
+      console.log(r.unreachable
+        ? `work: Ollama unreachable, ${r.attempted} item(s) left QUEUED rather than failed`
+        : `work: ${r.done} done, ${r.failed} failed of ${r.attempted}`);
+    }
+  } catch (err) { console.log(`work: FAILED -- ${String(err.message).slice(0, 120)}`); }
+}
 async function syncGmail() {
   const { execFile } = require('node:child_process');
   const script = path.join(ROOT, 'tools', 'import-gmail.cjs');
@@ -328,7 +344,8 @@ async function syncGmail() {
   });
 }
 async function main() {
-  await syncGmail();          // before gatherFacts, so today's figures include today's mail
+  await syncGmail();
+  await runWork();            // M43: the queue runs on the same one pass, not a task of its own          // before gatherFacts, so today's figures include today's mail
   const facts = gatherFacts();
   const prose = await writeProse(facts);
   const md = render(facts, prose);

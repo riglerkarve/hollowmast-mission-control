@@ -1,0 +1,54 @@
+/* Work panel. Theme tokens only — --ink, --muted, --bg, --card, --border, --accent,
+   --accent-soft, --accent-fill, --ring-bg. */
+
+.wk-h2 { font-size: 1rem; margin: 0 0 .3rem; }
+.wk-note { color: var(--muted); font-size: .86rem; margin: 0 0 .8rem; }
+
+.wk-prompt {
+  width: 100%; box-sizing: border-box; font: inherit; font-size: .9rem;
+  padding: .6rem .7rem; border: 1px solid var(--border); border-radius: 8px;
+  background: var(--bg); color: var(--ink); resize: vertical;
+}
+
+.wk-gates { display: grid; grid-template-columns: 1fr 1fr; gap: .8rem; margin: .8rem 0; }
+@media (max-width: 760px) { .wk-gates { grid-template-columns: 1fr; } }
+
+.wk-set { border: 1px solid var(--border); border-radius: 8px; padding: .6rem .7rem; margin: 0; }
+.wk-set legend { font-size: .8rem; color: var(--muted); padding: 0 .3rem; }
+
+/* The refusal group is marked out because ticking one of these does not tune the job, it
+   ENDS it. Same border weight, different ground — not a red warning, because refusing is
+   the system working rather than a fault. */
+.wk-never { background: var(--ring-bg); }
+
+.wk-check { display: flex; gap: .5rem; align-items: flex-start; padding: .25rem 0; font-size: .86rem; }
+.wk-check small { display: block; color: var(--muted); font-size: .78rem; }
+
+.wk-actions { display: flex; gap: .5rem; align-items: center; flex-wrap: wrap; }
+
+.wk-list { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: .6rem; }
+
+.wk-item { border: 1px solid var(--border); border-radius: 8px; padding: .6rem .75rem; }
+.wk-head { display: flex; justify-content: space-between; gap: .6rem; align-items: baseline; }
+.wk-title { font-weight: 600; font-size: .9rem; }
+.wk-status { font-size: .78rem; color: var(--muted); white-space: nowrap; }
+.wk-meta { color: var(--muted); font-size: .78rem; margin: .15rem 0 0; }
+.wk-hint { color: var(--muted); font-size: .8rem; margin: .35rem 0 0; }
+
+/* FAILED is the one status that gets its own weight. An empty result and a failed run are
+   different facts, and the whole module is built so they can never render the same. */
+.wk-item.wk-failed { border-left: 3px solid var(--accent); }
+.wk-err { margin: .35rem 0 0; font-size: .8rem; color: var(--ink); background: var(--accent-soft);
+  padding: .4rem .55rem; border-radius: 6px; }
+
+.wk-item.wk-refused { border-left: 3px solid var(--border); background: var(--ring-bg); }
+.wk-item.wk-waiting_session { border-left: 3px dashed var(--border); }
+
+.wk-result {
+  margin: .5rem 0 0; padding: .55rem .7rem; background: var(--bg);
+  border: 1px solid var(--border); border-radius: 6px;
+  font-family: ui-monospace, Consolas, monospace; font-size: .8rem;
+  white-space: pre-wrap; overflow-x: auto; max-height: 22rem;
+}
+
+.wk-cancel { margin-top: .5rem; font-size: .8rem; padding: .25rem .6rem; }

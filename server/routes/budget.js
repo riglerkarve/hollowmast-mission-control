@@ -1,5 +1,6 @@
 const express = require('express');
 const db = require('../db');
+const provenance = require('../provenance');
 const finance = require('./finance');
 const safety = require('./safety');
 
@@ -53,6 +54,11 @@ db.migrate('budget', [
       ALTER TABLE wishlist_items ADD COLUMN scope TEXT NOT NULL DEFAULT 'personal';
       CREATE INDEX idx_wish_scope ON wishlist_items(scope);
     `);
+  },
+
+  // Provenance. Default 'unknown' rather than 'you' — see server/provenance.js.
+  (d) => {
+    provenance.addColumn(d, 'wishlist_items');
   },
 ]);
 
@@ -289,8 +295,8 @@ router.post('/wishlist', (req, res) => {
   const pence = price === undefined || price === null || price === '' ? null : Math.round(Number(price) * 100);
   if (pence !== null && (!Number.isFinite(pence) || pence < 0)) return res.status(400).json({ error: 'price must be a non-negative number of pounds' });
 
-  const info = db.prepare('INSERT INTO wishlist_items (name, price_pence, url, note, scope) VALUES (?, ?, ?, ?, ?)')
-    .run(String(name).trim(), pence, url || null, note || null, scope || 'personal');
+  const info = db.prepare('INSERT INTO wishlist_items (name, price_pence, url, note, scope, by_whom) VALUES (?, ?, ?, ?, ?, ?)')
+    .run(String(name).trim(), pence, url || null, note || null, scope || 'personal', req.by);
   res.status(201).json({ id: Number(info.lastInsertRowid), status: 'proposed', scope: scope || 'personal' });
 });
 

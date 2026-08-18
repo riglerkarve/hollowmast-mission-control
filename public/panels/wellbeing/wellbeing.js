@@ -122,7 +122,7 @@ async function save(mood) {
   try {
     const r = await api('/entries', {
       method: 'POST',
-      headers: { 'content-type': 'application/json' },
+      headers: { 'content-type': 'application/json', 'x-mc-by': 'you' },
       body: JSON.stringify({ mood, note: noteEl.value, selfCare: selfCareEl.value }),
     });
 

@@ -265,7 +265,7 @@ async function load() {
 
 const patch = (path, payload) => api(path, {
   method: 'PATCH',
-  headers: { 'content-type': 'application/json' },
+  headers: { 'content-type': 'application/json', 'x-mc-by': 'you' },
   body: JSON.stringify(payload),
 });
 
@@ -336,7 +336,7 @@ export default {
         return act(async () => {
           await api('/goals', {
             method: 'POST',
-            headers: { 'content-type': 'application/json' },
+            headers: { 'content-type': 'application/json', 'x-mc-by': 'you' },
             body: JSON.stringify({ title, targetDate }),
           });
           root.querySelector('#glTitle').value = '';
@@ -350,7 +350,7 @@ export default {
         opened.add(Number(form.dataset.addstep));
         return act(() => api(`/goals/${form.dataset.addstep}/steps`, {
           method: 'POST',
-          headers: { 'content-type': 'application/json' },
+          headers: { 'content-type': 'application/json', 'x-mc-by': 'you' },
           body: JSON.stringify({ title, cost: value('cost') }),
         }));
       }

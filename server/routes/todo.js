@@ -1,5 +1,6 @@
 const express = require('express');
 const db = require('../db');
+const provenance = require('../provenance');
 
 // TODO — the backlog. ONE store, TWO views.
 //
@@ -287,6 +288,11 @@ db.migrate('todo', [
     // decided_at is left NULL on every seeded row, including the done and declined ones.
     // The spreadsheet never recorded when a decision was made, and stamping the import
     // time would invent a date that the age figures would then treat as real.
+  },
+
+  // Provenance. Default 'unknown' rather than 'you' — see server/provenance.js.
+  (d) => {
+    provenance.addColumn(d, 'todo_notes');
   },
 ]);
 
@@ -709,7 +715,7 @@ router.post('/items/:id/notes', (req, res) => {
   if (!db.prepare('SELECT 1 FROM todo_items WHERE id = ?').get(req.params.id)) {
     return res.status(404).json({ error: 'no such item' });
   }
-  const info = db.prepare('INSERT INTO todo_notes (item_id, note) VALUES (?, ?)').run(req.params.id, note);
+  const info = db.prepare('INSERT INTO todo_notes (item_id, note, by_whom) VALUES (?, ?, ?)').run(req.params.id, note, req.by);
   res.status(201).json({ id: Number(info.lastInsertRowid), itemId: req.params.id, note });
 });
 

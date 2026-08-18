@@ -308,7 +308,7 @@ export default {
       try {
         const r = await api('/entries', {
           method: 'POST',
-          headers: { 'content-type': 'application/json' },
+          headers: { 'content-type': 'application/json', 'x-mc-by': 'you' },
           body: JSON.stringify({
             stream: el.querySelector('#incStream').value,
             period: el.querySelector('#incPeriod').value,
@@ -337,7 +337,7 @@ export default {
       try {
         const r = await api('/streams', {
           method: 'POST',
-          headers: { 'content-type': 'application/json' },
+          headers: { 'content-type': 'application/json', 'x-mc-by': 'you' },
           body: JSON.stringify({
             label: el.querySelector('#incNewLabel').value.trim(),
             kind: el.querySelector('#incNewKind').value,

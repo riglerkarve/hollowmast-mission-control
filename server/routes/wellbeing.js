@@ -1,5 +1,6 @@
 const express = require('express');
 const db = require('../db');
+const provenance = require('../provenance');
 
 // ------------------------------------------------------------------------------------
 // WELLBEING. Read the constraints before changing anything here.
@@ -85,6 +86,11 @@ db.migrate('wellbeing', [
       );
       INSERT INTO wellbeing_quiet (id, enabled) VALUES (1, 0);
     `);
+  },
+
+  // Provenance. Default 'unknown' rather than 'you' — see server/provenance.js.
+  (d) => {
+    provenance.addColumn(d, 'wellbeing_entries');
   },
 ]);
 
@@ -185,8 +191,8 @@ router.post('/entries', (req, res) => {
     return res.status(400).json({ error: 'an entry needs a mood, a note, some self-care, or any combination' });
   }
 
-  const info = db.prepare('INSERT INTO wellbeing_entries (date, mood, note, self_care) VALUES (?, ?, ?, ?)')
-    .run(d, m, String(note || '').trim() || null, sc);
+  const info = db.prepare('INSERT INTO wellbeing_entries (date, mood, note, self_care, by_whom) VALUES (?, ?, ?, ?, ?)')
+    .run(d, m, String(note || '').trim() || null, sc, req.by);
 
   // The capture must return something immediately, or it is a surface you feed. What
   // comes back is RECALL, not assessment: how often you have logged lately, and when you

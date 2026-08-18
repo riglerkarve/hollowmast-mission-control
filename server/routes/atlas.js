@@ -1,5 +1,6 @@
 const express = require('express');
 const db = require('../db');
+const provenance = require('../provenance');
 
 // ------------------------------------------------------------------------------------
 // ATLAS. Where you have been, and what fraction of the world that is. Backlog #65.
@@ -49,6 +50,11 @@ db.migrate('atlas', [
       for (const n of names) ins.run(n, region);
     }
   },
+
+  // Provenance. Default 'unknown' rather than 'you' — see server/provenance.js.
+  (d) => {
+    provenance.addColumn(d, 'atlas_countries');
+  },
 ]);
 
 const router = express.Router();
@@ -92,6 +98,7 @@ router.post('/visit', (req, res) => {
     `UPDATE atlas_countries SET visited = ?, visited_at = CASE WHEN ? = 1 THEN date('now','localtime') ELSE NULL END
       WHERE name = ?`
   ).run(to ? 1 : 0, to ? 1 : 0, row.name);
+  db.prepare('UPDATE atlas_countries SET by_whom = ? WHERE name = ?').run(req.by, row.name);
 
   res.json({ name: row.name, visited: to });
 });
@@ -106,7 +113,7 @@ router.post('/countries', (req, res) => {
   if (db.prepare('SELECT 1 FROM atlas_countries WHERE name = ? COLLATE NOCASE').get(n)) {
     return res.status(409).json({ error: 'already on the list' });
   }
-  db.prepare('INSERT INTO atlas_countries (name, region, seeded) VALUES (?, ?, 0)').run(n, r);
+  db.prepare('INSERT INTO atlas_countries (name, region, seeded, by_whom) VALUES (?, ?, 0, ?)').run(n, r, req.by);
   res.status(201).json({ name: n, region: r, seeded: false });
 });
 

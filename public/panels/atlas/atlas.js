@@ -73,7 +73,7 @@ async function load() {
     try {
       await api('/visit', {
         method: 'POST',
-        headers: { 'content-type': 'application/json' },
+        headers: { 'content-type': 'application/json', 'x-mc-by': 'you' },
         body: JSON.stringify({ name: b.dataset.country }),
       });
       load();

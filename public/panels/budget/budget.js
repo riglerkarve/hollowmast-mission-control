@@ -65,7 +65,7 @@ async function loadBudget() {
       <button class="btn primary" id="bgDerive">Build it from my last 12 months</button>`;
     root.querySelector('#bgDerive').addEventListener('click', async (e) => {
       e.target.disabled = true; e.target.textContent = 'deriving…';
-      await api('/derive', { method: 'POST', headers: { 'content-type': 'application/json' }, body: '{"months":12}' });
+      await api('/derive', { method: 'POST', headers: { 'content-type': 'application/json', 'x-mc-by': 'you' }, body: '{"months":12}' });
       load();
     });
     root.querySelector('#bgTotals').innerHTML = '';
@@ -126,7 +126,7 @@ async function loadBudget() {
       try {
         await api(`/lines/${encodeURIComponent(inp.dataset.cat)}`, {
           method: 'PUT',
-          headers: { 'content-type': 'application/json' },
+          headers: { 'content-type': 'application/json', 'x-mc-by': 'you' },
           // essential is preserved rather than defaulted: PUT rewrites the whole row, so
           // omitting it would silently clear the flag and quietly change headroom.
           body: JSON.stringify({ monthly: Number(v), essential: !!(line && line.essential) }),
@@ -252,7 +252,7 @@ async function loadWishlist() {
 
   el.querySelectorAll('.bg-act').forEach((b) => b.addEventListener('click', async () => {
     await api(`/wishlist/${b.dataset.id}/status`, {
-      method: 'POST', headers: { 'content-type': 'application/json' },
+      method: 'POST', headers: { 'content-type': 'application/json', 'x-mc-by': 'you' },
       body: JSON.stringify({ status: b.dataset.to }),
     });
     load();
@@ -302,7 +302,7 @@ async function loadWishlist() {
 
   el.querySelectorAll('.bg-retag').forEach((b) => b.addEventListener('click', async () => {
     await api(`/wishlist/${b.dataset.id}/scope`, {
-      method: 'POST', headers: { 'content-type': 'application/json' },
+      method: 'POST', headers: { 'content-type': 'application/json', 'x-mc-by': 'you' },
       body: JSON.stringify({ scope: b.dataset.scope }),
     });
     load();
@@ -325,7 +325,7 @@ export default {
       const price = el.querySelector('#bgPrice').value;
       if (!name) return;
       await api('/wishlist', {
-        method: 'POST', headers: { 'content-type': 'application/json' },
+        method: 'POST', headers: { 'content-type': 'application/json', 'x-mc-by': 'you' },
         body: JSON.stringify({ name, price: price === '' ? null : Number(price), scope: el.querySelector('#bgScope').value }),
       });
       el.querySelector('#bgName').value = '';

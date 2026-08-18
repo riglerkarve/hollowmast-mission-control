@@ -144,7 +144,7 @@ function renderChores(d) {
     let msg = null;
     try {
       const r = await api(`/chores/${b.dataset.id}/done`, {
-        method: 'POST', headers: { 'content-type': 'application/json' }, body: '{}',
+        method: 'POST', headers: { 'content-type': 'application/json', 'x-mc-by': 'you' }, body: '{}',
       });
       // The value comes straight back: what was recorded, and when it next comes round.
       msg = r.duplicate
@@ -232,7 +232,7 @@ async function saveMeals(n) {
   echo('#lfEcho', 'saving…', '');
   try {
     const r = await api('/intake', {
-      method: 'POST', headers: { 'content-type': 'application/json' },
+      method: 'POST', headers: { 'content-type': 'application/json', 'x-mc-by': 'you' },
       body: JSON.stringify({ meals: n }),
     });
     const d = await api('/intake?days=14');
@@ -289,7 +289,7 @@ export default {
       if (!name || !Number.isInteger(every)) return;
       try {
         await api('/chores', {
-          method: 'POST', headers: { 'content-type': 'application/json' },
+          method: 'POST', headers: { 'content-type': 'application/json', 'x-mc-by': 'you' },
           body: JSON.stringify({ name, intervalDays: every }),
         });
         if (mine !== token) return;

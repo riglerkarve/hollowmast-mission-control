@@ -241,7 +241,7 @@ function wire(el) {
     try {
       const r = await api(`/events/${b.dataset.id}`, {
         method: 'PATCH',
-        headers: { 'content-type': 'application/json' },
+        headers: { 'content-type': 'application/json', 'x-mc-by': 'you' },
         body: JSON.stringify({ status: b.dataset.to }),
       });
       msg = [`${r.title}: ${r.statusNote || 'back to scheduled.'}`, 'ok'];
@@ -330,7 +330,7 @@ export default {
       try {
         const r = await api('/events', {
           method: 'POST',
-          headers: { 'content-type': 'application/json' },
+          headers: { 'content-type': 'application/json', 'x-mc-by': 'you' },
           body: JSON.stringify({
             title,
             startsAt,

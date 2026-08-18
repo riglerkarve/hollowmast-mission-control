@@ -629,8 +629,23 @@ function recurring({ minCharges = 3, categories = SERVICE_CATEGORIES } = {}) {
   };
 }
 
+// Monthly totals for ONE category, published so another module never has to read
+// finance_transactions itself. Returns rows sorted by total, so the caller can take a
+// median without re-sorting — and a median is what it should take: one heavy month is not
+// a baseline.
+function categoryMonthly(category, months = 12) {
+  return db.prepare(
+    `SELECT substr(date, 1, 7) AS month, SUM(-amount_pence) AS pence, COUNT(*) AS n
+       FROM finance_transactions
+      WHERE category = ? AND amount_pence < 0
+        AND date >= date('now', 'localtime', '-' || ? || ' months')
+      GROUP BY month ORDER BY pence`
+  ).all(category, months);
+}
+
 module.exports = router;
 module.exports.recurring = recurring;
+module.exports.categoryMonthly = categoryMonthly;
 module.exports.monthlySpend = monthlySpend;
 module.exports.monthlyIncome = monthlyIncome;
 module.exports.typicalMonthly = typicalMonthly;

@@ -24,6 +24,7 @@ const goalsRouter = require('./routes/goals');
 const scheduleRouter = require('./routes/schedule');
 const heartbeat = require('./heartbeat');
 const gate = require('./gate');
+const provenance = require('./provenance');
 
 const PORT = process.env.PORT || 3000;
 const HOST = '0.0.0.0';
@@ -42,6 +43,9 @@ process.on('unhandledRejection', (err) => {
 
 const app = express();
 app.use(express.json());
+
+// Who wrote this? Default unknown, never guessed. See server/provenance.js.
+app.use(provenance.middleware);
 
 // The unlock page must be reachable before the gate, or there is no way through it.
 gate.mount(app);

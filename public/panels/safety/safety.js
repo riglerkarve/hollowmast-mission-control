@@ -176,7 +176,7 @@ export default {
       try {
         await api('/limits', {
           method: 'POST',
-          headers: { 'content-type': 'application/json' },
+          headers: { 'content-type': 'application/json', 'x-mc-by': 'you' },
           body: JSON.stringify({
             perTransaction: t === '' ? null : Number(t),
             perMonth: m === '' ? null : Number(m),
@@ -197,7 +197,7 @@ export default {
       try {
         await api('/payees', {
           method: 'POST',
-          headers: { 'content-type': 'application/json' },
+          headers: { 'content-type': 'application/json', 'x-mc-by': 'you' },
           body: JSON.stringify({ name }),
         });
         el.querySelector('#sfPayee').value = '';

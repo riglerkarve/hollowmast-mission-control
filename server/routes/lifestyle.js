@@ -1,5 +1,7 @@
 const express = require('express');
 const db = require('../db');
+const provenance = require('../provenance');
+const finance = require('./finance');
 
 // ------------------------------------------------------------------------------------
 // LIFESTYLE. Two capture surfaces for the same day: household chores, and whether the
@@ -84,6 +86,12 @@ db.migrate('lifestyle', [
       ALTER TABLE lifestyle_chores ADD COLUMN anchor_date TEXT;              -- a real, known occurrence
       ALTER TABLE lifestyle_chores ADD COLUMN lead_days INTEGER NOT NULL DEFAULT 0;
     `);
+  },
+
+  // Provenance. Default 'unknown' rather than 'you' — see server/provenance.js.
+  (d) => {
+    provenance.addColumn(d, 'lifestyle_done');
+    provenance.addColumn(d, 'lifestyle_intake');
   },
 ]);
 
@@ -370,7 +378,7 @@ router.post('/chores/:id/done', (req, res) => {
   }
 
   const already = db.prepare('SELECT id FROM lifestyle_done WHERE chore_id = ? AND done_on = ?').get(id, when);
-  if (!already) db.prepare('INSERT INTO lifestyle_done (chore_id, done_on) VALUES (?, ?)').run(id, when);
+  if (!already) db.prepare('INSERT INTO lifestyle_done (chore_id, done_on, by_whom) VALUES (?, ?, ?)').run(id, when, req.by);
 
   const gaps = typicalGaps();
   const fresh = decorate(db.prepare(`${CHORE_SQL} HAVING c.id = ?`).get(id), gaps);
@@ -428,12 +436,58 @@ function intakeWindow(days) {
   };
 }
 
+// WHAT FOOD ACTUALLY COSTS — backlog #23, reduced to the half that can be answered.
+//
+// The item asked for "suggested meals from finance and health data, add to basket". Three
+// things stop that being built as written, and none of them is effort:
+//
+//   1. A BANK EXPORT CANNOT SEE A BASKET. The reference field on a Groceries row is the
+//      merchant again — "SAINSBURYS LOC4825", "DESIRE SUPERMARKET LTD" — never the items.
+//      The ledger knows where and how much, never what. Suggesting meals "from finance
+//      data" would mean inventing the ingredients and calling them yours.
+//   2. HEALTH-DRIVEN MEAL SUGGESTION IS BARRED HERE, by this module's own header: no
+//      calorie judgement, nothing that reads as advice about the user's body or eating.
+//      That rule was written deliberately and a feature request does not overturn it.
+//   3. "Add to basket" ends at a proposal regardless. Nothing here places an order.
+//
+// What IS answerable is the money, which is what the item ties to: your own grocery
+// spending, per day, so "one proper meal a day" has a real cost attached instead of a
+// guess. It rates no food, recommends no food, and never looks at a health metric.
+function foodCost(months = 12) {
+  // Asked of finance rather than read from its tables — the module contract, and it is
+  // finance that owns what a Groceries row means.
+  const rows = finance.categoryMonthly('Groceries', months);
+
+  if (!rows.length) return { state: 'no-data', note: 'No grocery spending in the window.' };
+
+  // Median month, not mean — one big shop should not set the baseline.
+  // finance.categoryMonthly returns { month, pence, n } and already sorts by pence, so the
+  // middle row IS the median. Reading `.total` here silently produced £0.00 while the
+  // accessor itself reported £82.79 — the field was renamed when this moved behind the
+  // module boundary, and undefined/30.44 is 0 rather than an error.
+  const mid = rows[Math.floor(rows.length / 2)];
+  const perDay = Math.round(mid.pence / 30.44);
+
+  return {
+    state: 'ok',
+    monthsCounted: rows.length,
+    medianMonthPence: mid.pence,
+    medianShopsPerMonth: mid.n,
+    perDayPence: perDay,
+    basis: `Median of ${rows.length} months of the Groceries category, divided by 30.44 days. `
+      + 'It is what you spent on food, not what a meal costs — the ledger cannot see a basket, '
+      + 'only a total and a merchant.',
+    refuses: 'No meal is suggested, rated or costed individually, and no health metric is '
+      + 'consulted. This module does not give advice about eating.',
+  };
+}
+
 router.get('/intake', (req, res) => {
   const days = Math.min(90, Math.max(1, Number(req.query.days) || 14));
   const total = db.prepare('SELECT COUNT(*) c FROM lifestyle_intake').get().c;
   const w = intakeWindow(days);
   // Empty and broken must not read the same, here as everywhere else.
-  res.json({ state: total ? 'ok' : 'empty', totalDaysEverRecorded: total, ...w });
+  res.json({ state: total ? 'ok' : 'empty', totalDaysEverRecorded: total, food: foodCost(), ...w });
 });
 
 router.post('/intake', (req, res) => {

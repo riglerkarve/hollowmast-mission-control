@@ -134,7 +134,7 @@ async function setFlag(name, status) {
   try {
     const r = await api(`/${encodeURIComponent(name)}/flag`, {
       method: 'POST',
-      headers: { 'content-type': 'application/json' },
+      headers: { 'content-type': 'application/json', 'x-mc-by': 'you' },
       body: JSON.stringify({ status, note }),
     });
     // Redraw FIRST, then write the message. Doing it the other way round set the text and

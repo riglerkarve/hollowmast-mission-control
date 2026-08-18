@@ -335,7 +335,7 @@ async function handleClick(ev) {
 
     if (act.dataset.act === 'status') {
       await api(`/items/${encodeURIComponent(id)}`, {
-        method: 'PATCH', headers: { 'content-type': 'application/json' },
+        method: 'PATCH', headers: { 'content-type': 'application/json', 'x-mc-by': 'you' },
         body: JSON.stringify({ status: act.dataset.to }),
       });
       await reloadAll();
@@ -344,7 +344,7 @@ async function handleClick(ev) {
       const note = window.prompt(`Note on ${id}:`);
       if (!note || !note.trim()) return;
       await api(`/items/${encodeURIComponent(id)}/notes`, {
-        method: 'POST', headers: { 'content-type': 'application/json' },
+        method: 'POST', headers: { 'content-type': 'application/json', 'x-mc-by': 'you' },
         body: JSON.stringify({ note }),
       });
       await loadItems();
@@ -375,7 +375,7 @@ async function handleChange(ev) {
   const li = p.closest('.td-item');
   try {
     await api(`/items/${encodeURIComponent(li.dataset.id)}`, {
-      method: 'PATCH', headers: { 'content-type': 'application/json' },
+      method: 'PATCH', headers: { 'content-type': 'application/json', 'x-mc-by': 'you' },
       body: JSON.stringify({ priority: p.value }),
     });
     await reloadAll();
@@ -392,7 +392,7 @@ async function handleSubmit(ev) {
   if (!title) return;
   try {
     await api('/items', {
-      method: 'POST', headers: { 'content-type': 'application/json' },
+      method: 'POST', headers: { 'content-type': 'application/json', 'x-mc-by': 'you' },
       body: JSON.stringify({
         title,
         rationale: val('#tdRationale') || null,

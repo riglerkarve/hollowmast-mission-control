@@ -379,3 +379,14 @@
 .fin-s-residue li {
   margin: 0.2rem 0;
 }
+
+/* Cash reconciliation (#M36). The figure is large because it is the point of the card;
+   everything else on it is context for that one number. */
+.fin-c2-big { font-size: 1.9rem; font-weight: 600; margin: 0.4rem 0 0.2rem; color: var(--ink); font-variant-numeric: tabular-nums; }
+.fin-c2-cap { display: block; font-size: 0.78rem; font-weight: 400; color: var(--muted); letter-spacing: 0.02em; }
+/* Money that ARRIVED reads differently from money spent — same figure, opposite meaning,
+   and rendering them identically is how a sign error goes unnoticed. */
+.fin-c2-in { color: var(--accent); }
+.fin-c2-form { display: flex; gap: 0.6rem; align-items: flex-end; flex-wrap: wrap; margin: 0.8rem 0 0.4rem; }
+.fin-c2-lab { display: flex; flex-direction: column; gap: 0.25rem; font-size: 0.78rem; color: var(--muted); }
+.fin-c2-echo { font-size: 0.82rem; color: var(--muted); }

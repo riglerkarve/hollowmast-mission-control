@@ -72,6 +72,11 @@ const TEMPLATE = `
     </section>
 
     <section class="card">
+      <h2 class="fin-h2">Cash — count the tin</h2>
+      <div id="finCash2"></div>
+    </section>
+
+    <section class="card">
       <h2 class="fin-h2">Money in that may be your own transfer</h2>
       <div id="finSuspects"></div>
     </section>
@@ -503,6 +508,93 @@ async function loadSuspects() {
     </div>`;
 }
 
+// Cash reconciliation — #M36. One number in, a whole category out of the dark.
+//
+// Lives inside Money rather than as its own nav entry: it is a fact about the ledger, and a
+// fifteenth tab for one input box would be the surface-you-must-feed the workspace gate
+// rejects. The capture is one field and the derivation returns in the same response.
+async function loadCash() {
+  const box = root.querySelector('#finCash2');
+  let d;
+  try {
+    d = await (await fetch('/api/cash', { headers: { 'x-mc-by': 'you' } })).json();
+  } catch (err) {
+    box.innerHTML = `<p class="fin-error">Could not read the cash state: ${esc(err.message)}
+      — that is a failure to look, not a report that no cash was spent.</p>`;
+    return;
+  }
+
+  const money = (p) => `£${(p / 100).toFixed(2)}`;
+  const form = `
+    <form id="cashForm" class="fin-c2-form">
+      <label class="fin-c2-lab">Count the tin
+        <input id="cashAmt" class="fin-select" type="number" step="0.01" min="0"
+               inputmode="decimal" placeholder="e.g. 42.50" required>
+      </label>
+      <button class="btn primary" type="submit">Record</button>
+      <span id="cashEcho" class="fin-c2-echo"></span>
+    </form>`;
+
+  // Three states, and none of them is a zero standing in for "do not know".
+  let body;
+  if (d.state === 'never counted' || d.state === 'baseline only') {
+    body = `<p class="fin-note">${esc(d.why)}</p>`;
+  } else if (d.state === 'error') {
+    body = `<p class="fin-error">${esc(d.why)}</p>`;
+  } else {
+    const negative = d.spentInWindow < 0;
+    body = `
+      <p class="fin-c2-big ${negative ? 'fin-c2-in' : ''}">${money(Math.abs(d.spentInWindow))}
+        <span class="fin-c2-cap">${negative ? 'arrived from outside the ledger' : 'spent in cash'}</span></p>
+      <p class="fin-note">${esc(d.window.from)} to ${esc(d.window.to)}, ${d.window.days} days.
+        ${money(d.previousCount.pence)} in the tin, ${money(d.withdrawnInWindow)} withdrawn across
+        ${d.withdrawalsInWindow} withdrawal${d.withdrawalsInWindow === 1 ? '' : 's'},
+        ${money(d.lastCount.pence)} left.
+        ${d.perDay !== null && !negative ? `That is ${money(d.perDay)} a day.` : ''}</p>
+      <p class="fin-note">${esc(d.why)}</p>`;
+  }
+
+  const stale = d.ledger && d.ledger.staleByDays > 0;
+  box.innerHTML = `
+    <p class="fin-note">Cash is the biggest thing the ledger cannot see. This does not track
+      purchases — it counts the tin, and the difference against what you withdrew is the
+      answer. <b>One number, whenever you happen to look.</b></p>
+    ${body}
+    ${form}
+    ${d.lastCount ? `<p class="fin-note">Last counted ${esc(d.lastCount.on)}
+        (${d.lastCount.daysAgo} day${d.lastCount.daysAgo === 1 ? '' : 's'} ago) at
+        ${money(d.lastCount.pence)}. Since then ${money(d.ledger.penceSinceLastCount)} has been
+        withdrawn across ${d.ledger.withdrawalsSinceLastCount} withdrawal${d.ledger.withdrawalsSinceLastCount === 1 ? '' : 's'}
+        — the next count closes that window.</p>` : ''}
+    ${d.blindTo ? `<div class="fin-s-residue"><b>What this cannot see.</b>
+        <ul>${d.blindTo.map((b) => `<li>${esc(b)}</li>`).join('')}</ul></div>` : ''}
+    ${stale ? `<p class="fin-warn">The ledger is ${d.ledger.staleByDays} days behind today, so
+        cash taken out since is missing from this. Import a statement before trusting the window.</p>` : ''}`;
+
+  const f = box.querySelector('#cashForm');
+  const echo = box.querySelector('#cashEcho');
+  f.addEventListener('submit', async (ev) => {
+    ev.preventDefault();
+    const v = box.querySelector('#cashAmt').value;
+    echo.textContent = 'recording…';
+    try {
+      const r = await fetch('/api/cash/counts', {
+        method: 'POST',
+        headers: { 'content-type': 'application/json', 'x-mc-by': 'you' },
+        body: JSON.stringify({ pounds: Number(v) }),
+      });
+      const out = await r.json();
+      if (!r.ok) throw new Error(out.error || `HTTP ${r.status}`);
+      // The value comes straight back rather than after a reload — that is the rule for the
+      // manual capture that is genuinely unavoidable.
+      await loadCash();
+    } catch (err) {
+      echo.textContent = `Not recorded: ${err.message}`;
+      echo.className = 'fin-c2-echo fin-error';
+    }
+  });
+}
+
 async function load() {
   const notice = root.querySelector('#finNotice');
   let d;
@@ -539,6 +631,7 @@ async function load() {
   loadWorth();
   loadForecast();
   loadSuspects();
+  loadCash();
 }
 
 export default {

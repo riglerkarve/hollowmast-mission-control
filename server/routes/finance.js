@@ -1259,3 +1259,41 @@ router.get('/own-transfer-suspects', (req, res) => {
 });
 
 module.exports.ownTransferSuspects = ownTransferSuspects;
+
+// ---------------------------------------------------------------------------
+// Cash withdrawn in a window — the one figure the cash module needs from the ledger.
+//
+// EXPORTED RATHER THAN LET THE CASH MODULE QUERY finance_transactions ITSELF. That is the
+// module contract: one owner per figure. If cash ran its own SQL the two would drift the
+// first time the category name or the account set changed, and neither would error.
+function cashWithdrawn({ from, to } = {}) {
+  const end = to || db.prepare('SELECT MAX(date) AS d FROM finance_transactions').get().d;
+  if (!end) return { ok: false, reason: 'empty_ledger', message: 'The ledger has no transactions.' };
+
+  const where = from
+    ? 'date > ? AND date <= ?'          // > from: the count day itself is already accounted for
+    : 'date <= ?';
+  const args = from ? [from, end] : [end];
+
+  const r = db.prepare(
+    `SELECT COUNT(*) AS n, COALESCE(SUM(-amount_pence),0) AS pence, MIN(date) AS first, MAX(date) AS last
+       FROM finance_transactions
+      WHERE category = 'Cash withdrawn' AND amount_pence < 0 AND ${where}`
+  ).get(...args);
+
+  return {
+    ok: true,
+    from: from || null,
+    to: end,
+    withdrawals: r.n,
+    pence: r.pence,
+    firstOn: r.first,
+    lastOn: r.last,
+    ledgerEndsOn: end,
+    // The ledger is an IMPORT. Everything here is silent about cash taken out after the last
+    // imported row, and a reconciliation run against a stale ledger will read that gap as
+    // spending. The caller has to say so.
+    ledgerIsStaleBy: null,
+  };
+}
+module.exports.cashWithdrawn = cashWithdrawn;

@@ -585,6 +585,44 @@ having kinds at all.
 
 ---
 
+## Archiving — two runs, because one looks careful and is not
+
+```bash
+node tools/archive.cjs                        # suggest version groups, touch nothing
+node tools/archive.cjs --stage <file> ...      # copy + verify. Originals stay put.
+node tools/archive.cjs --sweep [--apply]       # remove originals that STILL verify
+```
+
+Backlog #8, built to the rule its own rationale set: **never move a file in the same run
+that reads it. Copy, verify the copy, then remove.**
+
+**The two runs are the safety property, not ceremony.** A copy-then-delete inside one
+process looks careful and is not: if the write is buffered, the disk fills, the path is
+wrong, or the process dies between the calls, the delete still happens and the only copy is
+the one that failed. Staging and sweeping as separate invocations means the original
+outlives any single failure, and the sweep can demand evidence written by an earlier,
+completed run.
+
+**The evidence is SHA-256 of both files, re-checked at sweep time** — not size, not mtime.
+Matching sizes are not matching bytes ([[never-retype-bytes]] is the same wound).
+
+Three outcomes, all proven on a throwaway set before the tool was trusted:
+
+| | |
+|---|---|
+| staged, still identical | **REMOVED**, verified copy in `_archive` |
+| original **changed** after staging | **BLOCKED** — the archive holds a different file now, and removing would lose the edit |
+| archive copy **missing** at sweep | **BLOCKED** — removing would lose the file outright |
+
+It also refuses to overwrite a *different* file that happens to share a name.
+
+**It suggests and does not decide.** Filename grouping finds version families — it correctly
+spotted the four `claude todo` spreadsheets — but which one is superseded is a judgement
+about content, so the tool prints them and waits for explicit paths. **Nothing of the
+owner's was staged or moved.**
+
+---
+
 ## Version control — and why .gitignore is a security control here
 
 `git init` on 18 Aug 2026. Two commits, no remote. Until then everything in this

@@ -13,16 +13,19 @@
 // iframe and reading document.scrollingElement.scrollWidth against the frame's clientWidth.
 // There are exactly three URLs the pane offers:
 //
-//                        671px (desktop card)   1011px (this panel, widened)   277px (phone)
-//   HOLLOWMAST /dash        0px over                0px over                     2px over
-//   PrintProfit /dash       0px over                0px over                    71px over  <-- a <table>
-//   The Garage /garage/     0px over                0px over                     0px over
+// The finding is PER-WIDTH, not per-target: all three embed cleanly at desktop widths, and
+// at phone width PrintProfit's <table> breaks out of the frame while the other two are close
+// to the edge. That is why the fit line under each frame is MEASURED LIVE on every load and
+// every resize.
 //
-// So the honest answer is not per-target, it is PER-WIDTH: all three embed on a desktop,
-// and PrintProfit's table breaks out of a phone-width frame. That is why the fit line under
-// each frame is MEASURED LIVE from the frame on every load and every resize, and is not a
-// number stamped into this comment. A stamped figure would be a claim about three pages that
-// other sessions edit; a live read is a claim about the frame actually on screen.
+// THE FIGURES THAT USED TO BE HERE ARE GONE, and their removal is the point. This comment
+// carried a stamped 3x3 table of overflow amounts and, in the same breath, argued that
+// stamping figures was the wrong thing to do. Re-measured on 18 Aug the stamped numbers were
+// already wrong in the FLATTERING direction — every one understated the overflow, and the
+// Garage's stamped "0px over" was a false negative reading as "fits" when it does not. They
+// are claims about three pages that other sessions edit, and nothing re-derives them.
+// The live read under each frame is the only figure here that can be trusted, so it is now
+// the only one offered.
 //
 // The check distinguishes four states deliberately, because "fine", "broken", "could not
 // look" and "never arrived" are four different facts:
@@ -313,6 +316,15 @@ export default {
     generation += 1;
     if (onResize) window.removeEventListener('resize', onResize);
     onResize = null;
+
+    // Drop the frame explicitly rather than waiting for the shell to clear the root. An
+    // open iframe is a live cross-document context -- it keeps loading, keeps running its
+    // own timers, and can still fire load handlers -- so between unmount() and the next
+    // mount there was a frame this panel believed it had released. It always did get
+    // cleared, so nothing leaked; but unmount() claiming to have released something it had
+    // not is what the next change would rely on.
+    if (root) root.querySelectorAll('iframe').forEach((f) => { f.src = 'about:blank'; f.remove(); });
+
     openId = null;
     root = null;
   },

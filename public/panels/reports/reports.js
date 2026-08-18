@@ -187,7 +187,12 @@ function createPanel() {
       if (!r.ok) throw new Error(`HTTP ${r.status}`);
       d = await r.json();
     } catch (err) {
-      box.innerHTML = `<p class="empty-hint">Could not read the briefing: ${rpEsc(err.message)}</p>`;
+      // .rp-error, NOT .empty-hint. The 404 branch above gets this exactly right and says so
+      // in its own comment -- and then this branch rendered a real failure in the same muted
+      // style as "nothing generated yet", so the two states the code carefully separates
+      // looked identical on screen.
+      box.innerHTML = `<p class="rp-error">Could not read the briefing: ${rpEsc(err.message)}`
+        + ' &mdash; that is a failure to look, not a report that no briefing exists.</p>';
       return;
     }
     when.textContent = d.date || '';

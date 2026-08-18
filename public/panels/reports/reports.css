@@ -44,3 +44,8 @@
 /* The words are shown BEFORE the button is pressed. A voice you cannot preview is one you
    stop trusting to press, and this is the only output here that cannot be re-read. */
 .rp-say-line { color: var(--muted); font-size: 0.87em; font-style: italic; }
+
+/* A failure, not an empty state. .empty-hint is muted on purpose because "nothing here yet"
+   is unremarkable; a fetch that failed is not, and rendering both the same way is how a
+   broken panel reads as a quiet one. */
+.rp-error { color: var(--accent); font-size: 0.86rem; line-height: 1.5; }

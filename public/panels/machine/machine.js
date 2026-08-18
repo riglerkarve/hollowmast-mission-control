@@ -16,6 +16,7 @@
 // number, because it would be built from weights I chose — the one figure nobody can audit.
 let root = null;
 let timer = null;
+let signal = null;   // from the shell, aborted when this panel is torn down
 
 const esc = (s) => String(s == null ? '' : s).replace(/[&<>"]/g,
   (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
@@ -161,8 +162,8 @@ async function load() {
   if (!root) return;
   try {
     const [a, b] = await Promise.all([
-      fetch('/api/machine', { headers: { 'x-mc-by': 'you' } }).then((r) => r.json()),
-      fetch('/api/machine/history', { headers: { 'x-mc-by': 'you' } }).then((r) => r.json()),
+      fetch('/api/machine', { headers: { 'x-mc-by': 'you' }, signal }).then((r) => r.json()),
+      fetch('/api/machine/history', { headers: { 'x-mc-by': 'you' }, signal }).then((r) => r.json()),
     ]);
     if (!root) return;                       // unmounted while the fetch was in flight
     if (a.error) {
@@ -172,14 +173,17 @@ async function load() {
     render(a);
     renderTrend(b);
   } catch (e) {
+    // An abort is what a panel switch looks like from in here, not a fault.
+    if (e && e.name === 'AbortError') return;
     if (!root) return;
     root.querySelector('#mcGrid').innerHTML = `<p class="mc-note">Could not reach /api/machine: ${esc(e.message)}</p>`;
   }
 }
 
 export default {
-  mount(el) {
+  mount(el, opts) {
     root = el;
+    signal = (opts && opts.signal) || null;
     el.innerHTML = TEMPLATE;
     load();
     // Matches the route's own cadence. Polling faster would only re-read the same sample and
@@ -187,6 +191,7 @@ export default {
     timer = setInterval(load, 5000);
   },
   unmount() {
+    signal = null;
     if (timer) clearInterval(timer);
     timer = null;
     root = null;

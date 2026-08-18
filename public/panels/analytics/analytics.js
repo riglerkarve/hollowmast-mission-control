@@ -14,6 +14,7 @@
 // distinction PrintProfit's £0 has been hiding behind all week.
 let root = null;
 let timer = null;
+let signal = null;   // from the shell, aborted when this panel is torn down
 
 const esc = (s) => String(s == null ? '' : s).replace(/[&<>"]/g,
   (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
@@ -106,19 +107,22 @@ function render(d) {
 async function load() {
   if (!root) return;
   try {
-    const d = await fetch('/api/analytics', { headers: { 'x-mc-by': 'you' } }).then((r) => r.json());
+    const d = await fetch('/api/analytics', { headers: { 'x-mc-by': 'you' }, signal }).then((r) => r.json());
     if (!root) return;                    // unmounted while the fetch was in flight
     if (d.error) { root.querySelector('#anSites').innerHTML = `<p class="an-why">${esc(d.error)}</p>`; return; }
     render(d);
   } catch (e) {
+    // An abort is what a panel switch looks like from in here, not a fault.
+    if (e && e.name === 'AbortError') return;
     if (!root) return;
     root.querySelector('#anSites').innerHTML = `<p class="an-why">Could not reach /api/analytics: ${esc(e.message)}</p>`;
   }
 }
 
 export default {
-  mount(el) {
+  mount(el, opts) {
     root = el;
+    signal = (opts && opts.signal) || null;
     el.innerHTML = TEMPLATE;
     el.querySelector('#anProbe').addEventListener('click', async (ev) => {
       const b = ev.currentTarget;
@@ -134,6 +138,7 @@ export default {
     timer = setInterval(load, 60000);
   },
   unmount() {
+    signal = null;
     if (timer) clearInterval(timer);
     timer = null;
     root = null;

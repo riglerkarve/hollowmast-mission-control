@@ -1,4 +1,8 @@
 import { renderBarChart } from '/shared.js';
+// The backlog is not reimplemented here. This is the same panel the nav used to serve,
+// mounted into a div — one implementation, one owner. Owner's instruction, 18 Aug 2026:
+// the backlog's native home is Focus.
+import backlogPanel from '/panels/todo/todo.js';
 
 const DURATIONS = { work: 25 * 60, short: 5 * 60, long: 15 * 60 };
 const RING_CIRCUMFERENCE = 2 * Math.PI * 100;
@@ -41,18 +45,12 @@ const TEMPLATE = `
       </div>
     </section>
 
-    <section class="card">
+    <section class="card" id="focusNowCard">
       <h2>What are you working on?</h2>
-      <p class="task-source-note">Straight from the backlog — this is the same list the
-        Backlog panel shows, not a second copy. Pick one and the timer records against it.
-        Adding and closing items stays in Backlog: one list, one writer.</p>
-      <div class="task-filter">
-        <input type="search" id="taskSearch" class="task-search" placeholder="Filter…" autocomplete="off">
-        <label class="task-mine"><input type="checkbox" id="taskMineOnly" checked> yours only</label>
-      </div>
-      <ul id="taskList" class="task-list"></ul>
-      <p class="empty-hint" id="emptyHint">Nothing open in the backlog.</p>
+      <div id="focusNow"></div>
     </section>
+
+    <div id="focusBacklog"></div>
 
     <section class="card">
       <h2>This Week</h2>
@@ -90,12 +88,15 @@ async function api(path, options) {
 
 function createPanel() {
   let el = {};
-  let tasks = [];
   let mode = 'work';
   let secondsLeft = DURATIONS.work;
   let running = false;
   let tickHandle = null;
   let activeTaskId = null;
+  let activeTaskTitle = '';
+  let container = null;
+  let onBacklogFocus = null;
+  let onBacklogChanged = null;
 
   function formatTime(s) {
     const m = Math.floor(s / 60).toString().padStart(2, '0');
@@ -118,107 +119,61 @@ function createPanel() {
     document.title = running ? `${formatTime(secondsLeft)} · Focus Flow` : 'Mission Control';
   }
 
-  // You can MARK DONE here. You cannot create or delete — that stays in Backlog.
+  // The list lives in the embedded backlog panel now. This panel keeps only the ONE fact
+  // that is genuinely its own: which item the timer is recording against.
   //
-  // I got this wrong first time and shipped it read-only, reasoning that "a second surface
-  // writing the same list is two owners". That misapplies the rule. The one-writer rule is
-  // about two STORES holding the same fact — `tasks` and `todo_items`, which is what this
-  // change removed. It is not about two BUTTONS: both panels call the same
-  // PATCH /api/todo/items/:id, so there is exactly one writer and one owner either way.
-  //
-  // The cost of the mistake was immediate and concrete. The owner ordered Huel — a real
-  // backlog item, #19 — and the panel showing that item had no way to record it. A list you
-  // can look at while a timer runs, and cannot tick, is a worse tool than the one it
-  // replaced. Creation stays in Backlog because a new item needs a cluster, priority, owner
-  // and rationale, and a one-line box would produce items missing all four.
-  function renderTasks() {
-    el.taskList.innerHTML = '';
+  // Worth keeping the history, because I got the neighbouring judgement wrong once. I first
+  // shipped the compact list read-only, reasoning that "a second surface writing the same
+  // list is two owners". That misapplies the rule: the one-writer rule is about two STORES
+  // holding the same fact, not two BUTTONS calling one route. The cost was immediate — the
+  // owner ordered Huel, a real backlog item, and the panel showing that item had no way to
+  // tick it. Hosting the real panel here settles it permanently: there is exactly one
+  // implementation of the list, so the question cannot come back.
 
-    const q = (el.taskSearch.value || '').trim().toLowerCase();
-    const mineOnly = el.taskMineOnly.checked;
-    const shown = tasks.filter((t) => {
-      if (mineOnly && t.owner !== 'YOU') return false;
-      if (q && !String(t.title).toLowerCase().includes(q)) return false;
-      return true;
-    });
-
-    // Three states, not two: nothing open at all, nothing matching the filter, and a list.
-    // "No results" and "nothing to do" are very different things to read at 9am.
-    el.emptyHint.style.display = shown.length === 0 ? 'block' : 'none';
-    if (shown.length === 0) {
-      el.emptyHint.textContent = tasks.length === 0
-        ? 'Nothing open in the backlog.'
-        : `None of the ${tasks.length} open items match that filter.`;
-    }
-
-    shown.forEach((task) => {
-      const li = document.createElement('li');
-      li.className = 'task-item' + (task.id === activeTaskId ? ' active-task' : '');
-
-      const pri = document.createElement('span');
-      pri.className = `task-pri task-pri-${String(task.priority || '').toLowerCase()}`;
-      pri.textContent = task.priority || '';
-
-      const text = document.createElement('span');
-      text.className = 'task-text';
-      text.textContent = task.title;
-      text.title = 'Click to work on this';
-      text.addEventListener('click', () => setActiveTask(task.id));
-
-      const owner = document.createElement('span');
-      owner.className = 'task-owner';
-      owner.textContent = task.owner === 'YOU' ? 'yours' : String(task.owner || '').toLowerCase();
-
-      const done = document.createElement('button');
-      done.className = 'task-done';
-      done.textContent = 'Done';
-      done.title = `Mark "${task.title}" done`;
-      done.addEventListener('click', (ev) => {
-        ev.stopPropagation();
-        markDone(task, done);
-      });
-
-      li.append(pri, text, owner, done);
-      el.taskList.appendChild(li);
-    });
+  function renderFocusNow() {
+    if (!el || !el.focusNow) return;
+    el.focusNow.innerHTML = activeTaskId
+      ? `<p class="focus-now-has">Recording against
+           <b class="focus-now-title">${escapeHtml(activeTaskTitle || activeTaskId)}</b>
+           <button type="button" class="btn focus-now-clear">Clear</button></p>`
+      : `<p class="empty-hint">Nothing selected. Press <b>Focus</b> on any item below and
+           the timer will record against it. A session with nothing selected still counts —
+           it just records no subject.</p>`;
+    const clear = el.focusNow.querySelector('.focus-now-clear');
+    if (clear) clear.addEventListener('click', () => setActiveTask(null));
   }
 
-  async function markDone(task, btn) {
-    btn.disabled = true;
-    btn.textContent = '…';
+  function escapeHtml(v) {
+    return String(v).replace(/[&<>"']/g, (c) =>
+      ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
+  }
+
+  // Pressing Focus on the item already selected clears it, so the same button is both
+  // set and unset and there is no state you can get stuck in.
+  function setActiveTask(id, title) {
+    if (id === null || activeTaskId === id) {
+      activeTaskId = null;
+      activeTaskTitle = '';
+    } else {
+      activeTaskId = id;
+      activeTaskTitle = title || '';
+    }
+    renderFocusNow();
+  }
+
+  // Something in the backlog panel changed. If the item the timer points at is no longer
+  // open, stop pointing at it — a timer recording against a closed item is a wrong record,
+  // not a harmless one.
+  async function refreshActiveTask() {
+    if (!activeTaskId) return;
     try {
-      // The todo module's own route. This panel never touches todo_items directly, so the
-      // decided_at stamp, the note trail and the provenance are all written by the one
-      // place that owns them.
-      const r = await fetch(`/api/todo/items/${encodeURIComponent(task.id)}`, {
-        method: 'PATCH',
-        headers: { 'Content-Type': 'application/json', 'x-mc-by': 'you' },
-        body: JSON.stringify({ status: 'done' }),
-      });
-      if (!r.ok) throw new Error((await r.json().catch(() => ({}))).error || `HTTP ${r.status}`);
-
-      if (activeTaskId === task.id) activeTaskId = null;
-      await loadTasks();
-    } catch (err) {
-      // Failing to record must not look like recording. The row stays, the button comes
-      // back, and the reason is on screen rather than in a console nobody has open.
-      btn.disabled = false;
-      btn.textContent = 'Done';
-      el.emptyHint.style.display = 'block';
-      el.emptyHint.textContent = `Could not mark "${task.title}" done: ${err.message}`;
+      const body = await api('/todo/items?status=open');
+      const still = (body.items || []).some((t) => String(t.id) === String(activeTaskId));
+      if (!still) setActiveTask(null);
+    } catch {
+      // Could not look. Leave the selection alone rather than clearing it on a network
+      // blip -- silently dropping the subject would make the next session record nothing.
     }
-  }
-
-  async function loadTasks() {
-    // Asks the todo module's own route. The focus panel never reads todo_items directly.
-    const body = await api('/todo/items?status=open');
-    tasks = (body.items || []).sort((a, b) => String(a.priority).localeCompare(String(b.priority)));
-    renderTasks();
-  }
-
-  function setActiveTask(id) {
-    activeTaskId = activeTaskId === id ? null : id;
-    renderTasks();
   }
 
   async function loadStats() {
@@ -278,7 +233,7 @@ function createPanel() {
         // null and the session would record no subject at all.
         body: JSON.stringify({ todoId: activeTaskId, kind: 'work', durationMinutes: DURATIONS.work / 60 }),
       });
-      await Promise.all([loadTasks(), loadStats()]);
+      await Promise.all([refreshActiveTask(), loadStats()]);
       celebrate('Session complete! Take a break 🎉');
     } else {
       celebrate("Break's over — back to it!");
@@ -323,7 +278,8 @@ function createPanel() {
   }
 
   return {
-    mount(container) {
+    mount(el0) {
+      container = el0;
       container.innerHTML = TEMPLATE;
       el = {
         modeTabs: container.querySelectorAll('.mode-tab'),
@@ -334,10 +290,8 @@ function createPanel() {
         skipBtn: container.querySelector('#skipBtn'),
         sessionCount: container.querySelector('#sessionCount'),
         streakCount: container.querySelector('#streakCount'),
-        taskSearch: container.querySelector('#taskSearch'),
-        taskMineOnly: container.querySelector('#taskMineOnly'),
-        taskList: container.querySelector('#taskList'),
-        emptyHint: container.querySelector('#emptyHint'),
+        focusNow: container.querySelector('#focusNow'),
+        focusBacklog: container.querySelector('#focusBacklog'),
         celebrateOverlay: container.querySelector('#celebrateOverlay'),
         celebrateText: container.querySelector('#celebrateText'),
         barChart: container.querySelector('#barChart'),
@@ -361,21 +315,32 @@ function createPanel() {
         secondsLeft = 1;
         tick();
       });
-      // Filtering is local to the already-loaded list, so it never re-queries the backlog
-      // on a keystroke.
-      el.taskSearch.addEventListener('input', renderTasks);
-      el.taskMineOnly.addEventListener('change', renderTasks);
+      // The backlog panel announces; this panel decides. It is mounted AFTER el is built,
+      // so container.querySelectorAll('.mode-tab') above captured only the timer's three
+      // tabs and not the backlog's two.
+      onBacklogFocus = (ev) => setActiveTask(ev.detail.id, ev.detail.title);
+      onBacklogChanged = () => refreshActiveTask();
+      container.addEventListener('td:focus', onBacklogFocus);
+      container.addEventListener('td:changed', onBacklogChanged);
+      backlogPanel.mount(el.focusBacklog, { embedded: true });
 
       renderTimer();
       if (running) {
         tickHandle = setInterval(tick, 1000);
       }
-      loadTasks();
+      renderFocusNow();
       loadStats();
     },
 
     unmount() {
       clearInterval(tickHandle);
+      // The embedded panel holds an AbortController and three listeners of its own. Not
+      // unmounting it leaks a fetch that resolves into a dead DOM.
+      backlogPanel.unmount();
+      if (container && onBacklogFocus) container.removeEventListener('td:focus', onBacklogFocus);
+      if (container && onBacklogChanged) container.removeEventListener('td:changed', onBacklogChanged);
+      onBacklogFocus = onBacklogChanged = null;
+      container = null;
       document.title = 'Mission Control';
     },
   };

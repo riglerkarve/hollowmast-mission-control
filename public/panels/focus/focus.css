@@ -233,3 +233,36 @@
 .task-done:hover:not(:disabled) { color: var(--ink); border-color: var(--accent); }
 .task-done:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
 .task-done:disabled { opacity: 0.5; cursor: default; }
+
+/* The backlog moved into Focus (owner's instruction, 18 Aug 2026). The list itself is the
+   real Backlog panel mounted into #focusBacklog, so it is styled by todo.css and nothing
+   here restyles it — a second set of rules over someone else's markup is how .bg-split
+   silently lost its grid. These rules cover only what Focus itself adds. */
+
+#focusBacklog {
+  margin-top: 1.1rem;
+}
+
+/* The embedded backlog drops its .panel wrapper, so its header needs the spacing the
+   wrapper used to give it. */
+#focusBacklog .panel-header {
+  margin-bottom: 0.6rem;
+}
+
+.focus-now-has {
+  margin: 0;
+  display: flex;
+  align-items: center;
+  gap: 0.6rem;
+  flex-wrap: wrap;
+  color: var(--muted);
+}
+
+.focus-now-title {
+  color: var(--ink);
+}
+
+.focus-now-clear {
+  padding: 0.15rem 0.6rem;
+  font-size: 0.8rem;
+}

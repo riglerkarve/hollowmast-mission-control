@@ -3,7 +3,6 @@ const PANELS = {
   reports: () => import('/panels/reports/reports.js'),
   finance: () => import('/panels/finance/finance.js'),
   budget: () => import('/panels/budget/budget.js'),
-  todo: () => import('/panels/todo/todo.js'),
   income: () => import('/panels/income/income.js'),
   lifestyle: () => import('/panels/lifestyle/lifestyle.js'),
   wellbeing: () => import('/panels/wellbeing/wellbeing.js'),

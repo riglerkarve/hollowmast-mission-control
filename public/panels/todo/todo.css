@@ -205,3 +205,10 @@
   color: var(--accent);
   border-color: var(--accent);
 }
+
+/* The Focus action. It writes nothing — it announces which item the timer should record
+   against, and only Focus is listening. Given no colour of its own: it is a selection,
+   not a decision about the item. */
+.td-focus-btn {
+  font-weight: 600;
+}

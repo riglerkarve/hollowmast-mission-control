@@ -89,6 +89,7 @@ const TEMPLATE = `
 
 let root = null;
 let view = 'mine';
+let embedded = false;
 let filters = { status: '', cluster: '', priority: '' };
 let clusters = CLUSTERS_FALLBACK;
 let ac = null;                 // aborts in-flight fetches so a tab switch never writes into a dead DOM
@@ -235,6 +236,7 @@ function itemHtml(i) {
         <select class="td-in td-pri" data-act="priority" title="Re-prioritise">
           ${['P0', 'P1', 'P2', 'P3', 'DECLINE', 'DONE'].map((p) => `<option value="${p}"${p === i.priority ? ' selected' : ''}>${p}</option>`).join('')}
         </select>
+        <button class="btn td-act td-focus-btn" type="button" data-act="focus" title="Work on this — the timer records against it">Focus</button>
         <button class="td-note-btn" type="button" data-act="note" title="Add a note">+ note</button>
         <button class="td-del" type="button" data-act="delete" title="Delete — the seed only runs once, so it will not come back">×</button>
       </div>
@@ -297,7 +299,12 @@ async function load() {
   await loadItems();
 }
 
-async function reloadAll() { await load(); }
+async function reloadAll() {
+  await load();
+  // A host may be holding one of these ids. Closing an item elsewhere in this panel must
+  // not leave the timer pointed at something that is done.
+  if (root) root.dispatchEvent(new CustomEvent('td:changed', { bubbles: true }));
+}
 
 // ---------------------------------------------------------------------------- events
 // Delegated, so there is exactly one listener per event type to remove on unmount and
@@ -322,6 +329,18 @@ async function handleClick(ev) {
   const act = ev.target.closest('[data-act]');
   if (!act || act.tagName === 'SELECT') return;
   const li = act.closest('.td-item');
+
+  // 'focus' is the one action that writes nothing. It tells the host — Focus, when this
+  // panel is embedded there — which item the timer should record against. Announced as a
+  // bubbling event rather than called directly, so this panel keeps knowing nothing about
+  // the timer and still works standalone, where nothing is listening.
+  if (act.dataset.act === 'focus') {
+    root.dispatchEvent(new CustomEvent('td:focus', {
+      bubbles: true,
+      detail: { id: li.dataset.id, title: li.querySelector('.td-title')?.textContent || '' },
+    }));
+    return;
+  }
 
   try {
     if (act.dataset.act === 'clear') {
@@ -410,12 +429,27 @@ async function handleSubmit(ev) {
 }
 
 export default {
-  mount(el) {
+  // opts.embedded: rendered inside another panel (Focus), so drop the outer page chrome.
+  // The shell calls mount(root) with one argument, so standalone stays the default and
+  // this panel still works on its own if it is ever put back in the nav.
+  mount(el, opts) {
     root = el;
+    embedded = !!(opts && opts.embedded);
     view = 'mine';
     filters = { status: '', cluster: '', priority: '' };
     ac = new AbortController();
     el.innerHTML = TEMPLATE;
+
+    if (embedded) {
+      const p = el.querySelector('.td-panel');
+      p.classList.remove('panel', 'panel-wide');
+      const h1 = p.querySelector('.panel-header h1');
+      if (h1) {
+        const h2 = document.createElement('h2');
+        h2.textContent = h1.textContent;
+        h1.replaceWith(h2);
+      }
+    }
 
     onClick = handleClick;
     onChange = handleChange;

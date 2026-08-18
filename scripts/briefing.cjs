@@ -145,7 +145,29 @@ function gatherFacts() {
     modulesShipped: shipped.map((s) => ({ module: s.module, version: s.version, on: s.updated_at.slice(0, 10) })),
   };
 
+  // Deferrals live in todo_items.recheck_at. Due and not-yet-due are counted separately:
+  // "deferred to next month" and "deferred to a date that has passed" are opposite
+  // statements and must not be summed into one number.
+  const today = new Date().toISOString().slice(0, 10);
+  const defRows = db.prepare(
+    "SELECT id, title, recheck_at FROM todo_items WHERE status = 'open' AND recheck_at IS NOT NULL ORDER BY recheck_at"
+  ).all();
+  let handover = null;
+  try {
+    // Newest handover by filename, which is dated. Absent is reported as absent, never
+    // as an empty string that would render the same as "there is no handover".
+    const rd = path.join(__dirname, '..', 'handover');
+    const hs = fs.readdirSync(rd).filter((f) => /^handover-.*\.md$/.test(f)).sort();
+    handover = hs.length ? hs[hs.length - 1] : null;
+  } catch { handover = null; }
+  const deferralsDue = {
+    due: defRows.filter((r) => r.recheck_at <= today),
+    pending: defRows.filter((r) => r.recheck_at > today),
+    handover,
+  };
+
   return {
+    deferralsDue,
     date: TODAY,
     work,
     // Asked of lifestyle, not derived here. The briefing carries the STANDING state —
@@ -244,6 +266,24 @@ function render(facts, prose) {
   if (blind.length) L.push(`_Not counted above: ${blind.join('; ')}._\n`);
 
   // Due today. Forward-looking and actionable, so it sits above the money.
+  // Deferrals that have come due, and the latest handover. Both answer "what did a
+  // past session decide that I am supposed to look at again", which is invisible
+  // otherwise: a decision recorded in a note resurfaces only if somebody reads it.
+  const dd = facts.deferralsDue;
+  if (dd && (dd.due.length || dd.handover)) {
+    L.push('## Picked up from a past session\n');
+    for (const it of dd.due) {
+      L.push(`- **${it.id}** is due for re-check today (deferred ${it.recheck_at}) — ${it.title}`);
+    }
+    if (dd.pending.length) {
+      L.push(`- ${dd.pending.length} other deferral(s) not yet due, next ${dd.pending[0].recheck_at}.`);
+    }
+    if (dd.handover) {
+      L.push(`- Latest handover: \`handover/${dd.handover}\``);
+    }
+    L.push('');
+  }
+
   const c = facts.choresDue;
   if (c && c.total) {
     L.push('## Due today\n');

@@ -258,4 +258,36 @@ router.delete('/traffic', (req, res) => {
   });
 });
 
+// Published sites whose most recent probe was not a clean 200, for the briefing.
+//
+// It reports the LAST PROBE rather than testing the site now, and that is deliberate on two
+// counts. The briefing runs at a fixed hour and must not depend on the network being up at that
+// second; and a site that recovered an hour ago is not news, while one that has been down since
+// the last probe is.
+//
+// A project that has never been probed is reported as such rather than counted as healthy. An
+// unmeasured site is not a working one, and that distinction is the reason this returns a
+// reason string instead of a boolean.
+function notOk() {
+  const out = [];
+  for (const p of PROJECTS.filter((x) => x.live)) {
+    const row = db.prepare(
+      'SELECT at, status, ms, why FROM analytics_probes WHERE project = ? ORDER BY at DESC LIMIT 1'
+    ).get(p.id);
+
+    if (!row) {
+      out.push({ name: p.name, at: 'never', detail: 'never probed, so its state is unknown rather than good' });
+      continue;
+    }
+    if (row.status !== 200) {
+      const detail = row.status == null
+        ? (row.why || 'could not be reached')
+        : `returned ${row.status}`;
+      out.push({ name: p.name, at: String(row.at).slice(0, 16).replace('T', ' '), detail });
+    }
+  }
+  return { down: out, checked: PROJECTS.filter((x) => x.live).length };
+}
+
 module.exports = router;
+module.exports.notOk = notOk;

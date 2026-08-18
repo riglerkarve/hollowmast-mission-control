@@ -11,6 +11,36 @@
 // SQLite database does not exist — a known divergence with a reason, not an oversight.
 'use strict';
 
+// WHAT IS DELIBERATELY NOT HERE, and why. 18 Aug 2026.
+//
+// The briefing now asks 15 of the 28 modules. The other 13 were each looked at and left out
+// on purpose; this list exists so the next session does not spend the evening rediscovering
+// the same reasons. Wiring a module in is cheap — the judgement is whether it has anything to
+// say at 07:00 that changes what you do.
+//
+//   mail      MEASURED AND REJECTED. 64,225 of 69,078 messages are unread — 93% — and 255 of
+//             the last 266 received, 96%. Unread cannot separate "needs you" from "normal" at
+//             any window, so a daily line would be permanently alarming and never actionable.
+//             The helper written for it was deleted rather than left unused.
+//   cash      Never counted, and it is manual capture. A line reading "never counted" every
+//             morning is nagging, which is the one thing this file must not become.
+//   drive     One file. There is nothing to say.
+//   browsing  Descriptive rather than actionable: it tells you where the time went, which is a
+//             thing to sit and read, not a thing to act on before breakfast.
+//   stats     Describes the dashboard, not the day.
+//   atlas     Countries visited. Not a daily fact.
+//   exercise  Zero rows. Wiring an empty table produces an empty heading.
+//   brain     Two notes. Same.
+//   gate      Only matters when it refuses someone, and that already raises an alert.
+//   uptime    The service's own uptime, already covered by the Mission Control section.
+//   projects  A registry other modules ask; it holds no daily fact of its own.
+//   reports   A rendering surface, not a source.
+//   garage    A static console, not a data module.
+//
+// The rule that decided all of them: a section that renders every morning regardless of state
+// teaches the reader to skip it, and once skipped it takes the useful sections with it. Every
+// section here stays silent unless it has something to say.
+
 const fs = require('node:fs');
 const path = require('node:path');
 
@@ -34,6 +64,9 @@ const income = require('../server/routes/income');
 const budget = require('../server/routes/budget');
 const safety = require('../server/routes/safety');
 const machine = require('../server/routes/machine');
+const goals = require('../server/routes/goals');
+const alerts = require('../server/routes/alerts');
+const analytics = require('../server/routes/analytics');
 
 const ROOT = path.join(__dirname, '..');
 const HOST = 'http://127.0.0.1:11434';
@@ -189,11 +222,17 @@ function gatherFacts() {
     authorised: ask(() => safety.authorisedThisMonth()),
   };
   const pressure = ask(() => machine.pressureNow());
+  const goalSteps = ask(() => goals.nextSteps());
+  const alertsRaised = ask(() => alerts.raisedSince(sinceStamp));
+  const sitesDown = ask(() => analytics.notOk());
 
   return {
     earned,
     moneyGuard,
     pressure,
+    goalSteps,
+    alertsRaised,
+    sitesDown,
     scheduleDue,
     healthDay,
     deferralsDue,
@@ -415,6 +454,49 @@ function render(facts, prose) {
         if (diskTight) L.push(`- disk ${pr.disk.freeGB} GB free of ${pr.disk.totalGB}, threshold 20 GB`);
         L.push('');
       }
+    }
+
+    // GOALS, as the next physical action rather than a percentage. A progress bar tells you
+    // where you are; it does not tell you what to do, and a goal without its next step is a
+    // wish. A step blocked by another is shown as blocked rather than offered, because an
+    // impossible action is worse than none.
+    const gs = facts.goalSteps;
+    if (gs && !gs.error && gs.state === 'ok' && gs.goals.length) {
+      L.push('## Goals — the next step\n');
+      for (const g of gs.goals) {
+        if (!g.next) { L.push(`- ${g.title}: every step done (${g.done}/${g.of})`); continue; }
+        const cost = g.costPence ? ` — ${gbp(g.costPence)}` : '';
+        const blocked = g.blocked ? ' **(blocked)**' : '';
+        L.push(`- ${g.title} (${g.done}/${g.of}): ${g.next}${cost}${blocked}`);
+      }
+      L.push('');
+    }
+
+    // ALERTS. Reported as RAISED rather than "active", because this module has no notion of
+    // an alert being resolved and inventing one here would be a second disagreeing definition.
+    // The unjudged count leads, since the module mutes a kind that gets ignored enough times:
+    // an unjudged alert is one still spending attention without having earned its place.
+    const ar = facts.alertsRaised;
+    if (ar && !ar.error && ar.state === 'ok' && ar.raised > 0) {
+      L.push('## Alerts raised\n');
+      for (const k of ar.kinds) {
+        L.push(`- ${k.kind}: ${k.n}` + (Number(k.unjudged) ? `, ${k.unjudged} not yet judged` : ', all judged'));
+      }
+      L.push('');
+    }
+
+    // THE PUBLISHED SITES, and only when one is not answering. A green line every morning is
+    // a line nobody reads, and the value here is entirely in the exception. It reports the
+    // last PROBE rather than testing the site now: the briefing runs at a fixed hour and a
+    // site that recovered an hour ago is not news, whereas one that has been down since the
+    // last probe is.
+    const sd2 = facts.sitesDown;
+    if (sd2 && !sd2.error && sd2.down && sd2.down.length) {
+      L.push('## A published site is not answering\n');
+      for (const s of sd2.down) {
+        L.push(`- **${s.name}** — ${s.detail} (last checked ${s.at})`);
+      }
+      L.push('');
     }
 
     L.push('## Due today\n');

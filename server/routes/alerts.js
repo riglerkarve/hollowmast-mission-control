@@ -190,6 +190,37 @@ router.post('/kinds/:kind/unmute', (req, res) => {
   res.json({ kind: k.kind, muted: false, note: 'Unmuted, and previous ignores cleared so it starts fresh.' });
 });
 
+// Alerts raised in the window, for the briefing.
+//
+// It reports what was RAISED, not what is "active", because this module has no concept of an
+// alert being resolved — it has a ledger of sends and a judgement on each kind. Inventing an
+// open/closed state here would be a second, disagreeing definition of the same thing.
+//
+// `unjudged` matters more than the count: the module's own rule is that a kind ignored enough
+// times mutes itself, so an alert nobody has judged is one still costing attention without yet
+// earning its place.
+function raisedSince(sinceISO) {
+  const since = String(sinceISO || '').slice(0, 10);
+  if (!since) return { state: 'no-window' };
+
+  const total = db.prepare('SELECT COUNT(*) c FROM alert_events').get().c;
+  if (!total) return { state: 'none-sent', why: 'no alert has ever been sent — an empty ledger, not a broken one' };
+
+  const rows = db.prepare(
+    `SELECT kind, COUNT(*) AS n, SUM(CASE WHEN verdict IS NULL OR verdict = '' THEN 1 ELSE 0 END) AS unjudged
+     FROM alert_events WHERE sent_at >= ? GROUP BY kind ORDER BY n DESC`
+  ).all(since);
+
+  return {
+    state: 'ok',
+    since,
+    kinds: rows,
+    raised: rows.reduce((a, r) => a + r.n, 0),
+    unjudged: rows.reduce((a, r) => a + Number(r.unjudged || 0), 0),
+  };
+}
+
 module.exports = router;
+module.exports.raisedSince = raisedSince;
 module.exports.record = record;
 module.exports.IGNORES_TO_MUTE = IGNORES_TO_MUTE;

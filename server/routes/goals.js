@@ -617,4 +617,39 @@ router.all('*', (req, res) => {
   res.status(404).json({ error: `no such goals endpoint: ${req.method} /api/goals${req.params[0]}` });
 });
 
+// The next undone step of each live goal, for the briefing.
+//
+// A goal without its next step is a wish. The whole value of this module in a morning briefing
+// is answering "what is the next physical thing", so this returns the step rather than a
+// percentage — a progress bar tells you where you are and not what to do.
+//
+// Steps blocked by another step are reported as blocked rather than offered as next, because
+// presenting an impossible action is worse than presenting none.
+function nextSteps() {
+  const goals = db.prepare(
+    "SELECT id, title, target_date FROM goals WHERE status IS NULL OR status NOT IN ('done', 'dropped', 'declined')"
+  ).all();
+  if (!goals.length) return { state: 'none', why: 'no live goals' };
+
+  const out = [];
+  for (const g of goals) {
+    const steps = db.prepare(
+      'SELECT title, position, done_on, blocked_by, cost_pence FROM goal_steps WHERE goal_id = ? ORDER BY position'
+    ).all(g.id);
+    const doneCount = steps.filter((s) => s.done_on).length;
+    const next = steps.find((s) => !s.done_on) || null;
+    out.push({
+      title: g.title,
+      targetDate: g.target_date || null,
+      done: doneCount,
+      of: steps.length,
+      next: next ? next.title : null,
+      blocked: next ? Boolean(next.blocked_by) : false,
+      costPence: next && next.cost_pence ? next.cost_pence : null,
+    });
+  }
+  return { state: 'ok', goals: out };
+}
+
 module.exports = router;
+module.exports.nextSteps = nextSteps;

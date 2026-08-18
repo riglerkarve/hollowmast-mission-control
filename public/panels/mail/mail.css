@@ -41,3 +41,18 @@
   .ml-row { grid-template-columns: 1fr auto auto; }
   .ml-bar { display: none; }
 }
+
+.ml-h3 { font-size: .9rem; margin: .9rem 0 .2rem; }
+
+/* The two ledger lists share a row shape but mean opposite things, so they get the same
+   layout and separate headings rather than a merged table with a status column. */
+.ml-lrow { grid-template-columns: minmax(0, 12rem) minmax(0, 11rem) minmax(0, 1fr); }
+.ml-when { color: var(--muted); font-size: .8rem; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+
+/* MUST COME LAST. The base .ml-lrow rule above is written after the earlier media query and
+   has the same specificity, so without this it wins at every width and the narrow layout
+   silently stops applying. Overrides live at the end of the sheet, not beside their topic. */
+@media (max-width: 760px) {
+  .ml-lrow { grid-template-columns: 1fr; }
+  .ml-lrow .ml-when { white-space: normal; }
+}

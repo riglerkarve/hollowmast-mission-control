@@ -21,6 +21,7 @@
 
 const express = require('express');
 const db = require('../db');
+const finance = require('./finance');
 const ga = require('../../tools/google-auth.cjs');
 
 db.migrate('mail', [
@@ -296,6 +297,65 @@ router.get('/attention', (req, res) => {
     unreadCaveat: `Unread is a LABEL, not a measure of attention -- ${(100 * unread / total).toFixed(0)}%`
       + ' of this mailbox is unread, which means the flag is not being used to track anything.'
       + ' Treat the bands as where mail accumulates, not as a backlog you owe.',
+  });
+});
+
+
+// M39: the question neither module can answer alone. Mail asks FINANCE for its services --
+// the same cross-module shape browsing already uses -- and never reads finance tables.
+//
+// THE MATCH IS A GUESS ABOUT A STRING and the payload says so in its own caption. Comparing
+// a bank counterparty to an email address finds Klarna and also finds 'Three' inside
+// threelegs09@hotmail.com. Every row here is a CANDIDATE TO CHECK, never evidence that
+// money is being wasted, and the residue is reported beside the hits because a list that
+// silently drops what it could not match looks far more complete than it is.
+router.get('/vs-ledger', (req, res) => {
+  const held = db.prepare('SELECT COUNT(*) AS n FROM gmail_messages').get().n;
+  if (!held) return res.json({ state: 'empty', message: 'No mail imported yet, so nothing can be compared.' });
+
+  const rec = finance.recurring();
+  const services = rec.services || [];
+  if (!services.length) return res.json({ state: 'empty', message: 'The ledger reports no recurring services to compare against.' });
+
+  const senders = db.prepare(
+    'SELECT from_addr AS addr, COUNT(*) AS n, MAX(day) AS lastDay FROM gmail_messages GROUP BY from_addr'
+  ).all();
+
+  const norm = (x) => String(x).toLowerCase().replace(/[^a-z0-9]/g, '');
+  const tooShort = [];
+  const silent = [];      // charged, and nothing in the mailbox matches
+  const talking = [];     // still emailing AFTER the last charge
+  const quiet = [];       // matched, but the mail stopped too
+
+  services.forEach((svc) => {
+    const key = norm(svc.name);
+    // A key under four characters matches half the mailbox. Dropped, and COUNTED -- an
+    // unreported drop is what makes the surviving list look clean.
+    if (key.length < 4) { tooShort.push(svc.name); return; }
+    const hits = senders.filter((x) => norm(x.addr).includes(key))
+      .sort((a, b) => b.n - a.n);
+    if (!hits.length) { silent.push({ name: svc.name, status: svc.status, lastOn: svc.lastOn, charges: svc.charges }); return; }
+    const top = hits[0];
+    const row = { name: svc.name, status: svc.status, lastOn: svc.lastOn, charges: svc.charges,
+      sender: top.addr, messages: top.n, lastMail: top.lastDay, senders: hits.length };
+    (top.lastDay > svc.lastOn ? talking : quiet).push(row);
+  });
+
+  talking.sort((a, b) => (a.lastOn < b.lastOn ? 1 : -1));
+
+  res.json({
+    state: 'ok',
+    asOf: rec.asOf,
+    ledgerStaleDays: rec.ledgerStaleDays,
+    counted: services.length,
+    talking, silent, quiet,
+    tooShort,
+    caption: 'Candidates to check, not proof. The match compares a bank counterparty to an '
+      + 'email address, so it finds Klarna and it also finds "Three" inside a personal '
+      + 'address. Read every row as a question.',
+    blindTo: 'A service billing under a different trading name looks silent here, and a '
+      + 'service emailing from an unrelated domain looks unmatched. Both are the same '
+      + 'string problem in opposite directions.',
   });
 });
 

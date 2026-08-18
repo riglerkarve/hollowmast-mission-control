@@ -20,7 +20,50 @@ const TEMPLATE = `
     <section class="card" id="mlHead"><p class="empty-hint">Reading the mailbox…</p></section>
     <section class="card" id="mlSenders"></section>
     <section class="card" id="mlUnread"></section>
+    <section class="card" id="mlLedger"></section>
   </div>`;
+
+// M39. Two directions, kept apart because they mean opposite things. A service that stopped
+// charging but is STILL EMAILING may have moved to a different trading name on the statement.
+// One that charges with NO MAIL AT ALL has no paper trail to check the charge against.
+async function loadLedger() {
+  if (!root) return;
+  let d;
+  try {
+    const r = await fetch('/api/mail/vs-ledger', { headers: { 'X-MC-By': 'mail-panel' } });
+    d = await r.json();
+    if (!r.ok) throw new Error(d.error || `HTTP ${r.status}`);
+  } catch (err) {
+    if (!root) return;
+    root.querySelector('#mlLedger').innerHTML =
+      `<p class="empty-hint">Could not compare against the ledger: ${esc(err.message)}<br>`
+      + '<small>That is a failure to look, not a report that nothing matched.</small></p>';
+    return;
+  }
+  if (!root) return;
+  if (d.state !== 'ok') {
+    root.querySelector('#mlLedger').innerHTML = `<p class="empty-hint">${esc(d.message)}</p>`;
+    return;
+  }
+
+  const row = (x, right) => `<li class="ml-row ml-lrow">
+      <span class="ml-addr"><strong>${esc(x.name)}</strong></span>
+      <span class="ml-when">last charged ${esc(x.lastOn)}</span>
+      <span class="ml-when">${right}</span></li>`;
+
+  root.querySelector('#mlLedger').innerHTML = `
+    <h2 class="ml-h2">Mail against the ledger</h2>
+    <p class="ml-note">${esc(d.caption)}</p>
+    <h3 class="ml-h3">Still emailing after the last charge (${d.talking.length})</h3>
+    <ul class="ml-list">${d.talking.map((x) => row(x,
+    `mail to ${esc(x.lastMail)} &middot; ${n(x.messages)} from ${esc(x.sender)}`)).join('')}</ul>
+    <h3 class="ml-h3">Charged, but nothing in the mailbox matches (${d.silent.length})</h3>
+    <ul class="ml-list">${d.silent.map((x) => row(x,
+    `${n(x.charges)} charge(s) &middot; no matching sender`)).join('')}</ul>
+    <p class="ml-caveat">${esc(d.blindTo)}${d.tooShort.length
+    ? ` Dropped as too short to match safely: ${d.tooShort.map(esc).join(', ')}.` : ''}
+      Compared ${d.counted} service(s) the ledger reports.</p>`;
+}
 
 async function load() {
   if (!root) return;
@@ -59,6 +102,8 @@ async function load() {
         <span class="ml-bar"><span class="ml-bar-fill" style="width:${Math.max(2, s.pct * (100 / d.senders[0].pct))}%"></span></span>
         <span class="ml-n">${n(s.n)}</span><span class="ml-pct">${s.pct}%</span>
       </li>`).join('')}</ul>`;
+
+  loadLedger();
 
   const maxBand = Math.max(...d.ageing.map((b) => b.n), 1);
   root.querySelector('#mlUnread').innerHTML = `

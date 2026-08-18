@@ -346,8 +346,28 @@ account has taken in nothing for 197 days, so by that rule the urgency is nil �
 incorporating a non-trading company adds annual filings that start immediately. Worth a
 trigger (turnover returning) rather than a date.
 
+**Making Tax Digital, added 18 Aug.** Unlike incorporation, this is a dated obligation
+rather than a judgement call, and the date that decides it is already running: mandation
+from **April 2028 at £20,000 is tested on the 2026/2027 tax year**, which started 6 April
+2026. (April 2026 tested 2024/25 at £50,000; April 2027 tests 2025/26 at £30,000.)
+
+The business account shows **£0.00 in over 127 of the 365 days** of that year. The check
+reports this as a **floor rather than a total** — the year has 238 days left and the figure
+can only rise — because for a threshold test a lower bound is the useful shape.
+
+**And it states what it cannot see, which is the half that could make it wrong.** Qualifying
+income is gross self-employment *and* property income across every source; this reads one
+account. Other accounts took **£21,597.85 over 163 payments** categorised `Income - people`
+in the ledger's last twelve months — a direction label that says nothing about whether any
+of it was payment for work. So the honest reading is "the business account shows nothing
+this tax year", never "you are below the threshold". That figure is **computed, not typed**:
+the first draft had £22,628 written into the prose and it was already wrong by £1,030.
+
 None of this is tax advice, and the tool says so in both formats — including in the CSV's
-own last row, because a tidy grid implies a confidence the data does not support.
+own last row, because a tidy grid implies a confidence the data does not support. The MTD
+and incorporation sections print only on the all-years run and are absent from `--csv`;
+verified, and the CSV is byte-identical to the previous day's, so a section was added to
+the human report without moving a single figure.
 
 ---
 

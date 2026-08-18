@@ -220,6 +220,77 @@ function incorporationCheck() {
   with an accountant before acting either way.`);
 }
 
+// Making Tax Digital for Income Tax. Added 18 Aug 2026 after checking the position on
+// GOV.UK, because this is a DATED obligation rather than a judgement call, and the date
+// that decides it is already running.
+//
+// Mandation is tested on a PRIOR tax year, which is the part that catches people out:
+//
+//   from April 2026   qualifying income over 50,000 in 2024/2025
+//   from April 2027   qualifying income over 30,000 in 2025/2026
+//   from April 2028   qualifying income over 20,000 in 2026/2027   <- running NOW
+//
+// So the year currently in progress is the one that decides the 20,000 threshold.
+function mtdCheck() {
+  const TY_START = '2026-04-06';
+  const THRESHOLD = 2000000; // pence
+
+  const r = db.prepare(
+    `SELECT SUM(CASE WHEN amount_pence > 0 THEN amount_pence ELSE 0 END) inn,
+            COUNT(CASE WHEN amount_pence > 0 THEN 1 END) n
+       FROM finance_transactions
+      WHERE account_id = ? AND category <> 'Own transfer' AND date >= ?`
+  ).get(ACCOUNT, TY_START);
+
+  const end = db.prepare('SELECT MAX(date) d FROM finance_transactions').get().d;
+  const covered = Math.round((new Date(end) - new Date(TY_START)) / 86400000);
+  const inn = r.inn || 0;
+
+  console.log('\n' + '='.repeat(74));
+  console.log('MAKING TAX DIGITAL — THE TAX YEAR BEING TESTED IS THE ONE RUNNING NOW');
+  console.log('='.repeat(74));
+  console.log(`
+  Business account, 2026/2027 so far: GBP ${gbp(inn)} in over ${r.n || 0} payments.
+  The ledger ends ${end}, so this covers ${covered} of the 365 days of the tax year.
+
+  That is a FLOOR, not a total — the year has ${365 - covered} days left to run, and this
+  figure can only rise. For the threshold test a floor is the useful shape: GBP ${gbp(inn)}
+  against GBP ${gbp(THRESHOLD)} means GBP ${gbp(THRESHOLD - inn)} would have to arrive in the
+  remaining ${365 - covered} days before April 2028 mandation could bite.`);
+
+  // A filter must report what it does not key on. This one is keyed to a single account,
+  // and qualifying income is not.
+  //
+  // The 'Income - people' figure is COMPUTED rather than written into the prose. A number
+  // typed into a sentence is accurate exactly once; this file is run again next year.
+  const elsewhere = db.prepare(
+    `SELECT SUM(amount_pence) p, COUNT(*) n
+       FROM finance_transactions
+      WHERE account_id <> ? AND category = 'Income - people' AND amount_pence > 0
+        AND date >= date((SELECT MAX(date) FROM finance_transactions), '-12 months')`
+  ).get(ACCOUNT);
+
+  console.log(`
+  WHAT THIS CHECK CANNOT SEE, and it is the half that could make it wrong:
+
+    - Qualifying income is GROSS income from self-employment AND property, added together
+      across every source. This reads ONE account, ${ACCOUNT}.
+    - Trading income paid into the personal account is invisible here. That is not
+      hypothetical: other accounts took GBP ${gbp(elsewhere.p || 0)} over the last twelve
+      months of the ledger across ${elsewhere.n || 0} payments categorised 'Income - people',
+      which is a DIRECTION label and says nothing about whether any of it was payment for
+      work.
+    - Property income is not in this ledger at all.
+
+  So read the figure above as "the business account shows nothing this tax year", never as
+  "you are below the threshold". Those are different claims and only the first is measured.
+
+  As a trigger rather than a date: revisit when money starts arriving for work again, from
+  anywhere. If total gross self-employment and property income for 2026/2027 lands over
+  GBP 20,000, quarterly digital reporting starts April 2028 and needs compatible software.
+  Nothing here is tax advice — confirm the position with an accountant or on GOV.UK.`);
+}
+
 // The machine-readable form, for handing to an accountant or opening in a spreadsheet.
 // It was in this file's usage text from the start and was never implemented — the flag
 // was accepted and silently ignored, so `--csv` printed the human report and looked like
@@ -271,5 +342,8 @@ if (process.argv.includes('--csv')) {
   report();
   // Only on the all-years run: the check is about the trend, so a single-year view would
   // show it against one point.
-  if (!process.argv.slice(2).find((a) => /^\d{4}\/\d{4}$/.test(a))) incorporationCheck();
+  if (!process.argv.slice(2).find((a) => /^\d{4}\/\d{4}$/.test(a))) {
+    incorporationCheck();
+    mtdCheck();
+  }
 }

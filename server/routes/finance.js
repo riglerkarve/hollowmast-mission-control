@@ -651,3 +651,79 @@ module.exports.monthlyIncome = monthlyIncome;
 module.exports.typicalMonthly = typicalMonthly;
 module.exports.accountKindSummary = accountKindSummary;
 module.exports.ledgerSpan = ledgerSpan;
+
+// ------------------------------------------------------------------------- exposure
+// WHAT LEAVES THE MACHINE. Backlog #14, whose rationale was the specification: personal
+// finance data is ALLOWED to a frontier model and kept under review — and "under review"
+// only means something if there is a record rather than an intention.
+//
+// The distinction that matters and is easy to blur: the LOCAL model does not leave the
+// machine. Ollama runs on 127.0.0.1:11434, so sending it a counterparty is not disclosure.
+// A frontier model is a different question, and this register keeps them apart rather than
+// reporting a comforting single number.
+//
+// It is a REGISTER, not a monitor. It cannot observe a Claude session reading the ledger in
+// conversation — that is the honest gap, and it is stated rather than papered over, because
+// a register that looked complete while missing the main route would be worse than none.
+const EXPOSURE_ROUTES = [
+  {
+    id: 'categoriser-local',
+    what: 'counterparty, reference, amount_pence',
+    to: 'Ollama qwen3.5:9b on 127.0.0.1:11434',
+    leavesMachine: false,
+    status: 'in use',
+    note: 'Local. The data does not leave this computer, so it is not disclosure — but it is '
+      + 'listed because "went to a model" and "left the machine" are different facts and the '
+      + 'register would be misleading if it only showed one.',
+  },
+  {
+    id: 'briefing-local',
+    what: 'category names and movement directions only — never a figure',
+    to: 'Ollama qwen3.5:9b on 127.0.0.1:11434',
+    leavesMachine: false,
+    status: 'in use',
+    note: 'The model is barred from emitting a number and a guard enforces it; the numbers in '
+      + 'the briefing all come from SQL.',
+  },
+  {
+    id: 'frontier-automated',
+    what: 'nothing',
+    to: 'any frontier model, by scheduled or automated code',
+    leavesMachine: true,
+    status: 'NOT IN USE',
+    note: 'No scheduled task, script or route in this repo sends finance data to a frontier '
+      + 'model. Verified by the offload audit: the only model call sites are briefing.cjs, '
+      + 'categorise-model.cjs and llm-probe.cjs, and all three point at 127.0.0.1:11434.',
+  },
+  {
+    id: 'frontier-conversation',
+    what: 'whatever is read during a session — descriptors, counterparties, balances',
+    to: 'a frontier model, via a Claude Code session',
+    leavesMachine: true,
+    status: 'in use, and NOT observable from here',
+    note: 'This is the real exposure and this register cannot measure it. A session reading '
+      + 'the ledger to build a feature sends what it reads. You permitted this on 17 Aug; it '
+      + 'is recorded here so the decision is revisited against a stated fact rather than a '
+      + 'vague sense of it.',
+  },
+];
+
+router.get('/exposure', (req, res) => {
+  const offMachine = EXPOSURE_ROUTES.filter((r) => r.leavesMachine && r.status.startsWith('in use'));
+  res.json({
+    state: 'ok',
+    routes: EXPOSURE_ROUTES,
+    summary: {
+      automatedOffMachine: EXPOSURE_ROUTES.filter((r) => r.leavesMachine && r.status === 'NOT IN USE').length,
+      offMachineInUse: offMachine.length,
+      localOnly: EXPOSURE_ROUTES.filter((r) => !r.leavesMachine).length,
+    },
+    honest: 'Nothing automated in this repo sends finance data off the machine. The one route '
+      + 'that does is a Claude session reading it during work, which this register lists and '
+      + 'cannot measure. A register that omitted it would look complete while missing the '
+      + 'only path that matters.',
+    revisit: 'The permission was given 17 Aug 2026. Re-read this list before renewing it.',
+  });
+});
+
+module.exports.EXPOSURE_ROUTES = EXPOSURE_ROUTES;

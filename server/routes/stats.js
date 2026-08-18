@@ -226,3 +226,75 @@ router.get('/activity', (req, res) => {
 });
 
 module.exports.derivedActivity = derivedActivity;
+
+// STANDING — backlog #24, "turn life into a game", built to the shape you chose: counts and
+// streaks only, no composite.
+//
+// THERE IS NO XP NUMBER AND NO LEVEL, DELIBERATELY. An XP total is a weighted sum, and the
+// weights would be mine: is shipping a module worth five chores or fifty? Nobody can answer
+// that, so the number would be unauditable by construction — the one figure on the dashboard
+// that could not be checked, sitting next to figures that can. Your standing rule forbids it
+// and this is the case it was written for.
+//
+// Every line below is a COUNT of rows that already exist, or a STREAK of consecutive days
+// with such a row. Both are arithmetic you can verify by looking at the table.
+function standing() {
+  const q = (sql, ...a) => { try { return db.prepare(sql).get(...a); } catch { return null; } };
+
+  // A streak is consecutive days ending today or yesterday — ending yesterday still counts
+  // as live, because a streak that breaks at midnight before you have had the day is a
+  // punishment for the clock rather than a fact about you.
+  const streak = (table, col) => {
+    let rows = [];
+    try {
+      rows = db.prepare(
+        `SELECT DISTINCT date(${col}) AS d FROM ${table} ORDER BY d DESC`
+      ).all().map((r) => r.d);
+    } catch { return { days: 0, reason: 'no such table yet' }; }
+    if (!rows.length) return { days: 0, reason: 'nothing recorded' };
+
+    const today = db.prepare("SELECT date('now','localtime') AS d").get().d;
+    const yest = db.prepare("SELECT date('now','localtime','-1 day') AS d").get().d;
+    if (rows[0] !== today && rows[0] !== yest) return { days: 0, lastOn: rows[0], reason: 'not current' };
+
+    let n = 1;
+    for (let i = 1; i < rows.length; i++) {
+      const gap = Math.round((Date.parse(rows[i - 1]) - Date.parse(rows[i])) / 86400000);
+      if (gap === 1) n++; else break;
+    }
+    return { days: n, lastOn: rows[0] };
+  };
+
+  const modules = q('SELECT COUNT(*) c FROM schema_meta');
+  const done = q("SELECT COUNT(*) c FROM todo_items WHERE status = 'done'");
+  const chores = q('SELECT COUNT(*) c FROM lifestyle_done');
+  const journal = q('SELECT COUNT(*) c FROM wellbeing_entries');
+  const focus = q('SELECT COUNT(*) c, COALESCE(SUM(duration_minutes),0) m FROM focus_sessions');
+  const countries = q('SELECT COUNT(*) c FROM atlas_countries WHERE visited = 1');
+  const countriesAll = q('SELECT COUNT(*) c FROM atlas_countries');
+
+  return {
+    state: 'ok',
+    counts: [
+      { label: 'modules with a migrated schema', value: modules ? modules.c : 0 },
+      { label: 'backlog items closed', value: done ? done.c : 0 },
+      { label: 'focus sessions', value: focus ? focus.c : 0, detail: `${focus ? focus.m : 0} minutes` },
+      { label: 'chores recorded', value: chores ? chores.c : 0 },
+      { label: 'journal entries', value: journal ? journal.c : 0 },
+      { label: 'countries marked', value: countries ? countries.c : 0, detail: `of ${countriesAll ? countriesAll.c : 0}` },
+    ],
+    streaks: [
+      { label: 'days with a chore recorded', ...streak('lifestyle_done', 'done_on') },
+      { label: 'days with a journal entry', ...streak('wellbeing_entries', 'date') },
+      { label: 'days with a focus session', ...streak('focus_sessions', 'completed_at') },
+    ],
+    refuses: 'No XP, no level, no composite. Those need weights — is a shipped module worth '
+      + 'five chores or fifty? — and the weights would be mine, making it the one figure here '
+      + 'that could not be checked. Every number above is a row count or a run of days.',
+    streakRule: 'A streak counts consecutive days ending today OR yesterday. Breaking at '
+      + 'midnight before you have had the day would punish the clock, not measure you.',
+  };
+}
+
+router.get('/standing', (req, res) => res.json(standing()));
+module.exports.standing = standing;

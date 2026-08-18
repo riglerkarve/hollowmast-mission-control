@@ -32,6 +32,7 @@ let activePanel = null;
 // the DOM entirely. It only reproduces on a FIRST visit -- once the module is cached the
 // await resolves in a microtask and the window closes, which is why it reads as random.
 let mountToken = 0;
+let mountAbort = null;   // aborted when the panel that owns it is torn down
 
 async function mountPanel(name) {
   const loader = PANELS[name];
@@ -45,6 +46,23 @@ async function mountPanel(name) {
   // returns below would leave activePanel pointing at a panel it already unmounted, and
   // the next switch would unmount it a second time.
   activePanel = null;
+  // Cancel the outgoing panel's in-flight work. Every panel nulls its own root in
+  // unmount(), so a fetch resolving after a switch dereferences null and throws
+  // "Cannot read properties of null". Measured 18 Aug: 7 panels threw while the contrast
+  // audit drove all 14 in sequence.
+  //
+  // NOT the race mountToken fixes. That one stops the WRONG PANEL mounting after a slow
+  // import; this is the right panel resolving after its own teardown, and the token cannot
+  // see it. A first attempt at this gave each panel its own container and detached it on
+  // switch, on the theory that the writes were landing in an emptied root -- they are not,
+  // the root reference itself is null, and that fix silenced nothing.
+  //
+  // The signal reaches mount() as a second argument, which todo.mount(el, opts) already
+  // accepts and focus.mount(el0) ignores. A panel that passes it to fetch never runs its
+  // continuation; one that does not still needs its own guard, because aborting cannot
+  // un-write code that never checks.
+  if (mountAbort) mountAbort.abort();
+  mountAbort = new AbortController();
   panelRoot.innerHTML = '';
 
   let mod;
@@ -70,7 +88,7 @@ async function mountPanel(name) {
   if (token !== mountToken) return;
 
   activePanel = mod.default;
-  activePanel.mount(panelRoot);
+  activePanel.mount(panelRoot, { signal: mountAbort.signal });
 
   navItems.forEach((btn) => btn.classList.toggle('active', btn.dataset.panel === name));
   history.replaceState(null, '', `#${name}`);

@@ -737,6 +737,40 @@ It exists because the server was found dead for four hours with a log whose last
 still read "Dashboard running". **Absence and failure must not look the same** — that is
 the whole point, and it applies to every panel you add, not just the process.
 
+### The watchdog was blind to restarts — fixed 18 Aug 2026
+
+Found while researching backlog #26, and it is the same law failing inside the tool built
+to enforce it. The watchdog probes every 5 minutes and reports what it finds **at that
+instant**, so a server that restarts *between* two probes is up for both and logs `ok`
+twice. Measured on this project's own logs:
+
+| | ok-checks | non-ok lines | restarts concealed behind an `ok` |
+|---|---|---|---|
+| 17 Aug | 54 | 29 | **21** |
+| 18 Aug | 22 | **0** | **11** |
+
+A perfectly clean log for a day the service restarted eleven times. "Stable for ten hours"
+and "flapping every nine minutes" rendered identically.
+
+Today's restarts turned out to be development activity — but **nothing in the log could
+establish that**, which is precisely the defect. A crash loop would have looked the same.
+
+**Detected on `startedAt`, not on uptime arithmetic.** The obvious test — compare uptime
+against the previous uptime plus elapsed wall-clock — needs a tolerance constant, and it
+false-positives every time this laptop sleeps, because wall-clock advances while the
+process clock does not. `/api/status` already returns `startedAt` and `pid`. A changed
+`startedAt` **is** a restart: no threshold to choose, and sleeping cannot fake one.
+
+Verified against a real restart, not a hand-edited state file: the check across pid
+26348 → 25796 logged `ok BUT RESTARTED` with both pids and both start times, counted it,
+and the following check returned to plain `ok` without double-counting.
+
+**Deliberately not a notification.** Restarting during development is normal, and an alert
+that fires while you work is one you learn to dismiss. Same call already made for
+per-category budget breaches: log and briefing, never pushed at you. The witnessed count
+is carried through the DOWN path too — dropping it there would clear the baseline on every
+outage and silently reintroduce the blindness.
+
 Two machine facts this depends on, both verified the hard way:
 
 - **`schtasks /end` does not stop the server.** It prints SUCCESS, sets the task Ready,

@@ -186,15 +186,62 @@ async function main() {
   const first = await probe();
 
   if (first.ok) {
+    // A RESTART BETWEEN CHECKS IS NOT AN OUTAGE, BUT IT IS NOT "ok" EITHER.
+    //
+    // Found 18 Aug 2026 while researching backlog #26. The watchdog probes every 5 minutes
+    // and reports what it finds AT THAT INSTANT, so a server that restarts between two
+    // probes is up for both of them and logs "ok" twice. Measured on this project's own
+    // logs: 17 Aug, 54 ok-checks concealing 21 restarts; 18 Aug, 22 ok-checks and ZERO
+    // non-ok lines across a window containing 11 restarts. A perfectly clean log for a day
+    // the service restarted eleven times.
+    //
+    // That is this project's own law failing in the one tool built to enforce it: "stable
+    // for ten hours" and "flapping every nine minutes" rendered identically. Those restarts
+    // turned out to be development activity — but nothing in the log could establish that,
+    // which is precisely the defect. A crash loop would have looked the same.
+    //
+    // DETECTED ON startedAt, NOT ON UPTIME ARITHMETIC. The obvious test — compare uptime
+    // against the previous uptime plus elapsed wall-clock — needs a tolerance constant, and
+    // it false-positives every time this laptop sleeps, because wall-clock advances while
+    // the process clock does not. startedAt already comes back from /api/status. A changed
+    // startedAt IS a restart: no threshold to choose, and sleeping cannot fake one.
+    const startedAt = first.body.startedAt || null;
+    const restartedSinceLastCheck = Boolean(prev.startedAt && startedAt && prev.startedAt !== startedAt);
+
+    // Counted per day so a flap is legible without a rolling window to tune. The date is
+    // taken from the local day, matching how the log files are named.
+    const today = new Date().toLocaleDateString('en-CA');
+    const seenToday = (prev.witnessedDate === today ? prev.witnessedRestarts || 0 : 0)
+      + (restartedSinceLastCheck ? 1 : 0);
+
     if (prev.state === 'down') {
       const downMs = prev.downSince ? now - new Date(prev.downSince).getTime() : null;
       const mins = downMs == null ? 'an unknown time' : `${(downMs / 60000).toFixed(1)} min`;
       log(`RECOVERED after ${mins} down (uptime now ${first.body.uptimeSeconds}s)`);
       notify('Mission Control recovered', `Back up after ${mins} down.`);
+    } else if (restartedSinceLastCheck) {
+      log(`ok BUT RESTARTED since the last check — was pid ${prev.pid} started ${prev.startedAt}, `
+        + `now pid ${first.body.pid} started ${startedAt}; uptime ${first.body.uptimeSeconds}s. `
+        + `${seenToday} restart(s) witnessed today.`);
     } else {
       log(`ok — uptime ${first.body.uptimeSeconds}s, ${first.body.taskCount} tasks`);
     }
-    writeState({ state: 'up', downSince: null, lastNotifyAt: null, restarts: 0, lastCheck: new Date().toISOString() });
+
+    // DELIBERATELY NOT A NOTIFICATION. Restarting during development is normal and an alert
+    // that fires while you work is one you learn to dismiss, which costs the channel. This
+    // follows the same call already made for per-category budget breaches: it goes in the
+    // log and the briefing, which you read, rather than being pushed at you.
+    writeState({
+      state: 'up',
+      downSince: null,
+      lastNotifyAt: null,
+      restarts: 0,
+      startedAt,
+      pid: first.body.pid || null,
+      witnessedDate: today,
+      witnessedRestarts: seenToday,
+      lastCheck: new Date().toISOString(),
+    });
     return;
   }
 
@@ -235,11 +282,23 @@ async function main() {
     log('suppressed duplicate alert — already notified within 30 min');
   }
 
+  // The witnessed-restart fields are carried through the DOWN path too. Dropping them here
+  // would clear the baseline on every outage, so the first ok check after any restart the
+  // watchdog performed itself would have nothing to compare against and would silently
+  // report a clean "ok" — reintroducing the exact blindness this is meant to remove.
+  // startedAt is deliberately NOT updated here: a restart the watchdog performed is already
+  // logged and alerted on, and the next ok check should see the change rather than have it
+  // quietly absorbed.
+  const today = new Date().toLocaleDateString('en-CA');
   writeState({
     state: recovered ? 'up' : 'down',
     downSince: recovered ? null : downSince,
     lastNotifyAt: recovered ? null : lastNotifyAt,
     restarts: (prev.restarts || 0) + (restarted ? 1 : 0),
+    startedAt: prev.startedAt || null,
+    pid: prev.pid || null,
+    witnessedDate: today,
+    witnessedRestarts: prev.witnessedDate === today ? (prev.witnessedRestarts || 0) : 0,
     lastCheck: new Date().toISOString(),
   });
 

@@ -201,3 +201,71 @@
   .fin-access-list li { grid-template-columns: 1fr; gap: 0.15rem; }
   .fin-a-tables { font-size: 0.8em; }
 }
+
+/* ---------------------------------------------------------------------------------------
+   What you have — backlog #77. Appended at the end of the sheet where a later rule wins;
+   every class prefixed .fin-nw- and grepped against public/ first. Tokens from shell.css.
+   --------------------------------------------------------------------------------------- */
+.fin-nw-total { display: flex; flex-direction: column; gap: 0.1rem; margin-bottom: 0.9rem; }
+.fin-nw-label { font-size: 0.8rem; letter-spacing: 0.06em; text-transform: uppercase; color: var(--muted); }
+.fin-nw-big { font-size: 2rem; font-weight: 700; letter-spacing: -0.02em; font-variant-numeric: tabular-nums; }
+.fin-nw-asof { font-size: 0.82rem; color: var(--muted); }
+
+.fin-nw-list { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 1px; }
+
+.fin-nw-list li {
+  display: grid;
+  grid-template-columns: 1fr auto auto 1.4rem;
+  gap: 0 0.9rem;
+  align-items: baseline;
+  padding: 0.45rem 0.6rem;
+  background: var(--bg);
+  border-radius: 6px;
+}
+
+/* Rows you typed are marked. The distinction between a figure the bank reports and one you
+   remembered is the most important thing on this card, and it must survive a glance. */
+.fin-nw-mine { border-left: 3px solid var(--accent); }
+
+.fin-nw-what { overflow-wrap: break-word; }
+.fin-nw-sub  { color: var(--muted); font-size: 0.82em; }
+.fin-nw-amt  { font-variant-numeric: tabular-nums; font-weight: 600; white-space: nowrap; }
+.fin-nw-age  { color: var(--muted); font-size: 0.78em; white-space: nowrap; }
+
+/* Over a month old. Not an error — an age. It is coloured rather than hidden because a
+   stale figure that looks current is the whole failure mode this card is designed against. */
+.fin-nw-stale { color: var(--accent); font-weight: 600; }
+
+.fin-nw-del {
+  background: none; border: 0; color: var(--muted); cursor: pointer;
+  font-size: 1.05rem; line-height: 1; padding: 0 0.2rem;
+}
+.fin-nw-del:hover { color: var(--accent); }
+.fin-nw-del:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; border-radius: 4px; }
+
+.fin-nw-split { margin: 0.6rem 0 0; color: var(--muted); font-size: 0.85em; font-variant-numeric: tabular-nums; }
+
+.fin-nw-caveat {
+  margin-top: 0.9rem; padding: 0.75rem 0.85rem;
+  background: var(--accent-soft); color: var(--ink);
+  border-radius: 8px; font-size: 0.87em;
+}
+
+.fin-nw-add { margin-top: 1rem; }
+.fin-nw-add summary { cursor: pointer; color: var(--muted); font-size: 0.9em; }
+.fin-nw-add summary:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; border-radius: 4px; }
+.fin-nw-form { display: flex; flex-direction: column; gap: 0.5rem; margin-top: 0.7rem; max-width: 34rem; }
+.fin-nw-row { display: flex; gap: 0.5rem; }
+.fin-nw-row > * { flex: 1; min-width: 0; }
+.fin-nw-hint { margin: 0; color: var(--muted); font-size: 0.82em; }
+
+.fin-in {
+  padding: 0.5rem 0.65rem; color: var(--ink); background: var(--bg);
+  border: 1px solid var(--border); border-radius: 8px; font: inherit;
+}
+.fin-in:focus { outline: 2px solid var(--accent); outline-offset: 1px; }
+
+@media (max-width: 620px) {
+  .fin-nw-row { flex-direction: column; }
+  .fin-nw-list li { grid-template-columns: 1fr auto; grid-template-areas: "what amt" "age del"; }
+}

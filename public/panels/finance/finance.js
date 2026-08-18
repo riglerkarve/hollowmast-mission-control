@@ -38,6 +38,30 @@ const TEMPLATE = `
     </section>
 
     <section class="card">
+      <h2 class="fin-h2">What you have</h2>
+      <div id="finWorth"></div>
+      <details class="fin-nw-add">
+        <summary>Add something the bank cannot see</summary>
+        <form class="fin-nw-form" id="finAssetForm">
+          <div class="fin-nw-row">
+            <input id="finAssetLabel" class="fin-in" placeholder="What is it?" required maxlength="60">
+            <select id="finAssetKind" class="fin-select" aria-label="Kind"></select>
+          </div>
+          <div class="fin-nw-row">
+            <input id="finAssetAmount" class="fin-in" type="number" step="0.01" placeholder="£ amount" required>
+            <input id="finAssetDate" class="fin-in" type="date" required
+                   aria-label="True as of which date">
+          </div>
+          <p class="fin-nw-hint">The date is required and is not decoration: a figure you
+            typed is true on the day you typed it, and the total is only as current as its
+            oldest part.</p>
+          <button class="btn primary" type="submit">Add</button>
+        </form>
+        <div id="finAssetResult"></div>
+      </details>
+    </section>
+
+    <section class="card">
       <h2 class="fin-h2">Who has read this ledger</h2>
       <div id="finAccess"></div>
     </section>
@@ -219,6 +243,70 @@ async function loadRecurring() {
     <p class="fin-note fin-dim">${esc(d.basis)}</p>`;
 }
 
+// Backlog #77. Two halves that are never merged into one undated figure: cash derived from
+// the ledger, and holdings you typed. The staleness of each is shown, because a total
+// assembled from figures dated across three months is not a figure about today.
+async function loadWorth() {
+  const box = root.querySelector('#finWorth');
+  let d;
+  try {
+    d = await api('/net-worth');
+  } catch (err) {
+    box.innerHTML = `<p class="fin-error">Could not read holdings: ${esc(err.message)}
+      — a failure to look, not a report that you have nothing.</p>`;
+    return;
+  }
+
+  const kindSel = root.querySelector('#finAssetKind');
+  if (kindSel && !kindSel.options.length) {
+    kindSel.innerHTML = d.kinds.map((k) => `<option value="${esc(k)}">${esc(k)}</option>`).join('');
+  }
+
+  const age = (n) => (n <= 1 ? 'today' : `${n}d old`);
+  // delId is passed only for rows YOU entered. A ledger-derived balance has no delete,
+  // because removing it would mean hiding a figure the bank reports rather than editing one.
+  const row = (label, sub, pence, days, cls = '', delId = null) => `
+    <li class="${cls}">
+      <span class="fin-nw-what">${esc(label)}<span class="fin-nw-sub">${esc(sub)}</span></span>
+      <span class="fin-nw-amt${pence < 0 ? ' fin-neg' : ''}">${pence < 0 ? '−' : ''}${gbp(pence)}</span>
+      <span class="fin-nw-age${days > 30 ? ' fin-nw-stale' : ''}">${esc(age(days))}</span>
+      ${delId ? `<button class="fin-nw-del" data-del="${delId}" aria-label="Remove ${esc(label)}">×</button>` : '<span></span>'}
+    </li>`;
+
+  // The headline is deliberately NOT called net worth when nothing but the bank is known.
+  // Calling a £0.03 cash balance "net worth" would be a claim about what you own.
+  const isNetWorth = d.assetsRecorded > 0;
+
+  box.innerHTML = `
+    <div class="fin-nw-total">
+      <span class="fin-nw-label">${isNetWorth ? 'Net worth' : 'Cash in the bank'}</span>
+      <b class="fin-nw-big${d.totalPence < 0 ? ' fin-neg' : ''}">${d.totalPence < 0 ? '−' : ''}${gbp(d.totalPence)}</b>
+      <span class="fin-nw-asof">as of ${esc(d.asOf || '—')}${
+  d.stalestDays != null ? ` · oldest input ${d.stalestDays}d old` : ''}</span>
+    </div>
+
+    <ul class="fin-nw-list">
+      ${d.cash.map((c) => row(c.label, ' · from the ledger', c.pence, c.staleDays)).join('')}
+      ${d.assets.map((a) => row(a.label, ` · ${a.kind}, you told me`, a.amount_pence, a.staleDays, 'fin-nw-mine', a.id)).join('')}
+    </ul>
+
+    ${d.assetsRecorded
+    ? `<p class="fin-nw-split">Bank ${gbp(d.cashTotalPence)} · yours ${d.assetTotalPence < 0 ? '−' : ''}${gbp(d.assetTotalPence)}</p>`
+    : ''}
+
+    <div class="fin-nw-caveat">
+      <b>${isNetWorth ? 'The date shown is the oldest input, not the newest.' : 'This is not a net worth.'}</b>
+      ${esc(d.caveat)} ${esc(d.derivedNote)}
+    </div>`;
+
+  box.querySelectorAll('[data-del]').forEach((b) => {
+    b.addEventListener('click', async () => {
+      await api(`/assets/${b.dataset.del}`, { method: 'DELETE', headers: { 'x-mc-by': 'you' } });
+      loadWorth();
+    });
+  });
+}
+
 // Backlog #14 — the "kept under review" half of allowing finance data to a frontier model.
 // The panel's job here is NOT to reassure. A reader who takes this as a complete record of
 // exposure has been misled, so the floor caveat is rendered at full size next to the
@@ -298,6 +386,7 @@ async function load() {
   // Same reason, same place. `loadRecurring` was itself shipped once defined-and-uncalled,
   // which is a bug with no error message and no visible symptom beyond an empty box.
   loadAccessLog();
+  loadWorth();
 }
 
 export default {
@@ -327,6 +416,33 @@ export default {
         load();
       });
     });
+
+    el.querySelector('#finAssetForm').addEventListener('submit', async (ev) => {
+      ev.preventDefault();
+      const out = el.querySelector('#finAssetResult');
+      out.innerHTML = '';
+      try {
+        await api('/assets', {
+          method: 'POST',
+          headers: { 'content-type': 'application/json', 'x-mc-by': 'you' },
+          body: JSON.stringify({
+            label: el.querySelector('#finAssetLabel').value.trim(),
+            kind: el.querySelector('#finAssetKind').value,
+            amount: Number(el.querySelector('#finAssetAmount').value),
+            asOf: el.querySelector('#finAssetDate').value,
+          }),
+        });
+        el.querySelector('#finAssetLabel').value = '';
+        el.querySelector('#finAssetAmount').value = '';
+        loadWorth();
+      } catch (err) {
+        out.innerHTML = `<p class="fin-error">${esc(err.message)}</p>`;
+      }
+    });
+
+    // Defaults to today, because the commonest case is entering a figure you just checked
+    // — and an empty date field invites leaving it empty, which the route refuses anyway.
+    el.querySelector('#finAssetDate').value = new Date().toLocaleDateString('en-CA');
 
     load();
   },

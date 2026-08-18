@@ -88,6 +88,31 @@ db.migrate('finance', [
        WHERE category <> 'Own transfer' OR category IS NULL;
     `);
   },
+
+  // v3 — holdings that are not in the ledger. Backlog #77, and it lives in FINANCE rather
+  // than a new module because net worth is a money figure and finance owns those. A
+  // separate module would have to read finance_transactions to get the cash half, which
+  // the module contract forbids.
+  //
+  // EVERY ROW CARRIES ITS OWN as_of DATE, and that is the whole design rather than a
+  // nicety. A manual figure is true on the day it is typed and decays from then on; a net
+  // worth built by summing four figures entered on four different dates is a number with
+  // no date at all. So each is dated, staleness is shown per row, and nothing is ever
+  // silently carried forward as current.
+  (d) => {
+    d.exec(`
+      CREATE TABLE finance_assets (
+        id           INTEGER PRIMARY KEY AUTOINCREMENT,
+        label        TEXT NOT NULL,
+        kind         TEXT NOT NULL,           -- 'savings' | 'crypto' | 'investment' | 'owed to me' | 'debt' | 'other'
+        amount_pence INTEGER NOT NULL,        -- negative for a debt; integers, like every other money column
+        as_of        TEXT NOT NULL,           -- the date YOU say this was true
+        note         TEXT,
+        updated_at   TEXT NOT NULL DEFAULT (datetime('now','localtime'))
+      );
+      CREATE INDEX idx_fin_assets_kind ON finance_assets(kind);
+    `);
+  },
 ]);
 
 const router = express.Router();
@@ -811,6 +836,123 @@ function incomeForecast({ months = 12 } = {}) {
 
 router.get('/forecast', (req, res) => res.json(incomeForecast()));
 module.exports.incomeForecast = incomeForecast;
+
+// ---------------------------------------------------------------------------------------
+// NET WORTH — backlog #77. Two halves, deliberately never merged into one undated figure.
+//
+// THE PROBLEM THIS SHAPE SOLVES. A current-account ledger records FLOW, not holdings. It
+// happens to carry a running balance_pence per row, so the cash half IS derivable — but
+// only as of the last transaction, which today is 7 days old for the personal account and
+// 79 for the business one. Everything else you own is invisible to it entirely.
+//
+// So: cash is derived and dated from the ledger; anything else is a row you typed, dated
+// by you. Both halves are reported with their own as-of date and their own staleness, and
+// the total is shown as arithmetic over figures the reader can see rather than as a
+// headline that hides four different dates inside it.
+const ASSET_KINDS = ['savings', 'crypto', 'investment', 'owed to me', 'debt', 'other'];
+
+const daysSince = (d) => Math.round((Date.now() - new Date(d).getTime()) / 86400000);
+
+function derivedCash() {
+  // The closing balance is the balance_pence on each account's most recent row. Summing
+  // amount_pence instead would give a different number whenever an import starts partway
+  // through an account's life, and there would be no way to tell which was right.
+  return db.prepare(`
+    SELECT t.account_id AS id, a.label, a.kind, t.balance_pence AS pence, t.date AS asOf
+      FROM finance_transactions t
+      JOIN finance_accounts a ON a.id = t.account_id
+     WHERE t.id = (
+       SELECT id FROM finance_transactions
+        WHERE account_id = t.account_id
+        ORDER BY date DESC, id DESC LIMIT 1)
+     ORDER BY a.kind, a.label
+  `).all().map((r) => ({ ...r, staleDays: daysSince(r.asOf) }));
+}
+
+function netWorth() {
+  const cash = derivedCash();
+  const assets = db.prepare('SELECT * FROM finance_assets ORDER BY as_of DESC, id DESC').all()
+    .map((r) => ({ ...r, staleDays: daysSince(r.as_of) }));
+
+  const cashTotal = cash.reduce((a, r) => a + r.pence, 0);
+  const assetTotal = assets.reduce((a, r) => a + r.amount_pence, 0);
+
+  // The oldest input dates the whole figure. A total is only as current as its stalest part,
+  // and quoting the newest date beside a sum containing a 79-day-old number would be the
+  // flattering answer.
+  const dates = [...cash.map((c) => c.asOf), ...assets.map((a) => a.as_of)].filter(Boolean).sort();
+
+  return {
+    cash,
+    assets,
+    kinds: ASSET_KINDS,
+    cashTotalPence: cashTotal,
+    assetTotalPence: assetTotal,
+    totalPence: cashTotal + assetTotal,
+    asOf: dates.length ? dates[0] : null,
+    stalestDays: dates.length ? daysSince(dates[0]) : null,
+    // Absence and failure differ, and so do two kinds of absence: no assets recorded is a
+    // statement about the RECORD, never about what you own.
+    assetsRecorded: assets.length,
+    caveat: assets.length
+      ? 'The total is only as current as its oldest input, which is why the date shown is the '
+        + 'earliest and not the latest. Manual figures are true on the day you typed them.'
+      : 'Nothing beyond the bank is recorded, so this is a CASH figure and not a net worth. '
+        + 'It says nothing about what you own — only that nothing else has been entered.',
+    derivedNote: 'Bank balances come from the running balance on each account\'s last '
+      + 'imported transaction. That is the balance on that date, not today\'s.',
+  };
+}
+
+router.get('/net-worth', (req, res) => res.json(netWorth()));
+
+router.post('/assets', express.json(), (req, res) => {
+  const label = String((req.body && req.body.label) || '').trim();
+  const kind = String((req.body && req.body.kind) || '').trim();
+  const asOf = String((req.body && req.body.asOf) || '').trim();
+  const pounds = Number(req.body && req.body.amount);
+
+  if (!label) return res.status(400).json({ error: 'a label is required' });
+  if (!ASSET_KINDS.includes(kind)) return res.status(400).json({ error: `kind must be one of ${ASSET_KINDS.join(', ')}` });
+  if (!Number.isFinite(pounds)) return res.status(400).json({ error: 'amount must be a number' });
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(asOf)) return res.status(400).json({ error: 'asOf must be YYYY-MM-DD — a figure with no date cannot be aged' });
+  if (new Date(asOf).getTime() > Date.now()) return res.status(400).json({ error: 'asOf cannot be in the future' });
+
+  // A debt is stored negative so the total is a plain sum. Storing magnitudes and a sign
+  // column would mean every consumer had to remember to apply it, and one eventually would not.
+  const signed = kind === 'debt' ? -Math.abs(Math.round(pounds * 100)) : Math.round(pounds * 100);
+
+  const info = db.prepare(
+    'INSERT INTO finance_assets (label, kind, amount_pence, as_of, note) VALUES (?, ?, ?, ?, ?)'
+  ).run(label, kind, signed, asOf, String((req.body && req.body.note) || '').trim() || null);
+
+  res.status(201).json({ id: Number(info.lastInsertRowid), amountPence: signed });
+});
+
+router.patch('/assets/:id', express.json(), (req, res) => {
+  const row = db.prepare('SELECT * FROM finance_assets WHERE id = ?').get(Number(req.params.id));
+  if (!row) return res.status(404).json({ error: 'no such asset' });
+
+  const pounds = req.body && req.body.amount !== undefined ? Number(req.body.amount) : row.amount_pence / 100;
+  if (!Number.isFinite(pounds)) return res.status(400).json({ error: 'amount must be a number' });
+  const asOf = req.body && req.body.asOf ? String(req.body.asOf).trim() : row.as_of;
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(asOf)) return res.status(400).json({ error: 'asOf must be YYYY-MM-DD' });
+
+  const signed = row.kind === 'debt' ? -Math.abs(Math.round(pounds * 100)) : Math.round(pounds * 100);
+  db.prepare(
+    `UPDATE finance_assets SET amount_pence = ?, as_of = ?, updated_at = datetime('now','localtime') WHERE id = ?`
+  ).run(signed, asOf, row.id);
+
+  res.json({ id: row.id, amountPence: signed, asOf });
+});
+
+router.delete('/assets/:id', (req, res) => {
+  const r = db.prepare('DELETE FROM finance_assets WHERE id = ?').run(Number(req.params.id));
+  if (!r.changes) return res.status(404).json({ error: 'no such asset' });
+  res.json({ deleted: Number(req.params.id) });
+});
+
+module.exports.netWorth = netWorth;
 
 // ---------------------------------------------------------------------------------------
 // WHO HAS READ THE LEDGER — backlog #14. The owner's decision on 17 Aug was that personal

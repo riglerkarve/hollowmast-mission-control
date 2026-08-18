@@ -187,3 +187,31 @@
   .ring-wrap { width: 180px; height: 180px; }
   .time-display { font-size: 2.1rem; }
 }
+
+/* The task list is now the backlog — #M8. Appended at the end where a later rule wins;
+   .task-item and .task-text already existed and are reused deliberately so the timer's
+   selected-item styling still applies. New classes are prefixed and were grepped first. */
+.task-source-note { margin: 0 0 0.7rem; color: var(--muted); font-size: 0.85em; max-width: 60ch; }
+
+.task-filter { display: flex; gap: 0.6rem; align-items: center; margin-bottom: 0.6rem; flex-wrap: wrap; }
+
+.task-search {
+  flex: 1; min-width: 8rem;
+  padding: 0.45rem 0.6rem;
+  color: var(--ink); background: var(--bg);
+  border: 1px solid var(--border); border-radius: 8px; font: inherit;
+}
+.task-search:focus { outline: 2px solid var(--accent); outline-offset: 1px; }
+
+.task-mine { display: flex; align-items: center; gap: 0.35rem; color: var(--muted); font-size: 0.85em; white-space: nowrap; }
+
+/* Priority reads as a rank, not a colour-coded alarm. P0 carries the accent because it is
+   the only one that means drop everything; the rest are deliberately quiet, so the list
+   does not look like a wall of warnings. */
+.task-pri {
+  font-size: 0.7rem; font-weight: 700; letter-spacing: 0.04em;
+  color: var(--muted); min-width: 1.6rem;
+}
+.task-pri-p0 { color: var(--accent); }
+
+.task-owner { color: var(--muted); font-size: 0.75em; white-space: nowrap; }

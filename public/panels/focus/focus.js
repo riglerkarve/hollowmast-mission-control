@@ -42,13 +42,16 @@ const TEMPLATE = `
     </section>
 
     <section class="card">
-      <h2>Tasks</h2>
-      <form id="taskForm" class="task-form">
-        <input type="text" id="taskInput" placeholder="What are you working on?" autocomplete="off" maxlength="200">
-        <button type="submit" class="btn primary">Add</button>
-      </form>
+      <h2>What are you working on?</h2>
+      <p class="task-source-note">Straight from the backlog — this is the same list the
+        Backlog panel shows, not a second copy. Pick one and the timer records against it.
+        Adding and closing items stays in Backlog: one list, one writer.</p>
+      <div class="task-filter">
+        <input type="search" id="taskSearch" class="task-search" placeholder="Filter…" autocomplete="off">
+        <label class="task-mine"><input type="checkbox" id="taskMineOnly" checked> yours only</label>
+      </div>
       <ul id="taskList" class="task-list"></ul>
-      <p class="empty-hint" id="emptyHint">No tasks yet — add one to get started.</p>
+      <p class="empty-hint" id="emptyHint">Nothing open in the backlog.</p>
     </section>
 
     <section class="card">
@@ -115,68 +118,63 @@ function createPanel() {
     document.title = running ? `${formatTime(secondsLeft)} · Focus Flow` : 'Mission Control';
   }
 
+  // READ-ONLY over the backlog. No add, no complete, no delete here — those live in the
+  // Backlog panel. A second surface that writes the same list is two owners for "what is
+  // there to do", which is the defect this change exists to remove, and it would be absurd
+  // to fix it by introducing it again one card lower.
   function renderTasks() {
     el.taskList.innerHTML = '';
-    el.emptyHint.style.display = tasks.length === 0 ? 'block' : 'none';
-    tasks.forEach((task) => {
-      const li = document.createElement('li');
-      li.className = 'task-item' + (task.done ? ' done' : '') + (task.id === activeTaskId ? ' active-task' : '');
 
-      const checkbox = document.createElement('button');
-      checkbox.className = 'task-checkbox' + (task.done ? ' checked' : '');
-      checkbox.textContent = task.done ? '✓' : '';
-      checkbox.setAttribute('aria-label', 'Toggle done');
-      checkbox.addEventListener('click', () => toggleTask(task.id, !task.done));
+    const q = (el.taskSearch.value || '').trim().toLowerCase();
+    const mineOnly = el.taskMineOnly.checked;
+    const shown = tasks.filter((t) => {
+      if (mineOnly && t.owner !== 'YOU') return false;
+      if (q && !String(t.title).toLowerCase().includes(q)) return false;
+      return true;
+    });
+
+    // Three states, not two: nothing open at all, nothing matching the filter, and a list.
+    // "No results" and "nothing to do" are very different things to read at 9am.
+    el.emptyHint.style.display = shown.length === 0 ? 'block' : 'none';
+    if (shown.length === 0) {
+      el.emptyHint.textContent = tasks.length === 0
+        ? 'Nothing open in the backlog.'
+        : `None of the ${tasks.length} open items match that filter.`;
+    }
+
+    shown.forEach((task) => {
+      const li = document.createElement('li');
+      li.className = 'task-item' + (task.id === activeTaskId ? ' active-task' : '');
+
+      const pri = document.createElement('span');
+      pri.className = `task-pri task-pri-${String(task.priority || '').toLowerCase()}`;
+      pri.textContent = task.priority || '';
 
       const text = document.createElement('span');
       text.className = 'task-text';
-      text.textContent = task.text;
-      text.title = 'Click to set as active task';
+      text.textContent = task.title;
+      text.title = 'Click to work on this';
       text.addEventListener('click', () => setActiveTask(task.id));
 
-      const pomo = document.createElement('span');
-      pomo.className = 'task-pomo-count';
-      pomo.textContent = task.pomodoros ? `🍅 ${task.pomodoros}` : '';
+      const owner = document.createElement('span');
+      owner.className = 'task-owner';
+      owner.textContent = task.owner === 'YOU' ? 'yours' : String(task.owner || '').toLowerCase();
 
-      const del = document.createElement('button');
-      del.className = 'task-delete';
-      del.textContent = '×';
-      del.setAttribute('aria-label', 'Delete task');
-      del.addEventListener('click', () => deleteTask(task.id));
-
-      li.append(checkbox, text, pomo, del);
+      li.append(pri, text, owner);
       el.taskList.appendChild(li);
     });
   }
 
   async function loadTasks() {
-    tasks = await api('/tasks');
+    // Asks the todo module's own route. The focus panel never reads todo_items directly.
+    const body = await api('/todo/items?status=open');
+    tasks = (body.items || []).sort((a, b) => String(a.priority).localeCompare(String(b.priority)));
     renderTasks();
-  }
-
-  async function toggleTask(id, done) {
-    await api(`/tasks/${id}`, { method: 'PATCH', body: JSON.stringify({ done }) });
-    await loadTasks();
   }
 
   function setActiveTask(id) {
     activeTaskId = activeTaskId === id ? null : id;
     renderTasks();
-  }
-
-  async function deleteTask(id) {
-    await api(`/tasks/${id}`, { method: 'DELETE' });
-    if (activeTaskId === id) activeTaskId = null;
-    await loadTasks();
-  }
-
-  async function handleAddTask(e) {
-    e.preventDefault();
-    const text = el.taskInput.value.trim();
-    if (!text) return;
-    el.taskInput.value = '';
-    await api('/tasks', { method: 'POST', body: JSON.stringify({ text }) });
-    await loadTasks();
   }
 
   async function loadStats() {
@@ -231,7 +229,10 @@ function createPanel() {
     if (mode === 'work') {
       await api('/sessions', {
         method: 'POST',
-        body: JSON.stringify({ taskId: activeTaskId, kind: 'work', durationMinutes: DURATIONS.work / 60 }),
+        // todoId, not taskId. activeTaskId now holds a backlog id ('49', 'M3'), and the
+        // old field expects an INTEGER tasks.id -- sending it there would silently store
+        // null and the session would record no subject at all.
+        body: JSON.stringify({ todoId: activeTaskId, kind: 'work', durationMinutes: DURATIONS.work / 60 }),
       });
       await Promise.all([loadTasks(), loadStats()]);
       celebrate('Session complete! Take a break 🎉');
@@ -289,8 +290,8 @@ function createPanel() {
         skipBtn: container.querySelector('#skipBtn'),
         sessionCount: container.querySelector('#sessionCount'),
         streakCount: container.querySelector('#streakCount'),
-        taskForm: container.querySelector('#taskForm'),
-        taskInput: container.querySelector('#taskInput'),
+        taskSearch: container.querySelector('#taskSearch'),
+        taskMineOnly: container.querySelector('#taskMineOnly'),
         taskList: container.querySelector('#taskList'),
         emptyHint: container.querySelector('#emptyHint'),
         celebrateOverlay: container.querySelector('#celebrateOverlay'),
@@ -316,7 +317,10 @@ function createPanel() {
         secondsLeft = 1;
         tick();
       });
-      el.taskForm.addEventListener('submit', handleAddTask);
+      // Filtering is local to the already-loaded list, so it never re-queries the backlog
+      // on a keystroke.
+      el.taskSearch.addEventListener('input', renderTasks);
+      el.taskMineOnly.addEventListener('change', renderTasks);
 
       renderTimer();
       if (running) {

@@ -22,6 +22,7 @@ require('../server/routes/briefing');
 // touched here, so a figure cannot end up with two owners that quietly disagree.
 const tasks = require('../server/routes/tasks');
 const todo = require('../server/routes/todo');
+const sessions = require('../server/routes/sessions');
 const lifestyle = require('../server/routes/lifestyle');
 const wellbeing = require('../server/routes/wellbeing');
 
@@ -76,16 +77,25 @@ function gatherFacts() {
       WHERE category = 'Cash withdrawn' AND amount_pence < 0 AND date > ? AND date <= ?`
   ).get(d(28), d(0));
 
+  // NOT_CLAUDE, imported from the module that owns the column. This file has its own
+  // focus_sessions query and therefore did NOT inherit the filter added across stats.js on
+  // 18 Aug — a caller that bypasses a shared fix keeps the bug. Left alone, the morning
+  // briefing would have reported 62 hours of Claude's imported sessions as your focus time,
+  // in prose, once a day, with nothing to contradict it.
   const focus = db.prepare(
     `SELECT COUNT(*) n, COALESCE(SUM(duration_minutes), 0) mins
-       FROM focus_sessions WHERE kind = 'work' AND date(completed_at) >= date(?, '-6 days')`
+       FROM focus_sessions
+      WHERE kind = 'work' AND ${sessions.NOT_CLAUDE} AND date(completed_at) >= date(?, '-6 days')`
   ).get(TODAY);
 
   const review = db.prepare(
     `SELECT COUNT(*) c FROM finance_transactions WHERE category_source = 'model' AND reviewed = 0`
   ).get().c;
 
-  const openTasks = db.prepare('SELECT COUNT(*) c FROM tasks WHERE done = 0').get().c;
+  // THE BACKLOG, not the retired `tasks` table. It reported 'Open tasks: 1' -- the single
+  // demo row 'Call supplier about Q3 order' -- while 40 real items sat open. Same defect as
+  // the focus panel had (#M8): a figure sourced from the store nothing uses.
+  const openTasks = db.prepare("SELECT COUNT(*) c FROM todo_items WHERE status = 'open'").get().c;
 
   // Uptime, from the watchdog's own log rather than from a claim.
   let uptime = 'no watchdog log for today';
@@ -118,8 +128,14 @@ function gatherFacts() {
     since,
     focusSessions: focus.n,
     focusMinutes: focus.mins,
-    tasksCompleted: tasks.completedSince(sinceStamp),
-    tasksDoneButUndated: tasks.undatedDone(),
+    // tasksCompleted/tasksDoneButUndated are GONE from 18 Aug, not because they were wrong
+    // but because their producer stopped. The Focus panel now lists backlog items instead
+    // of the old `tasks` table (#M8), so nothing writes that table any more and both
+    // figures would have reported 0 forever — sitting next to a non-zero backlogDecided
+    // and reading as "you finished nothing" rather than "this metric is dead".
+    //
+    // A vocabulary has one owner too: an advertised metric whose producer has stopped is
+    // worse than an absent one, because the zero looks like data.
     backlogDecided: todo.decidedSince(sinceStamp),
     chores: lifestyle.activitySince(since),
     daysWritten: wellbeing.daysWrittenSince(since),
@@ -209,7 +225,6 @@ function render(facts, prose) {
 
   const did = [];
   if (w.focusSessions) did.push(`**${w.focusSessions}** focus session${w.focusSessions === 1 ? '' : 's'}, ${w.focusMinutes} minutes`);
-  if (w.tasksCompleted) did.push(`**${w.tasksCompleted}** task${w.tasksCompleted === 1 ? '' : 's'} finished`);
   const decided = (w.backlogDecided.byStatus || []).reduce((s, r) => s + r.c, 0);
   if (decided) did.push(`**${decided}** backlog item${decided === 1 ? '' : 's'} decided (${w.backlogDecided.byStatus.map((r) => `${r.c} ${r.status}`).join(', ')})`);
   if (w.chores.choresRecorded) did.push(`**${w.chores.choresRecorded}** chore${w.chores.choresRecorded === 1 ? '' : 's'} recorded`);
@@ -222,7 +237,6 @@ function render(facts, prose) {
 
   // What this section CANNOT see. Without it the counts above read as complete.
   const blind = [];
-  if (w.tasksDoneButUndated) blind.push(`${w.tasksDoneButUndated} finished task(s) predate the completion-date column and cannot be placed in any week`);
   if (w.backlogDecided.undated) blind.push(`${w.backlogDecided.undated} backlog item(s) were already done or declined when imported, with no date recorded — they are real work that this count cannot show`);
   if (blind.length) L.push(`_Not counted above: ${blind.join('; ')}._\n`);
 

@@ -31,6 +31,27 @@ db.migrate('sessions', [
       CREATE UNIQUE INDEX idx_focus_source_key ON focus_sessions(source_key);
     `);
   },
+
+  // v3 — link a session to a BACKLOG item. Owner, 18 Aug 2026: "tasks on the focus app
+  // should show the todo lists, this is its more native home."
+  //
+  // They are right and it was a contract violation. Two stores answered "what is there to
+  // do": `tasks` (created in db.js, holding ONE demo row — "Call supplier about Q3 order")
+  // and `todo_items` (101 real entries). The timer could only be pointed at the demo list,
+  // which is a fair part of why it has one session in seventeen days.
+  //
+  // A NEW COLUMN RATHER THAN REPOINTING task_id, because the types genuinely differ:
+  // tasks.id is INTEGER, todo_items.id is TEXT ('49', 'M3', 'O17'). There is no cast that
+  // makes the existing foreign key point at the new table.
+  //
+  // task_id is KEPT, not dropped. One historical session references it, and destroying a
+  // real record to tidy a schema is not a trade this project makes. Nothing new writes it.
+  (d) => {
+    d.exec(`
+      ALTER TABLE focus_sessions ADD COLUMN todo_id TEXT REFERENCES todo_items(id) ON DELETE SET NULL;
+      CREATE INDEX idx_focus_todo ON focus_sessions(todo_id);
+    `);
+  },
 ]);
 
 // THE ONE PLACE THE FILTER IS WRITTEN. Exported and reused by stats.js rather than retyped
@@ -51,7 +72,7 @@ const router = express.Router();
 const VALID_KINDS = new Set(['work', 'short', 'long']);
 
 router.post('/', (req, res) => {
-  const { kind, durationMinutes, taskId, label } = req.body;
+  const { kind, durationMinutes, taskId, todoId, label } = req.body;
 
   if (!VALID_KINDS.has(kind)) {
     res.status(400).json({ error: `kind must be one of ${[...VALID_KINDS].join(', ')}` });
@@ -69,20 +90,61 @@ router.post('/', (req, res) => {
     resolvedTaskId = task ? task.id : null;
   }
 
+  // A backlog id is VERIFIED against the backlog rather than trusted. An unknown id is
+  // rejected outright instead of stored as a dangling reference — a session pointing at
+  // nothing is worse than a session pointing at nothing in particular.
+  let resolvedTodoId = null;
+  if (todoId != null && String(todoId).trim() !== '') {
+    const item = db.prepare('SELECT id FROM todo_items WHERE id = ?').get(String(todoId));
+    if (!item) return res.status(400).json({ error: `no backlog item "${todoId}"` });
+    resolvedTodoId = item.id;
+  }
+
   // req.by, never a guess. A request that does not say who it is is recorded 'unknown'.
   const info = db
-    .prepare('INSERT INTO focus_sessions (task_id, kind, duration_minutes, by_whom) VALUES (?, ?, ?, ?)')
-    .run(resolvedTaskId, kind, Math.round(minutes), req.by);
+    .prepare('INSERT INTO focus_sessions (task_id, todo_id, kind, duration_minutes, by_whom) VALUES (?, ?, ?, ?, ?)')
+    .run(resolvedTaskId, resolvedTodoId, kind, Math.round(minutes), req.by);
 
   const row = db.prepare('SELECT * FROM focus_sessions WHERE id = ?').get(info.lastInsertRowid);
   res.status(201).json({
     id: row.id,
     taskId: row.task_id,
+    todoId: row.todo_id,
     kind: row.kind,
     durationMinutes: row.duration_minutes,
     completedAt: row.completed_at,
     byWhom: row.by_whom,
     label: label || undefined,
+  });
+});
+
+// Time spent per backlog item — the thing the old `tasks` list could never answer, because
+// nothing you actually work on was ever in it.
+//
+// It asks the TODO module for titles rather than joining todo_items directly... except it
+// does join, and that is deliberate and worth naming: focus_sessions.todo_id is a foreign
+// key INTO todo_items, so the relationship is part of this table's own schema. Reading a
+// title through a key this table declares is not reaching into another module's storage;
+// inventing a second copy of the title here would be.
+router.get('/by-item', (req, res) => {
+  const rows = db.prepare(`
+    SELECT s.todo_id AS id, t.title, t.status, t.priority,
+           COUNT(*) AS sessions,
+           COALESCE(SUM(s.duration_minutes), 0) AS minutes,
+           MAX(s.completed_at) AS lastAt,
+           s.by_whom AS byWhom
+      FROM focus_sessions s
+      JOIN todo_items t ON t.id = s.todo_id
+     WHERE s.todo_id IS NOT NULL
+     GROUP BY s.todo_id, s.by_whom
+     ORDER BY minutes DESC
+  `).all();
+
+  res.json({
+    items: rows,
+    note: rows.length
+      ? 'Grouped by who did the work as well as by item, so your minutes and Claude\'s are never summed.'
+      : 'No session has been recorded against a backlog item yet.',
   });
 });
 

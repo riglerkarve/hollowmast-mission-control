@@ -2,10 +2,11 @@
 //
 // google-auth.cjs — give Mission Control its OWN Google credential. Backlog #9.
 //
-//   node tools/google-auth.cjs            run the one-time consent flow
-//   node tools/google-auth.cjs --status   report what is set up, change nothing
-//   node tools/google-auth.cjs --test     use the stored token to make one read-only call
-//   node tools/google-auth.cjs --revoke   tell Google to invalidate the token, delete it here
+//   node tools/google-auth.cjs            run the consent flow (repeat for each account)
+//   node tools/google-auth.cjs --status   list every authorised account, change nothing
+//   node tools/google-auth.cjs --test     one read-only call per account, reported separately
+//   node tools/google-auth.cjs --revoke <account>   invalidate one at Google, delete it here
+//   node tools/google-auth.cjs --revoke --all       invalidate every one
 //
 // ---------------------------------------------------------------------------------------
 // WHY THIS EXISTS SEPARATELY FROM THE CLAUDE CONNECTORS.
@@ -48,7 +49,8 @@ const { URL, URLSearchParams } = require('node:url');
 
 const DATA = path.join(__dirname, '..', 'data');
 const CLIENT_FILE = path.join(DATA, 'google-client.json');
-const TOKEN_FILE = path.join(DATA, 'google-token.json');
+const TOKEN_FILE = path.join(DATA, 'google-token.json');    // legacy, single account
+const TOKENS_FILE = path.join(DATA, 'google-tokens.json');  // { "<email>": { refresh_token, … } }
 
 const SCOPES = [
   'https://www.googleapis.com/auth/gmail.metadata',
@@ -89,17 +91,60 @@ async function post(url, params) {
 }
 
 // ------------------------------------------------------------------------------- status
+// One file keyed by email address, so more than one mailbox can be authorised. The single
+// TOKEN_FILE could only ever hold the LAST account consented — authorising a second silently
+// replaced the first, with nothing on screen to say so.
+function loadTokens() {
+  const multi = readJson(TOKENS_FILE);
+  if (multi && typeof multi === 'object') return multi;
+  // Migrate a legacy single-account file on first read. It carries no email, so it is parked
+  // under a key that admits that rather than under a guessed address.
+  const one = readJson(TOKEN_FILE);
+  if (one && one.refresh_token) return { [one.account || '(unknown account)']: one };
+  return {};
+}
+
+function saveTokens(all) {
+  fs.writeFileSync(TOKENS_FILE, JSON.stringify(all, null, 2), { mode: 0o600 });
+}
+
+// Reads the mailbox address a refresh token belongs to. Used to FILE a new credential under
+// the account that actually granted it, and to prove at --test time that the account has not
+// changed underneath a stored key.
+async function whoAmI(refreshToken) {
+  const client = loadClient();
+  if (!client) return null;
+  const r = await post('https://oauth2.googleapis.com/token', {
+    client_id: client.id,
+    client_secret: client.secret,
+    refresh_token: refreshToken,
+    grant_type: 'refresh_token',
+  });
+  if (!r.ok || !r.body.access_token) return null;
+  const res = await fetch('https://gmail.googleapis.com/gmail/v1/users/me/profile', {
+    headers: { authorization: `Bearer ${r.body.access_token}` },
+  });
+  if (!res.ok) return null;
+  const b = await res.json().catch(() => null);
+  return (b && b.emailAddress) || null;
+}
+
 function status() {
   const client = loadClient();
-  const token = readJson(TOKEN_FILE);
+  const all = loadTokens();
+  const names = Object.keys(all);
 
   console.log('  client file :', fs.existsSync(CLIENT_FILE)
     ? (client ? `present, client_id ${client.id.slice(0, 18)}…` : 'PRESENT BUT UNREADABLE — re-download it')
     : 'not set up yet');
-  console.log('  token file  :', token && token.refresh_token
-    ? `present, granted ${token.granted_at || 'at an unrecorded time'}`
-    : 'no token — consent has not been given');
-  if (token && token.scopes) console.log('  scopes held :', token.scopes.join('  '));
+  if (!names.length) {
+    console.log('  accounts    : none — consent has not been given');
+  } else {
+    console.log(`  accounts    : ${names.length}`);
+    names.forEach((n) => console.log(`     ${n}  granted ${all[n].granted_at || 'at an unrecorded time'}`));
+    const scopes = all[names[0]].scopes;
+    if (scopes) console.log('  scopes held :', scopes.join('  '));
+  }
   console.log('  redirect URI:', REDIRECT);
   console.log();
   console.log('  Scopes this asks for, and nothing more:');
@@ -222,23 +267,43 @@ async function authorise() {
     return;
   }
 
-  fs.writeFileSync(TOKEN_FILE, JSON.stringify({
+  // WHICH ACCOUNT CONSENTED IS DISCOVERED, NOT ASSUMED. The refresh token is used once to
+  // read the profile, and the mailbox address that comes back is the key it is filed under.
+  // Recording who I MEANT to authorise would be wrong exactly when it matters most — an
+  // account chooser with two entries a few pixels apart.
+  const who = await whoAmI(r.body.refresh_token);
+  if (!who) {
+    console.error('  got a refresh token but could not read which account it belongs to.');
+    console.error('  NOT STORING IT. A credential filed under the wrong mailbox is worse than');
+    console.error('  none: everything downstream would attribute that mail to the other account.');
+    process.exitCode = 1;
+    return;
+  }
+
+  const all = loadTokens();
+  const replacing = !!all[who];
+  all[who] = {
     refresh_token: r.body.refresh_token,
     scopes: SCOPES,
     granted_at: new Date().toISOString(),
     // The access token is NOT stored. It expires in an hour and is cheap to mint from the
     // refresh token; keeping a second live credential on disk buys nothing.
-  }, null, 2), { mode: 0o600 });
+  };
+  saveTokens(all);
 
-  console.log('  Stored the refresh token, 0600, at:');
-  console.log('   ', TOKEN_FILE);
-  console.log('  Run  node tools/google-auth.cjs --test  to prove it works.');
+  console.log(`  ${replacing ? 'Replaced' : 'Stored'} the refresh token for ${who}, 0600, at:`);
+  console.log('   ', TOKENS_FILE);
+  console.log(`  ${Object.keys(all).length} account(s) authorised: ${Object.keys(all).join(', ')}`);
+  console.log('  Run  node tools/google-auth.cjs --test  to prove they work.');
 }
 
 // --------------------------------------------------------------------------------- test
-async function accessToken() {
+// accessToken(account) — an account is now REQUIRED rather than implied. Defaulting to "the
+// only one" would work until the day there are two, and then silently read the wrong mailbox.
+async function accessToken(account) {
   const client = loadClient();
-  const token = readJson(TOKEN_FILE);
+  const all = loadTokens();
+  const token = all[account];
   if (!client || !token || !token.refresh_token) return null;
   const r = await post('https://oauth2.googleapis.com/token', {
     client_id: client.id,
@@ -248,40 +313,81 @@ async function accessToken() {
   });
   return r.ok ? r.body.access_token : null;
 }
+module.exports = { accessToken, loadTokens, accounts: () => Object.keys(loadTokens()) };
 
+// Tests EVERY authorised account, and reports each separately. One aggregate "works" would
+// hide a second account whose consent had been withdrawn from its Google security page.
 async function test() {
-  const at = await accessToken();
-  if (!at) { console.error('  no usable credential — run without flags first'); process.exitCode = 1; return; }
+  const all = loadTokens();
+  const names = Object.keys(all);
+  if (!names.length) { console.error('  no accounts authorised — run without flags first'); process.exitCode = 1; return; }
 
-  // A read that returns a COUNT and no content, so proving the credential works does not
-  // itself pull anything into this machine.
-  const res = await fetch('https://gmail.googleapis.com/gmail/v1/users/me/profile', {
-    headers: { authorization: `Bearer ${at}` },
-  });
-  const b = await res.json().catch(() => ({}));
-  if (!res.ok) { console.error('  call failed:', res.status, JSON.stringify(b).slice(0, 200)); process.exitCode = 1; return; }
-  console.log('  works. mailbox:', b.emailAddress, '|', b.messagesTotal, 'messages,', b.threadsTotal, 'threads');
-  console.log('  nothing was read beyond these counts.');
+  let bad = 0;
+  for (const name of names) {
+    const at = await accessToken(name);
+    if (!at) { console.error(`  ${name}: FAILED to mint an access token — consent may have been withdrawn`); bad++; continue; }
+
+    // A read that returns COUNTS and no content, so proving the credential works does not
+    // itself pull anything into this machine.
+    const res = await fetch('https://gmail.googleapis.com/gmail/v1/users/me/profile', {
+      headers: { authorization: `Bearer ${at}` },
+    });
+    const b = await res.json().catch(() => ({}));
+    if (!res.ok) { console.error(`  ${name}: call failed ${res.status} ${JSON.stringify(b).slice(0, 120)}`); bad++; continue; }
+
+    // The address the token ACTUALLY belongs to, checked against the key it is filed under.
+    // They can diverge — a key written by an older version, or a file edited by hand — and a
+    // credential reading a different mailbox than its label claims is the worst failure here,
+    // because every downstream figure would be attributed to the wrong account.
+    const mismatch = b.emailAddress && b.emailAddress !== name;
+    console.log(`  ${name}: works — ${b.messagesTotal} messages, ${b.threadsTotal} threads`
+      + (mismatch ? `   *** BUT THE TOKEN IS FOR ${b.emailAddress} — filed under the wrong key ***` : ''));
+    if (mismatch) bad++;
+  }
+  console.log(`  ${names.length - bad}/${names.length} usable. Nothing was read beyond these counts.`);
+  if (bad) process.exitCode = 1;
 }
 
-async function revoke() {
-  const token = readJson(TOKEN_FILE);
-  if (!token || !token.refresh_token) { console.log('  nothing to revoke'); return; }
-  const res = await fetch('https://oauth2.googleapis.com/revoke', {
-    method: 'POST',
-    headers: { 'content-type': 'application/x-www-form-urlencoded' },
-    body: new URLSearchParams({ token: token.refresh_token }).toString(),
-  });
-  // Delete locally whatever Google says: a token this machine cannot use is not one to keep.
-  fs.unlinkSync(TOKEN_FILE);
-  console.log(res.ok
-    ? '  revoked at Google and deleted locally.'
-    : `  Google returned ${res.status}, but the local token is deleted. Check the account's third-party access page.`);
+// --revoke <account>  revokes one.  --revoke --all  revokes every one.
+// Naming the account is REQUIRED when more than one is authorised: revoking is not
+// reversible without a fresh consent, and "revoke" meaning "revoke whichever happens to be
+// first" is the kind of default that costs you the wrong mailbox.
+async function revoke(which) {
+  const all = loadTokens();
+  const names = Object.keys(all);
+  if (!names.length) { console.log('  nothing to revoke'); return; }
+
+  let targets;
+  if (which === '--all') targets = names;
+  else if (which && all[which]) targets = [which];
+  else if (!which && names.length === 1) targets = names;
+  else {
+    console.error(which ? `  no account "${which}". Authorised: ${names.join(', ')}`
+      : `  ${names.length} accounts authorised — name one, or pass --all.\n     ${names.join('\n     ')}`);
+    process.exitCode = 1;
+    return;
+  }
+
+  for (const name of targets) {
+    const res = await fetch('https://oauth2.googleapis.com/revoke', {
+      method: 'POST',
+      headers: { 'content-type': 'application/x-www-form-urlencoded' },
+      body: new URLSearchParams({ token: all[name].refresh_token }).toString(),
+    });
+    // Delete locally whatever Google says: a token this machine cannot use is not one to keep.
+    delete all[name];
+    console.log(res.ok
+      ? `  ${name}: revoked at Google and deleted locally.`
+      : `  ${name}: Google returned ${res.status}, but the local token is deleted. Check that account's third-party access page.`);
+  }
+  saveTokens(all);
+  const left = Object.keys(all);
+  console.log(left.length ? `  still authorised: ${left.join(', ')}` : '  no accounts remain authorised.');
 }
 
 (async () => {
   if (has('--status')) return status();
   if (has('--test')) return test();
-  if (has('--revoke')) return revoke();
+  if (has('--revoke')) return revoke(process.argv[process.argv.indexOf('--revoke') + 1]);
   return authorise();
 })();

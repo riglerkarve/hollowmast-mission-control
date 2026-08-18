@@ -19,6 +19,9 @@ data/gate-key.txt
 # gate key above, because revoking it needs Google's console rather than deleting a file.
 data/google-client.json
 data/google-token.json
+# Multi-account form, keyed by email. Added BEFORE the file could exist, 18 Aug — the
+# window in which the rule is missing is the window in which it gets committed.
+data/google-tokens.json
 data/oauth-*.json
 
 # --- real financial and personal data ----------------------------------------------

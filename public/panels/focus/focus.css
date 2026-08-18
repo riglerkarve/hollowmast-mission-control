@@ -215,3 +215,21 @@
 .task-pri-p0 { color: var(--accent); }
 
 .task-owner { color: var(--muted); font-size: 0.75em; white-space: nowrap; }
+
+/* Mark-done, added after shipping the list read-only and finding that useless — the owner
+   completed a real backlog item and the panel showing it had no way to record that.
+   It calls the todo module's own PATCH route, so there is still exactly one writer. */
+.task-done {
+  padding: 0.2rem 0.6rem;
+  font-size: 0.75rem;
+  font-weight: 600;
+  color: var(--muted);
+  background: transparent;
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  cursor: pointer;
+  white-space: nowrap;
+}
+.task-done:hover:not(:disabled) { color: var(--ink); border-color: var(--accent); }
+.task-done:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+.task-done:disabled { opacity: 0.5; cursor: default; }

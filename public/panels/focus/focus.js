@@ -118,10 +118,19 @@ function createPanel() {
     document.title = running ? `${formatTime(secondsLeft)} · Focus Flow` : 'Mission Control';
   }
 
-  // READ-ONLY over the backlog. No add, no complete, no delete here — those live in the
-  // Backlog panel. A second surface that writes the same list is two owners for "what is
-  // there to do", which is the defect this change exists to remove, and it would be absurd
-  // to fix it by introducing it again one card lower.
+  // You can MARK DONE here. You cannot create or delete — that stays in Backlog.
+  //
+  // I got this wrong first time and shipped it read-only, reasoning that "a second surface
+  // writing the same list is two owners". That misapplies the rule. The one-writer rule is
+  // about two STORES holding the same fact — `tasks` and `todo_items`, which is what this
+  // change removed. It is not about two BUTTONS: both panels call the same
+  // PATCH /api/todo/items/:id, so there is exactly one writer and one owner either way.
+  //
+  // The cost of the mistake was immediate and concrete. The owner ordered Huel — a real
+  // backlog item, #19 — and the panel showing that item had no way to record it. A list you
+  // can look at while a timer runs, and cannot tick, is a worse tool than the one it
+  // replaced. Creation stays in Backlog because a new item needs a cluster, priority, owner
+  // and rationale, and a one-line box would produce items missing all four.
   function renderTasks() {
     el.taskList.innerHTML = '';
 
@@ -160,9 +169,44 @@ function createPanel() {
       owner.className = 'task-owner';
       owner.textContent = task.owner === 'YOU' ? 'yours' : String(task.owner || '').toLowerCase();
 
-      li.append(pri, text, owner);
+      const done = document.createElement('button');
+      done.className = 'task-done';
+      done.textContent = 'Done';
+      done.title = `Mark "${task.title}" done`;
+      done.addEventListener('click', (ev) => {
+        ev.stopPropagation();
+        markDone(task, done);
+      });
+
+      li.append(pri, text, owner, done);
       el.taskList.appendChild(li);
     });
+  }
+
+  async function markDone(task, btn) {
+    btn.disabled = true;
+    btn.textContent = '…';
+    try {
+      // The todo module's own route. This panel never touches todo_items directly, so the
+      // decided_at stamp, the note trail and the provenance are all written by the one
+      // place that owns them.
+      const r = await fetch(`/api/todo/items/${encodeURIComponent(task.id)}`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json', 'x-mc-by': 'you' },
+        body: JSON.stringify({ status: 'done' }),
+      });
+      if (!r.ok) throw new Error((await r.json().catch(() => ({}))).error || `HTTP ${r.status}`);
+
+      if (activeTaskId === task.id) activeTaskId = null;
+      await loadTasks();
+    } catch (err) {
+      // Failing to record must not look like recording. The row stays, the button comes
+      // back, and the reason is on screen rather than in a console nobody has open.
+      btn.disabled = false;
+      btn.textContent = 'Done';
+      el.emptyHint.style.display = 'block';
+      el.emptyHint.textContent = `Could not mark "${task.title}" done: ${err.message}`;
+    }
   }
 
   async function loadTasks() {

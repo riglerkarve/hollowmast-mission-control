@@ -30,6 +30,10 @@ const lifestyle = require('../server/routes/lifestyle');
 const wellbeing = require('../server/routes/wellbeing');
 const schedule = require('../server/routes/schedule');
 const health = require('../server/routes/health');
+const income = require('../server/routes/income');
+const budget = require('../server/routes/budget');
+const safety = require('../server/routes/safety');
+const machine = require('../server/routes/machine');
 
 const ROOT = path.join(__dirname, '..');
 const HOST = 'http://127.0.0.1:11434';
@@ -175,7 +179,21 @@ function gatherFacts() {
   let healthDay = null;
   try { healthDay = health.lastDay(); } catch (e) { healthDay = { error: e.message }; }
 
+  // Four more modules asked rather than reimplemented. Each is wrapped: a briefing that dies
+  // because one module threw is worse than a briefing missing one section.
+  const ask = (fn) => { try { return fn(); } catch (e) { return { error: e.message }; } };
+  const earned = ask(() => income.earnedSince(sinceStamp));
+  const moneyGuard = {
+    budget: ask(() => budget.breaches()),
+    limits: ask(() => safety.limits()),
+    authorised: ask(() => safety.authorisedThisMonth()),
+  };
+  const pressure = ask(() => machine.pressureNow());
+
   return {
+    earned,
+    moneyGuard,
+    pressure,
     scheduleDue,
     healthDay,
     deferralsDue,
@@ -333,6 +351,68 @@ function render(facts, prose) {
         L.push(`## Body\n`);
         L.push(`- ${hd.date}: ${bits.join(', ')}${stale}`);
         if (hd.note) L.push(`- ${hd.note}`);
+        L.push('');
+      }
+    }
+
+    // MONEY. The budget owns headroom and safety owns the limits; this only arranges them.
+    // coverageComplete is printed whenever it is false, because headroom computed over an
+    // incomplete budget is not "what is left to spend" and presenting it as such is how a
+    // number nobody can audit gets believed.
+    const mg = facts.moneyGuard;
+    if (mg && mg.budget && !mg.budget.error) {
+      const b = mg.budget;
+      const over = (b.over || []).length;
+      if (over || b.headroomPence != null) {
+        L.push('## Money left\n');
+        if (b.headroomPence != null) {
+          L.push(`- ${gbp(b.headroomPence)} headroom for ${b.month}`
+            + (b.coverageComplete === false
+              ? ' — but the budget does not cover every category yet, so this is a ceiling rather than a balance'
+              : ''));
+        }
+        for (const o of (b.over || []).slice(0, 4)) {
+          L.push(`- over on **${o.category}**`);
+        }
+        const lim = mg.limits && !mg.limits.error ? mg.limits : null;
+        if (lim && lim.per_transaction_pence) {
+          const auth = mg.authorised && !mg.authorised.error ? mg.authorised : null;
+          L.push(`- spending guard: ${gbp(lim.per_transaction_pence.pence)} per transaction`
+            + (auth ? `, ${auth.n} authorised this month` : ''));
+        }
+        L.push('');
+      }
+    }
+
+    // INCOME. Silent while it is zero, on purpose: a line reading £0 every morning for months
+    // is one the reader stops seeing, and then the morning it finally says £4.20 they skip it
+    // too. The FIRST entry ever is called out separately, because it is the single most
+    // important thing this dashboard can report and otherwise looks like any other Tuesday.
+    const inc = facts.earned;
+    if (inc && !inc.error && inc.periodPence > 0) {
+      L.push('## Income\n');
+      if (inc.firstEver) {
+        L.push(`- **THE FIRST INCOME THIS PORTFOLIO HAS EVER RECORDED: ${gbp(inc.periodPence)}.**`);
+      } else {
+        L.push(`- ${gbp(inc.periodPence)} since ${inc.since}, ${gbp(inc.everPence)} all time`);
+      }
+      for (const s of (inc.byStream || []).slice(0, 5)) {
+        L.push(`- ${s.label}: ${gbp(s.p)}`);
+      }
+      L.push('');
+    }
+
+    // THE MACHINE, and only when it is actually tight. The thresholds are stated here rather
+    // than hidden in the module: 90% of memory, or under 20 GB free. They are a choice, so
+    // the raw figures are printed beside them and you can disagree with the line, not the data.
+    const pr = facts.pressure;
+    if (pr && !pr.error) {
+      const memTight = pr.memory && pr.memory.usedPct != null && pr.memory.usedPct >= 90;
+      const diskTight = pr.disk && pr.disk.available && pr.disk.freeGB < 20;
+      if (memTight || diskTight) {
+        L.push('## The machine is tight\n');
+        if (memTight) L.push(`- memory ${pr.memory.usedPct}% used (${pr.memory.usedMB} of ${pr.memory.totalMB} MB), threshold 90%`);
+        if (diskTight) L.push(`- disk ${pr.disk.freeGB} GB free of ${pr.disk.totalGB}, threshold 20 GB`);
         L.push('');
       }
     }

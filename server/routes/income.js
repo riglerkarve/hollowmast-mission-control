@@ -485,5 +485,48 @@ router.delete('/entries/:id', guard((req, res) => {
   res.json({ deleted: id, was: { stream: row.stream_id, period: row.period, amountPence: row.amount_pence, currency: row.currency } });
 }));
 
+// What has actually been earned, for the briefing.
+//
+// IT IS SILENT UNTIL THERE IS MONEY, and that is the design rather than a limitation. The
+// portfolio has five streams and has earned nothing since it started; a line that says "£0"
+// every morning for months is a line the reader stops seeing, and then the morning it finally
+// says £4.20 they will skip that too. So this reports the facts and the briefing prints nothing
+// when they are all zero.
+//
+// `everPence` exists so the FIRST pound can be told apart from the hundredth. The first sale a
+// project ever makes is the single most important event this dashboard can report, and it is
+// indistinguishable from any other Tuesday if you only look at the period total.
+function earnedSince(sinceISO) {
+  const since = String(sinceISO || '').slice(0, 10);
+
+  const ever = db.prepare('SELECT COALESCE(SUM(amount_pence), 0) AS p, COUNT(*) AS n FROM income_entries').get();
+  const period = since
+    ? db.prepare('SELECT COALESCE(SUM(amount_pence), 0) AS p, COUNT(*) AS n FROM income_entries WHERE period >= ?').get(since)
+    : { p: 0, n: 0 };
+
+  const streams = db.prepare('SELECT COUNT(*) AS n FROM income_streams WHERE active = 1').get().n;
+
+  // Per stream, only for the period, so a briefing can name where it came from rather than
+  // reporting a total nobody can attribute.
+  const byStream = since
+    ? db.prepare(`SELECT s.label AS label, COALESCE(SUM(e.amount_pence), 0) AS p, COUNT(e.id) AS n
+                  FROM income_entries e JOIN income_streams s ON s.id = e.stream_id
+                  WHERE e.period >= ? GROUP BY s.id ORDER BY p DESC`).all(since)
+    : [];
+
+  return {
+    since: since || null,
+    periodPence: period.p,
+    periodEntries: period.n,
+    everPence: ever.p,
+    everEntries: ever.n,
+    activeStreams: streams,
+    byStream,
+    // The distinction the briefing needs to decide whether to shout.
+    firstEver: period.n > 0 && ever.n === period.n,
+  };
+}
+
 module.exports = router;
 module.exports.KINDS = KINDS;
+module.exports.earnedSince = earnedSince;

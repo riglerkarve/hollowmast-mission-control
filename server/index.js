@@ -96,6 +96,9 @@ app.use('/api/goals', goalsRouter);
 app.use('/api/schedule', scheduleRouter);
 app.use('/api/projects', projectsRouter);
 app.use('/api/machine', machineRouter);
+// The sampler is not started by requiring the module -- other processes require it for one
+// helper and must not inherit a background timer. The server that serves the panel starts it.
+machineRouter.startSampling();
 app.use('/api/analytics', analyticsRouter);
 app.use('/garage', garageRouter);
 

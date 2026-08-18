@@ -169,9 +169,20 @@ async function tick() {
 
 // Sampled on a timer rather than on request, so a request never waits for a subprocess and a
 // fast poll cannot multiply the work. unref'd: this must never be the reason the process lives.
-const timer = setInterval(() => { tick().catch(() => {}); }, SAMPLE_MS);
-if (timer.unref) timer.unref();
-tick().catch(() => {});
+// SAMPLING IS NOT STARTED BY REQUIRING THIS FILE, and that is deliberate.
+//
+// The nightly briefing requires this module for one helper. When the sampler started at
+// module scope, that require spawned nvidia-smi and set a 5-second timer inside a job that
+// only wanted a memory figure -- a background process started as a side effect of an import.
+// The server calls startSampling() when it mounts the route; nothing else has to.
+let timer = null;
+function startSampling() {
+  if (timer) return timer;                 // idempotent: two callers must not double the rate
+  timer = setInterval(() => { tick().catch(() => {}); }, SAMPLE_MS);
+  if (timer.unref) timer.unref();          // never the reason the process stays alive
+  tick().catch(() => {});
+  return timer;
+}
 
 // GET /api/machine — the newest sample, with its age. Never blocks.
 router.get('/', (req, res) => {
@@ -198,4 +209,51 @@ router.get('/history', (req, res) => {
   });
 });
 
+// A single instantaneous reading of the two things that actually bite, for callers outside
+// this process.
+//
+// WHY THIS EXISTS SEPARATELY FROM THE SAMPLER ABOVE. The ring and its 5-second timer live in
+// the SERVER's memory. The nightly briefing is a different process: requiring this module there
+// gets an empty ring and starts a second sampler that would spawn nvidia-smi every five seconds
+// for the life of the job. So this function touches neither.
+//
+// IT READS ONLY MEMORY AND DISK, deliberately. CPU load cannot be had from one reading -- it is
+// a delta between two -- and reporting a single-sample "load" would be a fabricated number.
+// GPU needs a subprocess. Memory and disk are the two that fill up and stop things working, and
+// Node answers both in microseconds.
+//
+// IT SETS NO THRESHOLD. It returns the percentages and lets the caller decide what is worth
+// saying, because a threshold is a choice and the module that owns the reading should not also
+// own someone else's opinion about it.
+function pressureNow() {
+  const totalMB = Math.round(os.totalmem() / 1048576);
+  const usedMB = Math.round((os.totalmem() - os.freemem()) / 1048576);
+  const memPct = totalMB ? Math.round((usedMB / totalMB) * 1000) / 10 : null;
+
+  let disk = { available: false, why: 'not read' };
+  try {
+    const s = fs.statfsSync('C:/');
+    const freeGB = Math.round((s.bfree * s.bsize) / 1073741824 * 10) / 10;
+    const totalGB = Math.round((s.blocks * s.bsize) / 1073741824 * 10) / 10;
+    disk = {
+      available: true,
+      freeGB,
+      totalGB,
+      usedPct: totalGB ? Math.round(((totalGB - freeGB) / totalGB) * 1000) / 10 : null,
+    };
+  } catch (e) {
+    disk = { available: false, why: e.message };
+  }
+
+  return {
+    at: new Date().toISOString(),
+    memory: { usedMB, totalMB, usedPct: memPct },
+    disk,
+    // Named so a reader knows what this deliberately does not answer.
+    notMeasured: 'CPU load needs two samples and GPU needs a subprocess; neither is read here.',
+  };
+}
+
 module.exports = router;
+module.exports.startSampling = startSampling;
+module.exports.pressureNow = pressureNow;

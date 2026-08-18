@@ -196,7 +196,16 @@ function gatherFacts() {
     // Newest handover by filename, which is dated. Absent is reported as absent, never
     // as an empty string that would render the same as "there is no handover".
     const rd = path.join(__dirname, '..', 'handover');
-    const hs = fs.readdirSync(rd).filter((f) => /^handover-.*\.md$/.test(f)).sort();
+    // Newest by MODIFICATION TIME, not by filename. Sorting names looked right until two
+    // handovers shared a date: "handover-2026-08-18-evening.md" sorts BEFORE
+    // "handover-2026-08-18.md", because "-" (0x2D) precedes "." (0x2E) — so the newest file
+    // sorted first and the briefing named the oldest. A dated filename orders files only for
+    // as long as the format never varies, and this one varied the day it was used twice.
+    const hs = fs.readdirSync(rd)
+      .filter((f) => /^handover-.*\.md$/.test(f))
+      .map((f) => ({ f, t: fs.statSync(path.join(rd, f)).mtimeMs }))
+      .sort((a, b) => a.t - b.t)
+      .map((x) => x.f);
     handover = hs.length ? hs[hs.length - 1] : null;
   } catch { handover = null; }
   const deferralsDue = {

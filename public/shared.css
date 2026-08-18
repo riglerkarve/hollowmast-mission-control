@@ -50,7 +50,14 @@
   border-radius: 999px;
   font-size: 0.85rem;
   font-weight: 600;
-  color: var(--accent);
+  /* --ink, NOT --accent. Accent on --accent-soft measures 2.73:1 in the light theme and
+     fails AA outright; this one shared rule produced 17 of the light failures on 18 Aug.
+     The convention is already documented in budget.css, finance.css, todo.css and
+     safety.css — accent-soft carries borders and fills, --ink carries the text, at
+     12.26:1 light and 11.04:1 dark. A darker accent token would be a SECOND answer to a
+     question this codebase has already answered. The badge still reads as accented: it
+     keeps its --accent-soft ground. */
+  color: var(--ink);
   white-space: nowrap;
 }
 

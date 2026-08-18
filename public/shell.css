@@ -2,9 +2,15 @@
   --bg: #f4f3ef;
   --card: #ffffff;
   --ink: #1f2320;
-  --muted: #6a7167;   /* 4.53:1 on --bg. #6b7268 was 4.47:1 — three hundredths under AA,
-                          and --muted is the commonest colour on the page (115 uses on one
-                          panel), so that near-miss was several hundred failures at once. */
+  --muted: #5f665d;   /* Was #6a7167, tuned to 4.53:1 AGAINST --bg — correctly measured and
+                          deployed on the wrong grounds. Audited 18 Aug: on --ring-bg it is
+                          4.03:1 (45 elements) and on --accent-soft 3.88:1 (11), both under AA.
+                          A colour verified against one ground is not verified for another.
+                          #5f665d is the smallest darkening along the same hue that clears 4.5
+                          on ALL THREE: --ring-bg 4.75, --accent-soft 4.57, --bg 5.35 — so it
+                          is better everywhere, not traded off. Darkening cannot hurt: every
+                          light-theme ground is lighter than the text. The sidebar is unaffected;
+                          it has its own --sidebar-muted. Re-check with /tools/contrast.html. */
   --accent: #d9663d;
   --accent-soft: #f6ddd0;
   --work: #d9663d;

@@ -1,3 +1,18 @@
+//
+// WHO OWNS A DATED COMMITMENT — decided by the owner, 18 Aug 2026 (backlog M65).
+//
+//   The SCHEDULE owns a date somebody else set   — a GP appointment, a course, a hearing.
+//   The BACKLOG owns intent                      — renewing a passport, replacing a licence.
+//
+// The split is on WHO CHOSE THE DATE, which is answerable without thinking; that is what makes
+// it survive a busy week. Before this, the same commitment lived in both — a provisional
+// licence replacement was a diary entry AND backlog #48 — so clearing it in one place left the
+// other saying it had never been done, and neither list could be trusted alone.
+//
+// `tools/duplicate-commitments.cjs` finds overlaps. It only reports: which side set the date is
+// a fact about the owner's life, not about the data, and a script that guessed would delete
+// diary entries on a hunch.
+
 const express = require('express');
 const db = require('../db');
 

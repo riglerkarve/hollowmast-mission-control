@@ -349,6 +349,37 @@ own last row, because a tidy grid implies a confidence the data does not support
 
 ---
 
+## Atlas — a grid that admits it is a grid
+
+`/api/atlas` + `public/panels/atlas/`. Backlog #65.
+
+**Self-contained, and that is why it works.** Nothing in the ledger could drive it — 21
+Travel transactions across five years is not a travel history — so it is a ONE-OFF capture.
+That is the distinction the gate cares about: a surface you must keep feeding is rejected;
+a list you tick a handful of times a decade and then read forever is not.
+
+**It is a grid, and it says so on its own face.** A geographic projection needs real country
+path data. Authoring outlines from memory would be fabricating geography that *looks*
+authoritative — the most expensive kind of wrong, because nobody checks a map's coastlines.
+So it draws a labelled cell per country, grouped into six regions, and the panel states
+plainly that it does not pretend to know where anywhere is. If a real SVG world map ever
+arrives from a source, the cells can be swapped for paths without touching the data.
+
+**The percentage is BY COUNT, deliberately.** An area-weighted figure needs 193 land-area
+values, and quoting those from memory is exactly the plausible-number trap this project has
+been bitten by repeatedly. Count is arithmetic on a list you can see. If area figures ever
+arrive from a real source they become a SECOND percentage, clearly labelled — never blended
+into this one.
+
+Seeded with the 193 UN member states (Africa 54, Asia 46, Europe 44, North America 23,
+Oceania 14, South America 12 — verified to total 193). The seed is a starting point, not the
+vocabulary: `POST /countries` adds anything missing, and the denominator moves with it.
+
+**Left empty.** The UK is the obvious first click and I did not make it — the same rule as
+the wishlist scopes and the chore history: your record does not start with my assumptions.
+
+---
+
 ## Browsing — domains only, and why that is the whole design
 
 `/api/browsing` + `tools/import-browsing.cjs`. Backlog #12.

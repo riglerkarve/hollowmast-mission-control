@@ -1,0 +1,36 @@
+/* Atlas. A grid of countries, not a map — see atlas.js for why there is no projection.
+   Visited and unvisited are distinguished by TINT and by the is-visited class, never by
+   colour alone at low contrast: both states use --ink and measure above 11:1. */
+.at-figure { display: flex; align-items: baseline; gap: 0.6rem; margin-bottom: 0.5rem; }
+.at-pct { font-size: 2rem; font-weight: 700; letter-spacing: -0.02em; }
+.at-pct-label { font-size: 0.8rem; opacity: 0.7; }
+
+.at-regions { display: flex; flex-wrap: wrap; gap: 0.4rem 1.1rem; margin-bottom: 0.5rem; font-size: 0.8rem; }
+.at-region { opacity: 0.85; }
+
+.at-note { font-size: 0.77rem; opacity: 0.75; margin: 0.4rem 0; }
+.at-dim { opacity: 0.55; }
+.at-h3 { font-size: 0.82rem; font-weight: 700; margin: 0.9rem 0 0.35rem; opacity: 0.85; }
+
+.at-cells { display: flex; flex-wrap: wrap; gap: 0.25rem; }
+
+.at-cell {
+  font: inherit;
+  font-size: 0.7rem;
+  padding: 0.2rem 0.45rem;
+  color: var(--ink);
+  background: var(--bg);
+  border: 1px solid var(--border);
+  border-radius: 5px;
+  cursor: pointer;
+}
+
+.at-cell:hover { border-color: var(--accent); }
+.at-cell:focus-visible { outline: 2px solid var(--accent); outline-offset: 1px; }
+
+/* Visited: tinted AND bolder, so the state does not rest on colour alone. */
+.at-cell.is-visited {
+  background: var(--accent-soft);
+  border-color: var(--accent);
+  font-weight: 700;
+}

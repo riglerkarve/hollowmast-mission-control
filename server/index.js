@@ -104,7 +104,18 @@ app.listen(PORT, HOST, () => {
   console.log(`  http://localhost:${PORT}`);
   lanAddresses.forEach((addr) => console.log(`  http://${addr}:${PORT}  (LAN -- needs the access key)`));
   if (lanAddresses.length) {
-    console.log(`  access key: ${gate.KEY}   (also in ${gate.KEY_FILE})`);
+    // THE KEY IS PRINTED ONLY TO AN INTERACTIVE TERMINAL. Under MissionControl-Server
+    // stdout is redirected to logs/server-<date>.log, and it had written the enrolment key
+    // there 6 times on 17 Aug and 47 times on 18 Aug. That file is gitignored and the key
+    // is already on this disk in gate-key.txt, so nothing escaped -- but a log is the thing
+    // people paste into a bug report or hand over when asking for help, and a secret that
+    // has been pasted somewhere cannot be un-pasted. isTTY is false for a redirect and for
+    // a pipe, true for a person watching, which is exactly the distinction that matters.
+    if (process.stdout.isTTY) {
+      console.log(`  access key: ${gate.KEY}   (also in ${gate.KEY_FILE})`);
+    } else {
+      console.log(`  access key: not printed to a log -- read ${gate.KEY_FILE}`);
+    }
   }
   heartbeat.start();
 });

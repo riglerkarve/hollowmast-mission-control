@@ -166,6 +166,23 @@ db.migrate('lifestyle', [
       );
     `);
   },
+  // v5 — a third scheduling kind. #M9.
+  //
+  // interval   due = last done + N days.        Right for laundry.
+  // anchored   due = a known date + N days.     Right for the bins; recording it does not move it.
+  // month_end  due = the last day of the month. Right for "consolidate the accounts monthly".
+  //
+  // month_end is not expressible as an interval and is not expressible as an anchor either.
+  // 30 days from a month end drifts to the 30th, 29th, 28th and never realigns, because
+  // months are 28-31 days. See nextMonthEnd() for the measured drift.
+  //
+  // BACKFILLED FROM WHAT EACH ROW ALREADY IS, so nothing changes behaviour on migration: a
+  // chore with an anchor_date was already anchored, everything else was already an interval.
+  (d) => {
+    d.exec(`ALTER TABLE lifestyle_chores ADD COLUMN schedule_kind TEXT;`);
+    d.exec(`UPDATE lifestyle_chores SET schedule_kind = CASE
+              WHEN anchor_date IS NOT NULL THEN 'anchored' ELSE 'interval' END;`);
+  },
 ]);
 
 const router = express.Router();
@@ -197,6 +214,33 @@ function nextAnchored(anchorDate, intervalDays, today) {
   return addDays(anchorDate, Math.ceil(diff / step) * step);
 }
 
+// MONTH-END IS A CALENDAR RULE, NOT AN INTERVAL, and that is why anchoring cannot express
+// it. Anchoring fixed fortnightly-Thursday because 14 days is a true period. Months are
+// 28–31 days, so the nearest interval — 30 — drifts and never realigns. Measured before
+// building this, from an anchor of 2026-08-31:
+//
+//     2026-08-31  month end        2026-11-29  should be the 30th
+//     2026-09-30  month end        2026-12-29  should be the 31st
+//     2026-10-30  should be 31st   2027-01-28  should be the 31st
+//
+// Correct for two months, then wrong forever and getting worse. Same failure anchor_date
+// was added to fix for the bins, one level up: a schedule the world owns cannot be derived
+// from a number of days.
+//
+// Returns the last day of THIS month if it has not passed, else the last day of next.
+// Day 0 of month n+1 is the last day of month n, which is how the length of February
+// stays something the calendar knows and this function does not.
+function lastDayOfMonth(y, m) {           // m is 0-based
+  return new Date(Date.UTC(y, m + 1, 0)).toISOString().slice(0, 10);
+}
+
+function nextMonthEnd(today) {
+  const t = new Date(`${today}T00:00:00Z`);
+  const end = lastDayOfMonth(t.getUTCFullYear(), t.getUTCMonth());
+  if (end >= today) return end;
+  return lastDayOfMonth(t.getUTCFullYear(), t.getUTCMonth() + 1);
+}
+
 // The user's stated floor: one proper meal a day. Stored as a number, disclosed in every
 // intake response, and never turned into a percentage or a grade.
 const FLOOR_MEALS = 1;
@@ -224,7 +268,7 @@ const addDays = (date, n) => new Date(Date.parse(date) + n * 86400000).toISOStri
 const CHORE_SQL = `
   SELECT
     c.id, c.name, c.interval_days, c.active, c.created_at,
-    c.anchor_date, c.lead_days,
+    c.anchor_date, c.lead_days, c.schedule_kind,
     MAX(d.done_on)                  AS last_done,
     COUNT(DISTINCT d.done_on)       AS days_recorded,
     CAST(julianday(date('now','localtime')) - julianday(MAX(d.done_on)) AS INTEGER) AS days_since
@@ -352,10 +396,57 @@ function decorateAnchored(r, gaps) {
   };
 }
 
+// A month-end chore. Due on the last day of the month, every month, regardless of when
+// you last did it — the calendar owns this date the way the council owns bin day.
+//
+// lead_days works the same as for anchored chores: with a lead of 2, a month-end task tips
+// to due on the 29th of a 31-day month. dueInDays counts to the ACTION, not to the date, so
+// nothing downstream needs to know which kind of chore this is.
+function decorateMonthEnd(r, gaps) {
+  const today = localToday();
+  const nextOn = nextMonthEnd(today);
+  const daysUntil = dayDiff(nextOn, today);
+  const lead = Math.max(0, r.lead_days || 0);
+
+  return {
+    id: r.id,
+    name: r.name,
+    intervalDays: r.interval_days,
+    active: !!r.active,
+    addedOn: String(r.created_at).slice(0, 10),
+    daysRecorded: r.days_recorded,
+    lastDone: r.last_done,
+    daysSinceDone: r.days_since,
+
+    scheduleKind: 'month_end',
+    anchored: true,               // in the sense that matters: recording it does not move it
+    leadDays: lead,
+    nextDueOn: nextOn,
+    daysUntilNext: daysUntil,
+
+    dueInDays: daysUntil - lead,
+    overdueByDays: 0,
+    state: daysUntil - lead <= 0 ? 'due' : (daysUntil - lead <= SOON_WITHIN_DAYS ? 'soon' : 'ok'),
+    why: 'The last day of every month. Not an interval since you last did it, and not a '
+      + 'fixed number of days from an anchor — 30 days from a month end drifts to the 30th, '
+      + 'then the 29th, and never comes back. Recording it does not move the next date.'
+      + (lead ? ` Flagged ${lead} day${lead === 1 ? '' : 's'} ahead.` : ''),
+    typical: gaps.get(r.id) || { medianDays: null, gapsCounted: 0, note: 'Nothing recorded yet.' },
+  };
+}
+
 function allChores() {
   const gaps = typicalGaps();
   return db.prepare(CHORE_SQL).all()
-    .map((r) => (r.anchor_date ? decorateAnchored(r, gaps) : decorate(r, gaps)));
+    .map((r) => {
+      // Dispatch on the declared kind, falling back to the old inference for any row a
+      // migration has not reached. Three kinds, one dueInDays: the briefing, the trigger
+      // and the sort never learn which is which.
+      const kind = r.schedule_kind || (r.anchor_date ? 'anchored' : 'interval');
+      if (kind === 'month_end') return decorateMonthEnd(r, gaps);
+      if (kind === 'anchored' && r.anchor_date) return decorateAnchored(r, gaps);
+      return decorate(r, gaps);
+    });
 }
 
 const STATE_ORDER = { due: 0, 'never done': 1, soon: 2, ok: 3 };
@@ -406,7 +497,7 @@ router.put('/chores/:id', (req, res) => {
   const row = db.prepare('SELECT * FROM lifestyle_chores WHERE id = ?').get(id);
   if (!row) return res.status(404).json({ error: 'no such chore' });
 
-  const { name, intervalDays, active } = req.body || {};
+  const { name, intervalDays, active, scheduleKind, leadDays } = req.body || {};
   const n = name === undefined ? row.name : String(name || '').trim();
   const every = intervalDays === undefined ? row.interval_days : Number(intervalDays);
   const act = active === undefined ? row.active : (active ? 1 : 0);
@@ -414,6 +505,28 @@ router.put('/chores/:id', (req, res) => {
   if (!n) return res.status(400).json({ error: 'name cannot be empty' });
   if (!Number.isInteger(every) || every < 1 || every > 365) {
     return res.status(400).json({ error: 'intervalDays must be a whole number of days between 1 and 365' });
+  }
+
+  // The scheduling kind, #M9. Set separately from the interval because for a month_end
+  // chore the interval is meaningless — the calendar decides, not a number of days.
+  if (scheduleKind !== undefined) {
+    const KINDS = ['interval', 'anchored', 'month_end'];
+    if (!KINDS.includes(scheduleKind)) {
+      return res.status(400).json({ error: `scheduleKind must be one of ${KINDS.join(', ')}` });
+    }
+    // Refused rather than silently accepted: an anchored chore with no anchor would fall
+    // back to interval behaviour and look like it had been set, which is the worst outcome.
+    if (scheduleKind === 'anchored' && !row.anchor_date) {
+      return res.status(400).json({ error: 'anchored needs an anchor_date — set one first, or use month_end' });
+    }
+    db.prepare('UPDATE lifestyle_chores SET schedule_kind = ? WHERE id = ?').run(scheduleKind, id);
+  }
+  if (leadDays !== undefined) {
+    const lead = Number(leadDays);
+    if (!Number.isInteger(lead) || lead < 0 || lead > 28) {
+      return res.status(400).json({ error: 'leadDays must be a whole number between 0 and 28' });
+    }
+    db.prepare('UPDATE lifestyle_chores SET lead_days = ? WHERE id = ?').run(lead, id);
   }
 
   db.prepare('UPDATE lifestyle_chores SET name = ?, interval_days = ?, active = ? WHERE id = ?').run(n, every, act, id);

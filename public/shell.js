@@ -17,6 +17,7 @@ const PANELS = {
   schedule: () => import('/panels/schedule/schedule.js'),
   projects: () => import('/panels/projects/projects.js'),
   machine: () => import('/panels/machine/machine.js'),
+  analytics: () => import('/panels/analytics/analytics.js'),
 };
 
 const panelRoot = document.getElementById('panelRoot');

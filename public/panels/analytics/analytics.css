@@ -1,0 +1,53 @@
+/* Analytics. Colours come from the shared token set; none are invented here.
+   State is carried by a left stripe as well as a word, so it reads at a glance without relying
+   on colour alone — and "never probed" is styled as unknown rather than as good, because an
+   unmeasured site is not a healthy one. */
+
+.an-h2 { font-size: 13px; text-transform: uppercase; letter-spacing: .08em;
+  color: var(--muted); margin: 0 0 12px; font-weight: 600; }
+
+.an-btn { font: inherit; font-size: 12px; padding: 5px 12px; border-radius: 6px;
+  border: 1px solid var(--border); background: var(--card); color: var(--ink); cursor: pointer; }
+.an-btn:hover:not(:disabled) { border-color: var(--border-strong); }
+.an-btn:disabled { opacity: .6; cursor: default; }
+
+.an-sites { display: grid; gap: 12px; grid-template-columns: repeat(auto-fit, minmax(260px, 1fr)); }
+
+.an-site { border: 1px solid var(--border); border-left-width: 3px; border-radius: 8px;
+  padding: 12px 14px; display: flex; flex-direction: column; gap: 6px; min-width: 0; }
+.an-site.is-ok { border-left-color: var(--short); }
+.an-site.is-attention { border-left-color: var(--long); }
+.an-site.is-unknown { border-left-color: var(--border-strong); }
+
+.an-row { display: flex; justify-content: space-between; align-items: baseline; gap: 8px; }
+.an-name { font-size: 15px; color: var(--ink); }
+.an-state { font-size: 11px; text-transform: uppercase; letter-spacing: .06em; color: var(--muted); }
+.an-url { font-size: 12px; color: var(--accent-text); text-decoration: none; overflow-wrap: anywhere; }
+.an-url:hover { text-decoration: underline; }
+.an-detail { font-size: 13px; color: var(--ink); font-variant-numeric: tabular-nums; }
+
+.an-flags { display: flex; flex-wrap: wrap; gap: 6px; }
+.an-flag { font-size: 11px; padding: 1px 7px; border-radius: 10px;
+  border: 1px solid var(--border); color: var(--muted); white-space: nowrap; }
+.an-flag.is-bad { color: var(--long); border-color: var(--long); }
+.an-flag.is-unknown { border-style: dashed; }
+.an-flag.is-quiet { border-color: transparent; }
+
+.an-spark { display: flex; align-items: center; gap: 8px; min-height: 26px; }
+.an-spark svg { width: 100%; max-width: 200px; height: 26px; display: block; }
+.an-spark polyline { fill: none; stroke: var(--accent); stroke-width: 1.5;
+  vector-effect: non-scaling-stroke; }
+.an-scale { font-size: 11px; color: var(--muted); white-space: nowrap; }
+
+.an-caveat, .an-why { font-size: 12px; color: var(--muted); margin: 12px 0 0; }
+.an-empty { font-size: 15px; color: var(--ink); margin: 0; }
+
+.an-table { width: 100%; border-collapse: collapse; font-size: 13px; }
+.an-table th { text-align: left; font-weight: 600; font-size: 11px; text-transform: uppercase;
+  letter-spacing: .06em; color: var(--muted); padding: 0 10px 6px 0; }
+.an-table td { padding: 6px 10px 6px 0; border-top: 1px solid var(--border); color: var(--ink); }
+.an-table td.num { text-align: right; font-variant-numeric: tabular-nums; }
+
+@media (max-width: 560px) {
+  .an-sites { grid-template-columns: 1fr; }
+}

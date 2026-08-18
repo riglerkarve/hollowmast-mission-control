@@ -35,10 +35,13 @@ const ROOT = path.resolve(__dirname, '..', '..', '..');   // the workspace, one 
 
 // Hand-declared. `dash` is the ONLY directory served for each entry, and it is relative to
 // the project. A project with dash: null appears in the list and serves nothing.
+//  is the public URL, and only the two published projects carry one. It lives here
+// rather than in the analytics module because a public address is an attribute of the
+// project, and a second list of projects is a second place the truth lives.
 const PROJECTS = [
-  { id: 'hollowmast', name: 'HOLLOWMAST', dir: 'Survive', dash: 'dash', entry: 'index.html',
+  { id: 'hollowmast', name: 'HOLLOWMAST', dir: 'Survive', dash: 'dash', live: 'https://hollowmast.com', entry: 'index.html',
     track: 'Game', note: 'Nearest to shipping. One self-contained HTML file, zero dependencies.' },
-  { id: 'printprofit', name: 'PrintProfit', dir: 'income-portfolio', dash: 'dashboard', entry: 'index.html',
+  { id: 'printprofit', name: 'PrintProfit', dir: 'income-portfolio', dash: 'dashboard', live: 'https://riglerkarve.github.io/profitprint/', entry: 'index.html',
     track: 'Income', note: 'Live to the public, £0 earned. Blocked on distribution.' },
   { id: 'mission-control', name: 'Mission Control', dir: 'mission-control', dash: null, entry: null,
     track: 'Ops', note: 'This. Its control centre is the thing you are looking at.' },

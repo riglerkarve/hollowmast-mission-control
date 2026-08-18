@@ -1,7 +1,12 @@
 .lf-h2 { margin: 0 0 0.3rem; font-size: 0.95rem; opacity: 0.85; }
 .lf-h3 { margin: 1.1rem 0 0.5rem; font-size: 0.82rem; opacity: 0.7; font-weight: 600; }
 .lf-hint { font-size: 0.8rem; opacity: 0.7; line-height: 1.5; margin: 0 0 0.9rem; }
-.lf-dim { opacity: 0.55; font-weight: 400; }
+ /* De-emphasis by COLOUR, not opacity. Opacity COMPOUNDS: .lf-dim at 0.55 nested inside
+   another dimmed element rendered at 0.39 cumulative and measured 3.14:1 against the card,
+   under the 4.5:1 it needs at 13px. A colour cannot compound, so the same rule holds
+   wherever it is nested. (Pre-existing rule; the new meal markup is what exposed it by
+   nesting .lf-dim inside a heading.) */
+.lf-dim { color: var(--muted); font-weight: 400; }
 .lf-error { color: var(--accent); font-size: 0.85rem; }
 
 /* Reserves its line whether or not it is speaking, so the form below does not jump up the
@@ -61,8 +66,10 @@
 .lf-del {
   border: 0;
   background: transparent;
-  color: inherit;
-  opacity: 0.3;
+  /* Recessive by colour rather than alpha, for the same reason as .lf-dim above: at
+     opacity 0.3 this measured 2.37-2.44:1. Still visually quiet, still brightens to the
+     accent on hover, and now legible at rest. */
+  color: var(--muted);
   cursor: pointer;
   font-size: 1rem;
   line-height: 1;
@@ -137,3 +144,168 @@
 
 .lf-facts { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 0.3rem; font-size: 0.85rem; }
 .lf-facts b { font-variant-numeric: tabular-nums; }
+
+/* --- food diary (#M17) ------------------------------------------------------------
+   EVERY CLASS HERE IS PREFIXED .mt-, AND THE PREFIX WAS AUDITED BEFORE IT WAS USED.
+   Every panel stylesheet in this app is linked into ONE document (see index.html), so
+   class names are a single global namespace across every panel and a later-linked sheet
+   silently wins. The prefix was checked against every class defined by every LINKED sheet
+   and matched none - no count is quoted here because other panels add classes and a number
+   in a comment goes stale without ever becoming wrong-looking. Re-derive it instead:
+
+     grep -ho '\.[A-Za-z][A-Za-z0-9_-]*' shell.css shared.css panels/-*\/*.css | sort -u
+
+   Note .lf-meal, .lf-meals, .lf-met, .lf-none and .lf-today already exist in THIS file
+   with other meanings - reusing one would have redefined the intake strip above. */
+
+.mt-card { margin-top: 1rem; }
+
+.mt-head { display: flex; gap: 0.8rem; align-items: baseline; justify-content: space-between; flex-wrap: wrap; }
+.mt-daylab { font-size: 0.78rem; opacity: 0.7; display: flex; gap: 0.4rem; align-items: center; }
+.mt-date { flex: 0 0 auto; padding: 0.3rem 0.5rem; font-size: 0.8rem; }
+
+.mt-search { display: flex; gap: 0.5rem; flex-wrap: wrap; margin-bottom: 0.7rem; }
+.mt-tight { margin: 0.5rem 0 0; }
+
+/* --- the three lookup outcomes ---------------------------------------------------
+   "could not look" and "not in the database" are different facts, so they are different
+   boxes: a solid accent edge over a filled ground for a FAULT, a dashed muted edge and no
+   fill for an ABSENCE. Border style carries it as well as hue, which survives both themes
+   and a colour-blind reader - the same rule .lf-never-done already follows above. */
+.mt-state {
+  display: flex; flex-direction: column; gap: 0.3rem;
+  padding: 0.6rem 0.75rem; border-radius: 0 8px 8px 0;
+  font-size: 0.82rem; line-height: 1.5; margin: 0 0 0.7rem;
+}
+.mt-state-h { font-size: 0.85rem; }
+.mt-state-sub { opacity: 0.75; }
+
+.mt-searching { border-left: 3px solid var(--border); background: var(--ring-bg); opacity: 0.8; }
+
+/* FAULT. The question never got answered. */
+.mt-failed { border-left: 3px solid var(--accent); background: var(--accent-soft); }
+/* Printed verbatim, so a route-side misclassification stays readable instead of laundered. */
+.mt-why { font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; font-size: 0.76rem; opacity: 0.85; }
+
+/* ABSENCE. Answered, and it is not there. Must not borrow the fault's colour. */
+.mt-absent { border-left: 3px dashed var(--muted); background: transparent; }
+
+.mt-found { font-size: 0.8rem; opacity: 0.75; margin: 0 0 0.5rem; }
+.mt-results { list-style: none; margin: 0 0 0.8rem; padding: 0; display: flex; flex-direction: column; gap: 0.4rem; }
+/* min-width:0 rather than nothing: a flex child defaults to min-content width, so a long
+   unbroken product name would push this row wider than the card and scroll the page. */
+.mt-result { min-width: 0; }
+
+.mt-pick {
+  width: 100%; text-align: left; cursor: pointer;
+  display: flex; flex-direction: column; gap: 0.25rem;
+  padding: 0.5rem 0.65rem;
+  border: 1px solid var(--border); border-radius: 8px;
+  background: var(--ring-bg); color: inherit; font: inherit;
+}
+.mt-pick:hover { border-color: var(--accent); background: var(--accent-soft); }
+.mt-r-name { font-size: 0.85rem; font-weight: 600; }
+.mt-r-basis { font-size: 0.72rem; opacity: 0.78; }
+
+/* A figures strip. Uniform: no nutrient is styled as more or less desirable than another. */
+.mt-r-figs { display: flex; gap: 0.7rem; flex-wrap: wrap; font-size: 0.74rem; opacity: 0.8; }
+.mt-fig { display: inline-flex; gap: 0.25rem; }
+.mt-fig b { font-variant-numeric: tabular-nums; font-weight: 600; }
+/* These are the FOOD's figures, not this meal's contribution - the total is these times
+   the serving count. Labelled so the two are never confused at a glance.
+   OPACITY 0.9, NOT 0.55: this sits inside .mt-r-figs, which is already at 0.8, and opacity
+   MULTIPLIES down the tree. 0.8 x 0.55 = 0.44 composited, measured at 3.46:1 - under AA,
+   while the naive colour-vs-background reading said 11.22:1 and would have passed it. The
+   hierarchy is carried by size, caps and letter-spacing instead, none of which cost
+   legibility. */
+.mt-per { text-transform: uppercase; letter-spacing: 0.04em; font-size: 0.65rem; opacity: 0.9; }
+
+.mt-picked {
+  display: flex; flex-direction: column; gap: 0.3rem;
+  padding: 0.6rem 0.75rem; margin-bottom: 0.6rem;
+  border: 1px solid var(--accent); border-radius: 8px; background: var(--accent-soft);
+}
+.mt-p-head { display: flex; gap: 0.6rem; align-items: baseline; justify-content: space-between; }
+.mt-p-name { font-size: 0.88rem; font-weight: 600; }
+
+.mt-clear {
+  border: 0; background: transparent; color: inherit; cursor: pointer;
+  font: inherit; font-size: 0.74rem; opacity: 0.6; text-decoration: underline; padding: 0;
+}
+.mt-clear:hover { opacity: 1; color: var(--accent); }
+
+.mt-compose { display: flex; gap: 0.5rem; flex-wrap: wrap; align-items: center; }
+.mt-servlab { display: flex; gap: 0.4rem; align-items: center; font-size: 0.78rem; opacity: 0.75; }
+.mt-serv { flex: 0 0 5.5rem; }
+.mt-bare { flex: 0 0 auto; }
+
+/* --- the day's items -------------------------------------------------------------- */
+.mt-list { list-style: none; margin: 0.3rem 0 0.8rem; padding: 0; display: flex; flex-direction: column; gap: 0.4rem; }
+.mt-item {
+  display: flex; gap: 0.7rem; align-items: center; justify-content: space-between;
+  padding: 0.5rem 0.65rem; border-left: 3px solid var(--border);
+  border-radius: 0 8px 8px 0; background: var(--ring-bg);
+}
+.mt-i-main { display: flex; flex-direction: column; gap: 0.2rem; min-width: 0; }
+.mt-i-name { font-size: 0.86rem; font-weight: 600; }
+.mt-i-src { font-size: 0.71rem; color: var(--muted); }
+.mt-i-del { font-size: 1rem; }
+
+/* An item with no figures. Dashed, unfilled, and SAID rather than shaded - it is missing
+   information, not a bad meal, and nothing in this module grades a meal. */
+.mt-i-nofig { font-size: 0.74rem; opacity: 0.7; font-style: italic; }
+.mt-item-bare { border-left-style: dashed; border-left-color: var(--muted); background: transparent; }
+.mt-none { margin: 0.3rem 0 0.8rem; }
+
+/* --- the incomplete notice --------------------------------------------------------
+   Full width, above the numbers, at the same size as them. A total that silently omits a
+   meal reads as a shortfall, and a shortfall is the harmful direction in this module. It
+   is about the DATA, never about the eating, and the wording keeps that distinction. */
+.mt-warn {
+  display: flex; flex-direction: column; gap: 0.3rem;
+  padding: 0.7rem 0.85rem; margin: 0 0 0.8rem;
+  border: 1px solid var(--accent); border-left-width: 3px; border-radius: 0 8px 8px 0;
+  background: var(--accent-soft);
+}
+.mt-warn-h { font-size: 0.87rem; }
+.mt-warn-b { font-size: 0.8rem; line-height: 1.55; opacity: 0.9; }
+
+/* --- totals -----------------------------------------------------------------------
+   Every cell is styled identically whatever the number is. There is no fill that grows, no
+   hue that moves with the value, and no comparison drawn against the target: the target is
+   printed beside the total as a second plain number and nothing is computed between them.
+   A progress bar here would be a score, and this module does not score. */
+.mt-totals {
+  display: grid; grid-template-columns: repeat(auto-fit, minmax(9.5rem, 1fr));
+  gap: 0.5rem; margin-bottom: 0.6rem;
+}
+.mt-tot {
+  display: flex; flex-direction: column; gap: 0.15rem;
+  padding: 0.55rem 0.65rem;
+  border: 1px solid var(--border); border-radius: 8px; background: var(--ring-bg);
+}
+.mt-tot-n { font-size: 0.72rem; text-transform: uppercase; letter-spacing: 0.04em; opacity: 0.78; }
+.mt-tot-v { font-size: 1.15rem; font-weight: 600; font-variant-numeric: tabular-nums; }
+.mt-tot-u { font-size: 0.72rem; font-weight: 400; color: var(--muted); margin-left: 0.15rem; }
+.mt-tot-why { font-size: 0.71rem; color: var(--muted); line-height: 1.4; }
+.mt-target { font-size: 0.72rem; color: var(--muted); }
+
+/* NOT A NUMBER, AND DRAWN AS NOT A NUMBER. "not recorded" and "no figures" both land here.
+   Dashed and unfilled, so an unmeasured cell cannot be mistaken at a glance for a measured
+   one - the route sends 0 for "nothing known contributed", and a 0 rendered as a value
+   would claim the day was empty when it was only unmeasured. */
+.mt-tot-blank { border-style: dashed; background: transparent; }
+.mt-tot-na { font-size: 0.9rem; font-weight: 500; opacity: 0.65; font-style: italic; }
+
+/* --- targets ---------------------------------------------------------------------- */
+.mt-targets { display: flex; flex-direction: column; gap: 0.4rem; }
+.mt-t-row { display: flex; gap: 0.5rem; align-items: center; flex-wrap: wrap; }
+.mt-t-name { flex: 0 0 7rem; font-size: 0.8rem; }
+.mt-t-in { flex: 0 0 7rem; }
+.mt-t-set { font-size: 0.76rem; padding: 0.25rem 0.6rem; }
+.mt-t-when { font-size: 0.72rem; }
+
+@media (max-width: 560px) {
+  .mt-t-name { flex: 1 0 100%; }
+  .mt-compose { flex-direction: column; align-items: stretch; }
+}

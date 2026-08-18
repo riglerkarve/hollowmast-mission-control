@@ -316,6 +316,21 @@ function render(facts, prose) {
 // failure costs the queue and never the briefing, and bounded so a big queue cannot make
 // the morning report take all night. Items write their own results, so a kill leaves every
 // finished item finished.
+
+// M57: the counted claims in CLAUDE.md regenerate on the daily pass rather than rotting.
+// Measured 18 Aug, every figure in both files was wrong within a day of being written, and
+// the schema list had regressed to a failure it documents in its own text. Synchronous and
+// wrapped: a documentation stamp must never be able to fail a morning report.
+function stampDocs() {
+  try {
+    const { execFileSync } = require('node:child_process');
+    const out = execFileSync(process.execPath, [path.join(ROOT, 'tools', 'stamp-claude-md.cjs')],
+      { encoding: 'utf8', timeout: 20000 });
+    const nl = String.fromCharCode(10);   // a regex literal here does not survive patching
+    const moved = out.split(nl).filter((l) => l.indexOf('rewritten') >= 0);
+    if (moved.length) console.log(`docs: ${moved.length} CLAUDE.md count block(s) regenerated`);
+  } catch (err) { console.log(`docs: stamp FAILED -- ${String(err.message).slice(0, 100)}`); }
+}
 async function runWork() {
   try {
     const work = require('../server/routes/work');
@@ -345,7 +360,8 @@ async function syncGmail() {
 }
 async function main() {
   await syncGmail();
-  await runWork();            // M43: the queue runs on the same one pass, not a task of its own          // before gatherFacts, so today's figures include today's mail
+  await runWork();
+  stampDocs();               // M57: regenerate the counted blocks in CLAUDE.md            // M43: the queue runs on the same one pass, not a task of its own          // before gatherFacts, so today's figures include today's mail
   const facts = gatherFacts();
   const prose = await writeProse(facts);
   const md = render(facts, prose);

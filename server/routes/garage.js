@@ -28,17 +28,12 @@ const ROOT = path.resolve(__dirname, '..', '..', '..');   // the workspace root
 const FILES = new Set([
   'index.html',
   'Mini Games/give-way.html',
-  'Oxford AutoWorks/docs/session-dashboard.html',
-  'Oxford AutoWorks/docs/session-playbook.html',
-  'Oxford AutoWorks/docs/telemetry/README.md',
-  'Oxford AutoWorks/docs/telemetry/ledger.jsonl',
 ]);
 
 // Directories those pages may draw assets from. Deliberately narrow: docs/ and the game
 // folder, never a project root and never mission-control.
 const DIRS = [
   'Mini Games/',
-  'Oxford AutoWorks/docs/telemetry/',
 ];
 
 const MIME = {
@@ -88,8 +83,10 @@ router.get('*', (req, res) => {
     // Say it is not served rather than pretending it does not exist — a flat 404 here
     // would send me hunting for a missing file that is present and deliberately refused.
     return res.status(404).type('text/plain')
-      .send('Not served. The Garage route is an allowlist: the workspace console, Mini Games\n'
-        + 'and the Oxford AutoWorks telemetry pages only.\n\n'
+      .send('Not served. The Garage route is an allowlist: the workspace console and Mini\n'
+        + 'Games only. The telemetry pages it used to borrow from Oxford AutoWorks were\n'
+        + 'dropped on 18 Aug — this workspace parses its own sessions now, and the\n'
+        + 'Oxford-rooted copy was attributing 0 edited files to every one of them.\n\n'
         + 'This server listens on 0.0.0.0, so it must never mount the workspace root — the\n'
         + 'finance ledger and its backups live under it. See server/routes/garage.js.\n');
   }

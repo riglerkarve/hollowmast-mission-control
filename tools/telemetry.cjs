@@ -6,11 +6,13 @@
 //   node tools/telemetry.cjs --dry    parse and print, write nothing
 //
 // ------------------------------------------------------------------------------------
-// IT REUSES OXFORD'S STAGES RATHER THAN COPYING THEM. `scripts/telemetry/parse-session.cjs`
-// over there contains ZERO references to Oxford or AutoWorks and takes --projects, --config
-// and --out — it was already generic, so "generalise it" means pointing it at a second
-// workspace, not forking it. A copy here would be a second owner of the same parser and the
-// two would drift the first time either was touched.
+// IT USED TO REUSE OXFORD'S STAGES RATHER THAN COPY THEM, on the argument that
+// parse-session.cjs contains ZERO references to Oxford or AutoWorks and so was already
+// generic. That argument was about the TEXT and turned out to be wrong about the BEHAVIOUR:
+// the parser records a projectRoot and resolves every file path against it, so where it
+// lives changes what it attributes. Copied in and re-rooted on 18 Aug — see STAGES below.
+// The drift risk that argument warned about is real and is now accepted deliberately: this
+// workspace owns its copy, and Oxford's can diverge without breaking a scheduled task here.
 //
 // TWO DELIBERATE DIFFERENCES FROM OXFORD'S SETUP, both chosen by the owner on 18 Aug:
 //
@@ -30,7 +32,34 @@ const path = require('node:path');
 const { execFileSync } = require('node:child_process');
 
 const ROOT = path.resolve(__dirname, '..');
-const STAGES = path.resolve(ROOT, '..', 'Oxford AutoWorks', 'scripts', 'telemetry');
+
+// LOCAL, as of 18 Aug 2026. This used to resolve to
+// '../Oxford AutoWorks/scripts/telemetry' and shell out to that project's parser. The
+// reuse argument below was right at the time and is now wrong for one reason: Oxford is
+// kept and documented but NOT in the rotation, and a live ops tool that reaches into a
+// dormant 4.7 GB project breaks the day that directory is moved or archived — silently,
+// inside a scheduled task, which is the worst place for it.
+//
+// parse-session.cjs, areas.cjs and config.json were copied here byte-identically, verified
+// by sha256 rather than size.
+//
+// I SET "BYTE-IDENTICAL OUTPUT" AS THE ACCEPTANCE TEST AND IT WAS THE WRONG TEST. The
+// outputs differ, and they SHOULD: parse-session records a `projectRoot` and resolves every
+// file path against it, so where the parser lives changes what it attributes. Run from
+// Oxford, it looked for this workspace's edited files under Oxford's root, found none, and
+// wrote `files: []` — no error, no warning, just an empty array that reads as "nothing was
+// edited".
+//
+// Measured on a FROZEN copy of the transcripts, because the live ones grow while you look
+// at them and the first two comparisons were confounded by my own session writing to them:
+//
+//     Oxford rooting   0 files attributed across 0 sessions
+//     local rooting    63 files across 2, including server/routes/brain.js at 6 edits
+//
+// So this is not a refactor that happens to be safe. It is a fix: the dependency was
+// producing mis-rooted data, and every churn figure in the old ledger was empty for a
+// reason nobody had asked about.
+const STAGES = path.resolve(__dirname, 'telemetry');
 const TRANSCRIPTS = path.join(os.homedir(), '.claude', 'projects', 'C--Users-jcwhi-Claude-Outputs');
 const OUT = path.join(ROOT, 'data', 'telemetry');
 
@@ -41,8 +70,9 @@ function main() {
   // pipeline that ran and found nothing.
   if (!fs.existsSync(STAGES)) {
     console.error(`The telemetry stages are not where this expects them:\n  ${STAGES}`);
-    console.error('They live in Oxford AutoWorks and are reused, not copied. If that project');
-    console.error('moved, update STAGES here rather than forking the parser.');
+    console.error('They are a LOCAL copy under tools/telemetry/ as of 18 Aug — parse-session.cjs,');
+    console.error('areas.cjs and config.json. If they are missing, restore them; do not re-point this');
+    console.error('at Oxford AutoWorks, which rooted every path at the wrong project.');
     process.exit(1);
   }
   if (!fs.existsSync(TRANSCRIPTS)) {

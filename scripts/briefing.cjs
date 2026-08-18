@@ -345,6 +345,29 @@ async function main() {
     const fired = triggers.filter((t) => t.state === 'fires').length;
     console.log(`triggers: ${triggers.length} checked, ${fired} fired`);
   }
+
+  // TELEMETRY RIDES ALONG TOO, for the same reason the triggers do: no sixth scheduled
+  // task. Five already exist and each one is another thing that can silently stop.
+  //
+  // Measured before wiring rather than assumed: a full parse of 288 MB of transcripts is
+  // ~2.0s against this briefing's ~18.7s, so it costs about 11% of a job that already runs
+  // unattended once a day.
+  //
+  // Until 18 Aug this data came from GarageTelemetryHourly, which runs Oxford AutoWorks'
+  // telemetry.ps1 with Oxford as its working directory. That task is Oxford's business and
+  // is left alone; it simply no longer feeds anything here.
+  //
+  // WRAPPED SO IT CANNOT TAKE THE BRIEFING DOWN. The briefing is the thing you read at 07:00;
+  // a metrics refresh failing must never cost you that. It reports the failure and continues.
+  if (!DRY) {
+    try {
+      const { execFileSync } = require('node:child_process');
+      execFileSync('node', [path.join(ROOT, 'tools', 'telemetry.cjs')], { stdio: ['ignore', 'ignore', 'pipe'] });
+      console.log('telemetry: refreshed');
+    } catch (err) {
+      console.error(`telemetry refresh failed (briefing is unaffected): ${String(err.message).slice(0, 120)}`);
+    }
+  }
 }
 
 main().catch((e) => { console.error(e); process.exit(1); });

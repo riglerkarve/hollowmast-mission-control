@@ -1,0 +1,12 @@
+{
+  "subscription": { "amount": 90, "currency": "GBP", "periodDays": 30.4375 },
+  "fx":           { "gbpToUsd": 1.3478, "asOf": "2026-08-07" },
+  "prices": {
+    "claude-fable-5":  { "input": 10, "output": 50 },
+    "claude-opus-5":   { "input": 5,  "output": 25 },
+    "claude-sonnet-5": { "input": 2,  "output": 10 }
+  },
+  "cacheMultipliers": { "write1h": 2, "write5m": 1.25, "read": 0.1 },
+  "idleGapMs": 300000,
+  "limits": { "windowHours": 5, "capTokens": null }
+}

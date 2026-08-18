@@ -469,5 +469,37 @@ function activitySince(sinceDate) {
   return { choresRecorded: chores, intakeDaysRecorded: intake };
 }
 
+// What is due, published for the briefing and the daily triggers so neither has to read
+// lifestyle_chores itself. It reuses allChores(), so the figures are the same ones the
+// panel shows — a second derivation here would be a second owner for the same schedule.
+//
+// THE SPLIT MATTERS, and it is why chores can be both a notification and a briefing line
+// without becoming nagging:
+//
+//   tippedToday  — dueInDays === 0, the single day a chore crosses its interval. An
+//                  EVENT. Notifying on this needs no "last notified" state and cannot
+//                  repeat, because a chore is only ever 0 days due once per cycle.
+//   due          — dueInDays <= 0, everything currently owed including what was missed.
+//                  A STANDING STATE. Right for the briefing, wrong for a phone buzz: it
+//                  would fire every morning until you did it, which is how an alert
+//                  teaches you to ignore the channel.
+//
+// neverDone is carried separately and is never folded into either. A chore with no history
+// has no date to count from, so calling it "due" would be inventing one.
+function dueSummary() {
+  const all = allChores();
+  const due = all.filter((c) => c.state === 'due');
+  return {
+    today: localToday(),
+    due,
+    tippedToday: due.filter((c) => c.dueInDays === 0),
+    overdue: due.filter((c) => c.dueInDays < 0),
+    soon: all.filter((c) => c.state === 'soon'),
+    neverDone: all.filter((c) => c.state === 'never done'),
+    total: all.length,
+  };
+}
+
 module.exports = router;
 module.exports.activitySince = activitySince;
+module.exports.dueSummary = dueSummary;

@@ -27,6 +27,7 @@
 
 const budget = require('../server/routes/budget');
 const finance = require('../server/routes/finance');
+const lifestyle = require('../server/routes/lifestyle');
 const schedule = require('../server/routes/schedule');
 
 const gbp = (p) => `£${(Math.abs(p || 0) / 100).toFixed(2)}`;
@@ -45,6 +46,27 @@ const CHECKS = [
       return {
         title: `${u.overdue.length} overdue on the schedule`,
         body: `${names}${more}. Each needs marking done, missed or cancelled.`,
+      };
+    },
+  },
+  {
+    kind: 'chores_due',
+    why: 'a chore crossed its interval today',
+    run() {
+      const d = lifestyle.dueSummary();
+      // ONLY chores that tip TODAY (dueInDays === 0). A chore three days overdue is
+      // deliberately silent here: it is a standing state, and notifying on it would fire
+      // every morning until it was done, which is precisely how an alert teaches you to
+      // ignore the channel. The overdue ones are carried by the briefing line instead.
+      //
+      // This needs no "last notified" state to avoid repeating, because a chore is only
+      // ever 0 days due once per cycle. Nothing to store, nothing to get out of step.
+      if (!d.tippedToday.length) return null;
+      const names = d.tippedToday.map((c) => c.name).join(', ');
+      const also = d.overdue.length ? ` Also still owed: ${d.overdue.map((c) => c.name).join(', ')}.` : '';
+      return {
+        title: d.tippedToday.length === 1 ? `${names} is due today` : `${d.tippedToday.length} chores due today`,
+        body: `${names}.${also}`,
       };
     },
   },

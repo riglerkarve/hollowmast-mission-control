@@ -302,6 +302,29 @@ Each check returns one of **three** states — `fires`, `clear`, or `error` — 
 itself immediately: `budget.breaches()` threw on its first run (an omitted month reaching
 SQLite as `undefined`) and surfaced as `error` instead of passing silently as `clear`.
 
+### Chores: why one thing is both a notification and a briefing line
+
+Backlog #52. The module already derived the schedule; what was missing was that a chore
+could come due and **nothing told you** — the briefing reported chores *recorded* as work
+achieved, never chores *due*, so it only worked if you remembered to open the panel.
+
+`lifestyle.dueSummary()` publishes both halves and the split is the whole design:
+
+| | Fires on | Carried by | Why |
+|---|---|---|---|
+| `tippedToday` | `dueInDays === 0` | the `chores_due` notification | an EVENT — a chore is 0 days due exactly once per cycle, so it cannot repeat and needs no "last notified" state |
+| `due` | `dueInDays <= 0` | the briefing's "Due today" section | a STANDING STATE — everything owed, including what was missed while the laptop was asleep |
+
+Notifying on the standing state would fire every morning until you did it, which is how an
+alert teaches you to ignore the channel. Notifying only on the tip means a chore three
+days late is silent on the phone and visible in the briefing — verified: with Laundry at 0
+days and Bins at −3, only Laundry fired.
+
+`neverDone` is carried separately by both and folded into neither. A chore with no history
+has no date to count an interval from, so calling it "due" or "not due" would be inventing
+one. This is why the briefing says "Nothing due" **and then** names the chores that have
+never been recorded — "nothing due" on its own would imply you are on top of things.
+
 **Deliberately NOT a trigger: per-category budget breaches.** Two are over right now, and
 one is "Other" at £75.50 against a £3.00 budget — a category whose median is near zero
 turns a trivial sum into an enormous percentage. Any absolute threshold that fixed it

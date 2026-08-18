@@ -129,6 +129,11 @@ function gatherFacts() {
   return {
     date: TODAY,
     work,
+    // Asked of lifestyle, not derived here. The briefing carries the STANDING state —
+    // everything currently owed, including what was missed while this laptop was asleep.
+    // The chores_due trigger carries only the single day a chore tips, so the two do not
+    // say the same thing twice and neither one nags.
+    choresDue: lifestyle.dueSummary(),
     ledger: { first: ledger.a, last: ledger.b, rows: ledger.n, staleDays },
     windowRecent: recent, movers,
     cash28: cash,
@@ -220,6 +225,32 @@ function render(facts, prose) {
   if (w.tasksDoneButUndated) blind.push(`${w.tasksDoneButUndated} finished task(s) predate the completion-date column and cannot be placed in any week`);
   if (w.backlogDecided.undated) blind.push(`${w.backlogDecided.undated} backlog item(s) were already done or declined when imported, with no date recorded — they are real work that this count cannot show`);
   if (blind.length) L.push(`_Not counted above: ${blind.join('; ')}._\n`);
+
+  // Due today. Forward-looking and actionable, so it sits above the money.
+  const c = facts.choresDue;
+  if (c && c.total) {
+    L.push('## Due today\n');
+    if (c.due.length) {
+      for (const ch of c.due) {
+        // Say how late, rather than lumping "due" and "three days late" into one word.
+        const late = ch.dueInDays < 0 ? ` — ${-ch.dueInDays} day${ch.dueInDays === -1 ? '' : 's'} late` : '';
+        L.push(`- **${ch.name}**${late}`);
+      }
+    } else {
+      L.push('- Nothing due.');
+    }
+    // Absence, kept separate from "not due" — a chore with no history has no date to
+    // count an interval from, so calling it either would be inventing one.
+    if (c.neverDone.length) {
+      const names = c.neverDone.map((x) => x.name).join(', ');
+      const verb = c.neverDone.length === 1 ? 'has' : 'have';
+      L.push('');
+      L.push(`_${c.neverDone.length} chore${c.neverDone.length === 1 ? '' : 's'} ${verb} never been recorded `
+        + `(${names}), so nothing here knows when they were last done. That is not the same `
+        + 'as being up to date._');
+    }
+    L.push('');
+  }
 
   L.push('## Ledger\n');
   if (facts.ledger.staleDays > 40) {

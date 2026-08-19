@@ -18,15 +18,19 @@ db.setProcessActor('claude');
 
 const team = require('../server/routes/team');
 
-// Observed from the session list on 19 Aug 2026, 14:38 UTC. Titles are what the sessions call
-// themselves; the roles are assigned from those titles and nothing else.
+// THIS IS A SNAPSHOT, taken from the session list on 19 Aug 2026 at 15:03 UTC, and it starts
+// going out of date immediately. The first version was taken at 14:38 and was already wrong
+// twenty minutes later: the session then called "User interface cleanup and flow" had been
+// renamed "Team Manager", which filled the one seat whose absence I had just written up as
+// the blocking question for the owner. Accurate is not current. Re-read the live list before
+// trusting this, and treat --seed as a starting point rather than the roster.
 //
 // EVERY ROLE HERE IS `worker` EXCEPT THE ONE THAT SAYS OTHERWISE ON ITS OWN FACE. Deciding
 // that "Admin Agent" is really a supervisor, or that "Opus 5 Ultra" outranks "Coding Agent",
 // would be inventing a hierarchy and then presenting it as observed.
 const OBSERVED = [
   ['local_7723327d-6070-4942-8898-8ff5f1d4488f', 'Team Supervisor', 'supervisor', 'HOLLOWMAST'],
-  ['local_d09195ff-12fc-4c33-8c4a-eec2dc52a935', 'User interface cleanup and flow', 'worker', 'HOLLOWMAST'],
+  ['local_d09195ff-12fc-4c33-8c4a-eec2dc52a935', 'Team Manager', 'manager', 'HOLLOWMAST'],
   ['local_462a30cf-f135-4ab6-b8e5-9e2e849e5b17', 'Website Agent', 'worker', 'HOLLOWMAST'],
   ['local_e6147002-b16d-418d-b7c5-e4cbab587ed8', 'Coding Agent', 'worker', 'HOLLOWMAST'],
   ['local_b5f1fa28-7b83-4aa5-9053-9f2f7a55d2b4', 'Auto Play Agent', 'worker', 'HOLLOWMAST'],

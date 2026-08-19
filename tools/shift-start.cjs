@@ -81,6 +81,16 @@ if (view.needsOwner.length) {
   console.log('  which of them is worth one of the day\'s steering questions.');
 }
 
+// Resolved items are SHOWN, not hidden. A question that got answered and one that was never
+// raised must not look the same — and the manager needs to see that it does not have to ask.
+if (view.needsOwnerResolved && view.needsOwnerResolved.length) {
+  console.log(rule(`ALREADY RESOLVED — DO NOT ASK — ${view.needsOwnerResolved.length}`));
+  for (const n of view.needsOwnerResolved) {
+    console.log(`  from ${n.from}: ${String(n.text).split('\n')[0].slice(0, 76)}`);
+    console.log(`    resolved by ${n.by}: ${n.note}`);
+  }
+}
+
 // ---- 5. what is blocked
 console.log(rule(`BLOCKED — ${view.blocked.length}`));
 if (!view.blocked.length) console.log('  Nothing reported blocked.');

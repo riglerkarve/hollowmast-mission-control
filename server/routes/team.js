@@ -139,6 +139,27 @@ db.migrate('team', [
     provenance.addColumn(d, 'team_plans');
     provenance.addColumn(d, 'team_steering');
   },
+
+  // 2. A `needs_owner` item can be ANSWERED WITHOUT THE OWNER, and until this existed there
+  //    was no way to say so.
+  //
+  //    Caught within an hour of the module going live, by the thing going live. My own first
+  //    handover asked "who is the Team Manager? nothing can be confirmed until that seat is
+  //    filled" — and the seat filled itself twenty minutes later. The item was true when
+  //    written, is now resolved, and the shift view was still queueing it for the owner.
+  //
+  //    That is the exact failure this whole structure exists to prevent: a stale question
+  //    spending his attention. And it is not rare — a shift's worth of blockers routinely
+  //    clears before anyone reads them.
+  //
+  //    The handover itself is NEVER edited. It is what a session reported at a moment, and
+  //    rewriting it would make the record disagree with what was actually said. The resolution
+  //    is a separate fact recorded beside it, with who resolved it and how.
+  (d) => {
+    d.exec('ALTER TABLE team_handovers ADD COLUMN owner_resolved_at TEXT');
+    d.exec('ALTER TABLE team_handovers ADD COLUMN owner_resolved_by TEXT');
+    d.exec('ALTER TABLE team_handovers ADD COLUMN owner_resolved_note TEXT');
+  },
 ]);
 
 // A shift label both a human and a script can produce without consulting anything.
@@ -223,12 +244,32 @@ function shiftView(sinceShift) {
     shift: handovers.length ? handovers[0].shift : shiftLabel(),
     handovers,
     silent,
-    needsOwner: handovers.filter((h) => h.needs_owner).map((h) => ({ from: h.title, text: h.needs_owner })),
+    // Resolved items are separated, NOT hidden. The manager needs to know it does not have to
+    // ask; the supervisor needs to see that the blocker cleared. Dropping them entirely would
+    // make a question that got answered look like one that was never raised.
+    needsOwner: handovers.filter((h) => h.needs_owner && !h.owner_resolved_at)
+      .map((h) => ({ from: h.title, text: h.needs_owner })),
+    needsOwnerResolved: handovers.filter((h) => h.needs_owner && h.owner_resolved_at)
+      .map((h) => ({ from: h.title, text: h.needs_owner, by: h.owner_resolved_by, note: h.owner_resolved_note })),
     blocked: handovers.filter((h) => h.blocked).map((h) => ({ from: h.title, text: h.blocked })),
   };
 }
 
 router.get('/shift', (req, res) => res.json(shiftView(req.query.shift)));
+
+// Mark a handover's owner-facing item as answered without the owner. A NOTE IS REQUIRED:
+// "resolved" with no account of how is indistinguishable from someone finding the question
+// inconvenient, and this is the one queue where quietly dropping an item costs the most.
+router.post('/handover/:id/resolve-owner', express.json(), (req, res) => {
+  const { by, note } = req.body || {};
+  if (!by || !note) return res.status(400).json({ error: 'by and note are both required — a resolution with no account of how is a dropped question' });
+  const h = db.prepare('SELECT * FROM team_handovers WHERE id = ?').get(req.params.id);
+  if (!h) return res.status(404).json({ error: 'no such handover' });
+  if (!h.needs_owner) return res.status(400).json({ error: 'that handover has no owner-facing item' });
+  db.prepare('UPDATE team_handovers SET owner_resolved_at=?, owner_resolved_by=?, owner_resolved_note=? WHERE id=?')
+    .run(new Date().toISOString(), by, note, h.id);
+  return res.json({ ok: true });
+});
 
 // Marking a handover read is how "the supervisor started their shift" becomes a fact rather
 // than an assumption. An unread handover from two shifts ago is a real finding.

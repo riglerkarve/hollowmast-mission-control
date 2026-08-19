@@ -367,7 +367,10 @@ function render(facts, prose) {
       // the manager role exists to do.
       L.push(`_Recommended: ${q.recommend}_\n`);
     }
-    L.push('Answer in the Team panel, or tell the Team Manager session.\n');
+    // Points at what EXISTS. The first draft said "answer in the Team panel", and there is no
+    // Team panel — a briefing that sends you to a screen nobody built is worse than one that
+    // gives you a command, because you spend the time looking before you doubt the sentence.
+    L.push('_Answer by telling the Team Manager session, or:_ `node tools/steering-answer.cjs <id> "<answer>"`\n');
   } else if (facts.steeringError) {
     // Could-not-look, not nothing-to-ask. An empty steering block on a broken read would say
     // "no decisions needed today" on a day several were waiting.

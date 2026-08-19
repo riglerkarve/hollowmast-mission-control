@@ -47,8 +47,19 @@ function main() {
   const onDisk = fs.readdirSync(DIR)
     .filter((f) => f.endsWith('.md') && f !== 'MEMORY.md' && !f.startsWith('_'));
 
-  const lines = raw.split('\n').filter((l) => /^- \[/.test(l));
-  const linked = lines.map((l) => (l.match(/\]\(([^)]+)\)/) || [])[1]).filter(Boolean);
+  // Both index shapes: the markdown-link form, and the bare-filename form adopted 19 Aug.
+  // Filtering on /^- \[/ alone reported 0 indexed and 200 files missing the moment the format
+  // changed -- loud and correct, but it was the filter that was out of date, not the index.
+  const lines = raw.split('\n').filter((l) => /^- \[/.test(l) || /^-\s+[A-Za-z0-9._-]+\.md\b/.test(l));
+  // Two accepted shapes: `- [Title](file.md) — hook` and, since 19 Aug, `- file.md — hook`.
+  // The second exists because the first wrote the title twice and pushed the index past the
+  // read limit; see the header of MEMORY.md itself.
+  const linked = lines.map((l) => {
+    const link = (l.match(/\]\(([^)]+)\)/) || [])[1];
+    if (link) return link;
+    const bare = l.match(/^-\s+([A-Za-z0-9._-]+\.md)\b/);
+    return bare ? bare[1] : null;
+  }).filter(Boolean);
   const linkedSet = new Set(linked);
 
   const unindexed = onDisk.filter((f) => !linkedSet.has(f));

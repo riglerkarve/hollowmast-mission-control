@@ -95,9 +95,43 @@ code tells you the process ran; it does not tell you a file was written.
 
 ## 3. Where the local model is used — and where it is not
 
-Ollama runs locally on `127.0.0.1:11434`: `qwen3.5:9b` at `num_ctx` 16384, ~84% on the
-RTX 5050, 17–24 tok/s. Free, private, and offline. The question is only what it is
-*good enough for*, and that is answered by measurement, not by preference.
+**This section said "Ollama runs locally on `127.0.0.1:11434` … free, private, and offline"
+and that sentence became FALSE on 19 August 2026**, when Ollama Pro was enabled. It is
+corrected here rather than deleted, because the old sentence is load-bearing: the permission
+to put bank counterparties near a model rests on it.
+
+**Local and cloud models are served by the SAME endpoint.** `127.0.0.1:11434/api/chat` runs
+`qwen3.5:9b` on this machine and `gpt-oss:120b-cloud` in Ollama's datacentre, and the two
+requests are identical apart from the model name. Verified: both `gpt-oss:120b-cloud` and
+`gpt-oss:20b-cloud` answer on localhost.
+
+So **the URL no longer tells you where the data went.** A `-cloud` suffix does, and it is a
+suffix in a string — invisible in a log line, a code review, or a panel. That is the same
+shape as a route that is safe bound to `127.0.0.1` and publishes the ledger bound to
+`0.0.0.0`: the destination changed, the label did not.
+
+**`server/ollama.js` is the one client, and it checks the PAYLOAD rather than the URL.**
+Anything naming finance, health, wellbeing or a credential is refused *before sending* when
+the model is a cloud one. Checked on content, because a caller that believes its data is
+harmless is exactly the caller the guard exists to stop.
+
+| | measured on this machine, 19 Aug 2026 |
+|---|---|
+| `qwen3.5:9b` cold (loads the model) | **17.4s** |
+| `qwen3.5:9b` warm, resident | **2.9s** — so `keep_alive` is not a nicety |
+| `qwen3.5:9b` residency | **64% on GPU**, 36% spilling at 6.6 GB |
+| `gpt-oss:20b-cloud` | **1.25s** |
+
+**That inverts the old reasoning.** Local was the cheap, fast, small tier and the frontier was
+the expensive one. Cloud Ollama is *faster than local* — roughly ten times, on a datacentre
+GPU — and far larger, at 120B against 9B. **The only remaining reason to prefer local is
+privacy**, and that reason is now the whole of it.
+
+`gemma4:12b` is also installed at **7.6 GB against ~6.9 GB of usable VRAM**, so it does not
+fit. Nothing routes to it until somebody measures it.
+
+The question is still only what a model is *good enough for*, and that is answered by
+measurement, not by preference.
 
 ### Measured, not assumed
 

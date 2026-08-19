@@ -47,7 +47,7 @@ const AGENTS = {
   // So the tiers are named for WHERE THE DATA GOES, not for which client sends it.
   local: { engine: 'ollama', cost: 'free', private: true, what: 'qwen3.5:9b ON THIS MACHINE -- nothing leaves it' },
   'local-big': { engine: 'ollama', cost: 'free', private: true, what: 'gemma4:12b on this machine -- 7.6 GB against ~6.9 GB usable VRAM, unmeasured' },
-  'ollama-cloud': { engine: 'ollama-cloud', cost: 'subscription', private: false, what: 'ollama.com -- OFF THIS MACHINE. No VRAM ceiling, and no privacy guarantee.' },
+  'ollama-cloud': { engine: 'ollama-cloud', cost: 'subscription', private: false, what: 'gpt-oss:120b-cloud via ollama.com -- OFF THIS MACHINE. 120B, ~1.25s, no VRAM ceiling, NO privacy guarantee.' },
   haiku: { engine: 'claude', cost: 'cheap', what: 'Claude Haiku 4.5' },
   sonnet: { engine: 'claude', cost: 'mid', what: 'Claude Sonnet 5' },
   opus: { engine: 'claude', cost: 'dear', what: 'Claude Opus 5' },

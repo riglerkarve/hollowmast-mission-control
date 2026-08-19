@@ -100,10 +100,13 @@ proving it. Take them in batches; each is bounded and independently verifiable.
 | **B** | M82 prove every checker can fail · M83 one-owner-per-figure · M84 tool audit | The checkers are the trust layer. A checker that silently stopped checking reports clean forever, and that is the most expensive failure shape here. |
 | **C** | M85 access log is still a floor · M86 recompute the shift report gaps | Both are claims the dashboard makes about itself that nobody has re-tested since the code around them grew. |
 
-**Two rules across all of them.** Never write to  from a test — use a temp
-path and say so in the output. And for M86 especially: **write the recomputation without
-reading  first.** A checker written from the same reading as the code confirms
-the code, which is the whole reason you are the one doing it.
+**Two rules across all of them.** Never write to `data/dashboard.db` from a test — use a temp
+path, and say in the output which path you used, so a reader can tell the live file was never
+opened for writing rather than trusting that it wasn't.
+
+And for M86 especially: **write the recomputation without reading `reportFor()` first.** A
+checker written from the same reading as the code confirms the code, which is the whole reason
+you are the one doing it and not me.
 
 **5. Standing from then on:** review every Claude commit to this repo, keep the panel sweep
 current as routes change, and own the stylesheets.

@@ -137,28 +137,136 @@ function checkOne(name) {
 }
 
 (async () => {
+  // One git call for the whole run, not one per panel. A failure here must not be silent: an
+  // empty set would read as "everything is committed", which is the flattering answer.
+  const dirty = new Set();
+  let dirtyKnown = true;
+  try {
+    const out = require('node:child_process')
+      .execSync('git status --porcelain -- public/panels', { cwd: path.join(__dirname, '..'), encoding: 'utf8' });
+    for (const m of out.matchAll(/public\/panels\/([A-Za-z0-9-]+)\//g)) dirty.add(m[1]);
+  } catch { dirtyKnown = false; }
+  if (!dirtyKnown) console.log('  NOTE  could not read git status — cannot tell in-flight edits from defects\n');
+
   let bad = 0;
   for (const name of want) {
     const r = checkOne(name);
 
-    // 4. the route. Read, not assumed: a panel's data route is usually /api/<name> but this
-    //    only reports what it finds rather than insisting on the convention.
+    // 4. the route. THE COMMENT HERE USED TO SAY this "only reports what it finds rather than
+    //    insisting on the convention" -- and the regex under it captured `/api/([a-z0-9-]+)`,
+    //    which is the module segment and nothing else. It threw away the rest of every path
+    //    and probed the module ROOT. So it insisted on the convention absolutely, and what it
+    //    verified was "does /api/<name> happen to have a root route", never "does the URL this
+    //    panel actually calls work". Finance has no root route, so it printed 404 beside a FAIL
+    //    it had not caused. A comment is not the code.
+    //
+    //    Now: every distinct static /api/ path in the panel is probed. A path that continues
+    //    into a template interpolation cannot be built here and is reported as unprobeable
+    //    rather than silently trimmed back to something that does answer.
     const js = path.join(PUB, 'panels', name, `${name}.js`);
-    let route = null;
+    const probes = [];
+    let wrapperNote = null;
     if (fs.existsSync(js)) {
-      const m = fs.readFileSync(js, 'utf8').match(/fetch\(`?\/api\/([a-z0-9-]+)/);
-      if (m) route = `/api/${m[1]}`;
+      const src = fs.readFileSync(js, 'utf8');
+      const seen = new Set();
+      for (const m of src.matchAll(/fetch\(\s*[`'"](\/api\/[A-Za-z0-9\-_/.]*)/g)) {
+        const p = m[1].replace(/\/$/, '');
+        // What follows the literal decides whether the URL is complete or merely a prefix.
+        const after = src.slice(m.index + m[0].length);
+        const interpolated = after.startsWith('$') || after.startsWith('{');
+        // AND WHICH VERB IT USES, because probing everything with GET is how this cried wolf
+        // on its first run: /api/work/run, /api/exercise/sessions and /api/analytics/probe all
+        // came back 404 and all three are router.post. Express answers 404 for a path that
+        // exists under a different method, so a GET probe cannot tell "missing" from
+        // "wrong verb" -- and reporting the first when it is the second is a false alarm on
+        // three working panels. Only GETs are probed; the rest are named and left alone.
+        const opts = after.slice(0, 260);
+        const verb = (opts.match(/method:\s*['"]([A-Za-z]+)['"]/) || [])[1];
+        const method = (verb || 'GET').toUpperCase();
+        const key = `${p}|${interpolated}|${method}`;
+        if (seen.has(key)) continue;
+        seen.add(key);
+        probes.push({ path: p, interpolated, method, base: interpolated ? p : null });
+      }
+
+      // FOLLOW THE PANEL'S OWN api() WRAPPER. Fourteen panels define one -- CLAUDE.md counts
+      // them -- so their only literal fetch is inside the helper and reads `/api/income${path}`.
+      // Stopping there reported "0 of 1 URL(s) probeable" for nine panels that in fact call
+      // four endpoints each: an honest sentence about a blind spot, where the blind spot was
+      // one regex wide and covered most of the dashboard.
+      //
+      // ONLY WHEN THERE IS EXACTLY ONE BASE. The safety panel has two wrappers -- /api/safety
+      // and /api/gate -- and composing every api() call site against both bases invented
+      // /api/gate, which 404s because nothing fetches it. A checker that manufactures the URL
+      // it then reports as broken is worse than one that says it cannot tell. Two bases means
+      // the call sites cannot be attributed from source, so they are named and not composed.
+      const bases = probes.filter((x) => x.interpolated && /^\/api\/[a-z0-9-]+$/.test(x.path));
+      if (bases.length > 1) {
+        wrapperNote = `${bases.length} api() wrappers (${bases.map((b) => b.path).join(', ')})`
+          + ' — call sites cannot be attributed to one base from source, so they are not probed';
+      }
+      for (const w of (bases.length === 1 ? bases : [])) {
+        for (const c of src.matchAll(/\bapi\(\s*[`'"](\/[A-Za-z0-9\-_/?=&.]*)/g)) {
+          const tail = src.slice(c.index + c[0].length);
+          if (tail.startsWith('$') || tail.startsWith('{')) continue;   // still parameterised
+          const verb2 = (tail.slice(0, 200).match(/method:\s*['"]([A-Za-z]+)['"]/) || [])[1];
+          const full = (w.path + c[1]).replace(/\/$/, '') || w.path;
+          const method2 = (verb2 || 'GET').toUpperCase();
+          const key2 = `${full}|false|${method2}`;
+          if (seen.has(key2)) continue;
+          seen.add(key2);
+          probes.push({ path: full, interpolated: false, method: method2, viaWrapper: true });
+        }
+      }
     }
+    // The headline names what was ACTUALLY PROBED, not the first path found. Naming probes[0]
+    // printed "/api/budget not probed" on a panel where a different URL had answered 200, and
+    // "/api/finance 404" beside a FAIL that a CSS class had caused. The label has to describe
+    // the measurement it is standing next to.
+    let route = null;
     let code = 'not probed';
-    if (route) {
-      try { code = (await fetch(BASE + route, { signal: AbortSignal.timeout(8000) })).status; }
-      catch (e) { code = `ERR ${e.name}`; }
-      if (typeof code === 'number' && code >= 500) r.problems.push(`${route} answered ${code}`);
-    } else r.notes.push('no /api/ call found in the panel — nothing to probe');
+    let probed = 0;
+    if (wrapperNote) r.notes.push(wrapperNote);
+    if (!probes.length) {
+      r.notes.push('no /api/ call found in the panel — nothing to probe');
+    } else {
+      for (const p of probes) {
+        if (p.interpolated) {
+          r.notes.push(`${p.path}/… takes a path parameter — not probeable from source alone`);
+          continue;
+        }
+        if (p.method !== 'GET') {
+          // Not probed on purpose. Sending the real verb would EXECUTE it -- POST /api/work/run
+          // starts a job. A checker must not have side effects on the thing it is checking.
+          r.notes.push(`${p.path} is ${p.method} — not probed, because probing it would run it`);
+          continue;
+        }
+        let c;
+        try { c = (await fetch(BASE + p.path, { signal: AbortSignal.timeout(8000) })).status; }
+        catch (e) { c = `ERR ${e.name}`; }
+        probed += 1;
+        if (route === null || (typeof c === 'number' && c >= 400)) { route = p.path; code = c; }
+        // A 404 on a URL the panel really fetches IS a defect: the panel is calling something
+        // that is not there, and it renders as an empty section rather than an error.
+        if (typeof c === 'number' && c >= 400) r.problems.push(`${p.path} answered ${c} — the panel fetches this`);
+        else if (typeof c !== 'number') r.problems.push(`${p.path} ${c}`);
+      }
+    }
+
+    // IS ANOTHER SESSION HALFWAY THROUGH THIS PANEL? Several sessions share this one working
+    // tree, so a repo-wide check meets other people's unfinished edits and reports them as
+    // defects. Measured 19 Aug: `fin-pnl-month` was "defined nowhere" and correct -- it lived
+    // in 107 uncommitted lines of finance.js, with the matching CSS presumably still being
+    // written. Filing that as a bug would have been filing someone else's work in progress.
+    // The finding still prints; it is the CLAIM attached to it that changes.
+    if (dirty.has(name)) r.notes.push('UNCOMMITTED CHANGES in this panel — another session may be'
+      + ' mid-edit, so treat anything above as a candidate, not a defect');
 
     const ok = !r.problems.length;
     if (!ok) bad++;
-    console.log(`  ${ok ? 'PASS' : 'FAIL'}  ${name.padEnd(12)} ${route ? `${route} ${code}` : ''}`);
+    const label = route ? `${route} ${code}${probes.length > 1 ? `  (${probed} of ${probes.length} URLs probed)` : ''}`
+      : probes.length ? `0 of ${probes.length} URL(s) probeable — see below` : '';
+    console.log(`  ${ok ? 'PASS' : 'FAIL'}  ${name.padEnd(12)} ${label}`);
     r.problems.forEach((p) => console.log(`        ! ${p}`));
     r.notes.forEach((n) => console.log(`        · ${n}`));
   }

@@ -113,6 +113,49 @@ current as routes change, and own the stylesheets.
 
 ---
 
+## Also now in scope: HOLLOWMAST bugs
+
+Owner decision, 19 August 2026 (later the same day as "full time on Mission Control" above —
+this is an addition to that, not a reversal of it). Mission Control stays the standing brief;
+these are picked up alongside it. You have done exactly this kind of work here before — B064
+and M71 both shipped on this project.
+
+**`Survive/` is a different repo with a different rule set.** Read `../AGENTS.md` §7 again
+before touching it: one self-contained HTML file, hand-written WebGL, **zero dependencies** —
+never a CDN link, a font URL, an image file, or a network call. That constraint does not exist
+in Mission Control and is easy to break out of habit.
+
+**The wrapper does not reach it yet.** `tools/codex-run.cjs` (the one that owns git so your
+sandbox doesn't have to) is hard-coded to this repo — `REPO = path.join(__dirname, '..')`
+always resolves to `mission-control`. Until it takes a `--repo` argument, HOLLOWMAST work goes
+through the same path M75 always meant for you here: you cannot commit, so leave the work in
+the tree, list the exact paths under *Blocked*, and say so in the handover.
+
+Open bugs, read off the board (`/api/board`) 19 Aug evening, ordered by severity:
+
+| Ref | Sev | What |
+|---|---|---|
+| B032 | P2 | The bot cannot drive at all — the lever CLAUDE.md names for it is void. |
+| B066 | P2 | The bot cannot bank anything, so the tower chain asks it to hold 39 items across 36 days while dying every 40 seconds. **Note:** `task-start.cjs` routes this to `script`/no-model on a sensitive-data rule — that is almost certainly the word "bank" (game inventory storage) colliding with the finance-privacy keyword list, not a real ledger-data match. Worth confirming before deferring it on that basis alone. |
+| B067 | P2 | The tower chain does not fail on accumulation; it fails because the bot dies mid-hunt for electronics. |
+| B068 | P2 | The bot only crafts a replacement tool if the materials are already in its pack, so after a death it stays toolless. |
+| B061 | P3 | `wins` and `towers` have only ever been measured on runs too short to win. |
+| B062 | P3 | The bot swings at nodes its tool cannot fell, and the toast counts it: "wrong tool x7". |
+
+**B064 (heat/overheating) is deliberately left off this list.** The board still shows it open,
+but the architect's 19 Aug evening handover records it fixed and committed (`638f2f8`), checked
+against the real threshold in `src/60_ui.js` rather than trusted. `BUGS.md` is known to
+contradict itself this way — entries get fixed without being moved out of `## Open`. Verify the
+current state before spending a shift on it; do not treat "shows open on the board" alone as
+evidence here.
+
+**Not on this list, and not because they were missed:** `S-1558`, `S-1944`, `S-1945`, `S-1952`
+are already assigned to Coding Agent against confirmed plans. Taking one of these too would
+create the exact two-sessions-in-one-file hazard `S-1650`'s own assignment note already warns
+about — check `/api/team/assignments` before picking up anything not on this table.
+
+---
+
 ## How to work here
 
 **Close what you finish.** M71 and M73 are both done and both still show open on the board.

@@ -823,7 +823,7 @@ router.get('/export.csv', (req, res) => {
 const TEXT_FIELDS = ['title', 'cluster', 'effort', 'owner', 'rationale', 'recheck_at'];
 
 router.patch('/items/:id', (req, res) => {
-  const { status, priority } = req.body || {};
+  const { status, priority , project, kind } = req.body || {};
   const texts = TEXT_FIELDS.filter((f) => req.body && req.body[f] !== undefined);
   if (status === undefined && priority === undefined && !texts.length) {
     return res.status(400).json({
@@ -911,7 +911,9 @@ router.patch('/items/:id', (req, res) => {
 
 // --------------------------------------------------------------------- POST /items
 router.post('/items', (req, res) => {
-  const { title, cluster, priority, owner, effort, rationale } = req.body || {};
+  const {
+    title, cluster, priority, owner, effort, rationale, project, kind,
+  } = req.body || {};
   if (!String(title || '').trim()) return res.status(400).json({ error: 'title is required' });
   if (priority && !PRIORITIES.includes(priority)) return res.status(400).json({ error: `priority must be one of ${PRIORITIES.join(', ')}` });
   if (owner && !OWNERS.includes(owner)) return res.status(400).json({ error: `owner must be one of ${OWNERS.join(', ')}` });
@@ -931,9 +933,13 @@ router.post('/items', (req, res) => {
 
   try {
     db.prepare(
-      `INSERT INTO todo_items (id, source, title, cluster, priority, owner, effort, rationale, status)
-       VALUES (?, 'manual', ?, ?, ?, ?, ?, ?, ?)`
-    ).run(id, String(title).trim(), cluster || null, pri, owner || 'DET', effort || null, rationale || null, status);
+      // project and kind were added by migration 5 and this writer never wrote them, so every
+      // item filed since has carried NULL for both while the caller supplied values that were
+      // silently dropped. A column added without its writer is a field that reads as 'not set'
+      // when it was in fact 'not saved', and those are different facts.
+      `INSERT INTO todo_items (id, source, title, cluster, priority, owner, effort, rationale, status, project, kind)
+       VALUES (?, 'manual', ?, ?, ?, ?, ?, ?, ?, ?, ?)`
+    ).run(id, String(title).trim(), cluster || null, pri, owner || 'DET', effort || null, rationale || null, status, project || null, kind || null);
   } catch (err) {
     return res.status(500).json({ error: err.message });
   }

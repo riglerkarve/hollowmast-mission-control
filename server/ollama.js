@@ -29,7 +29,20 @@ const LOCAL = 'http://127.0.0.1:11434';
 // with an error rather than a 404 — qwen3-coder:480b, deepseek-v3.1:671b, kimi-k2:1t, glm-4.6
 // and minimax-m2 all returned "was retired at ...". So this list is what was tested, not what
 // the documentation offers, and a caller naming something else gets a clear failure.
+// MEASURED 19 Aug 2026, and it changes what the cloud tier may be used for: gpt-oss:20b-cloud
+// IGNORES a JSON schema. Given format:<schema> with an enum it returned the plain text
+// "X1: Bug  X2: Feature Request" rather than the structure, twice.
+//
+// That matters more than its speed. The offload policy admits a model only when the output is
+// STRUCTURALLY CONSTRAINED, and an enum is what makes an out-of-vocabulary answer impossible
+// rather than merely unlikely. A model that ignores the constraint is not a faster version of
+// a constrained one -- it is an unconstrained one, and the gate it fails is the gate.
+//
+// So a caller needing a schema must check SCHEMA_HONOURED before trusting the tier, and a
+// cloud answer must be parsed defensively rather than assumed to be JSON. `null` means
+// UNMEASURED, which is not the same as false and must not be read as either.
 const CLOUD_MODELS = ['gpt-oss:120b-cloud', 'gpt-oss:20b-cloud'];
+const SCHEMA_HONOURED = { 'qwen3.5:9b': true, 'gemma4:12b': null, 'gpt-oss:20b-cloud': false, 'gpt-oss:120b-cloud': null };
 const LOCAL_MODELS = ['qwen3.5:9b', 'gemma4:12b'];
 
 const isCloud = (model) => /-cloud$|:cloud$/.test(String(model));
@@ -158,5 +171,5 @@ async function available() {
 }
 
 module.exports = {
-  ask, warm, available, isCloud, SENSITIVE, CLOUD_MODELS, LOCAL_MODELS, Refused,
+  ask, warm, available, isCloud, SENSITIVE, CLOUD_MODELS, LOCAL_MODELS, SCHEMA_HONOURED, Refused,
 };

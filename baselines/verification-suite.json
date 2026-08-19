@@ -20,6 +20,7 @@
     { "tool": "vanished.cjs", "mode": "manual", "args": [], "reason": "the configured pre-commit hook is currently absent", "temporaryDatabase": false },
     { "tool": "verify-access-log-floor.cjs", "mode": "safe", "args": [], "reason": null, "temporaryDatabase": false },
     { "tool": "verify-checkers.cjs", "mode": "manual", "args": [], "reason": "plants defects in the shared working tree while proving checkers", "temporaryDatabase": false },
+    { "tool": "verify-concurrent-writes.cjs", "mode": "safe", "args": [], "reason": null, "temporaryDatabase": true },
     { "tool": "verify-m73-needs-owner.cjs", "mode": "manual", "args": [], "reason": "checks a historical workflow with live team data", "temporaryDatabase": false },
     { "tool": "verify-ollama-shift.cjs", "mode": "manual", "args": [], "reason": "depends on the in-progress Ollama shift artefacts", "temporaryDatabase": false },
     { "tool": "verify-panel.cjs", "mode": "manual", "args": [], "reason": "probes the running server and its run logger writes data/dashboard.db", "temporaryDatabase": false },

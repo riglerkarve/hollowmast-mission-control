@@ -46,6 +46,7 @@ const checks = {
   'vanished.cjs': { mode: 'manual', why: 'the configured pre-commit hook is currently absent' },
   'verify-access-log-floor.cjs': { mode: 'safe', args: [] },
   'verify-checkers.cjs': { mode: 'manual', why: 'plants defects in the shared working tree while proving checkers' },
+  'verify-concurrent-writes.cjs': { mode: 'safe', args: [], temp: true },
   'verify-m73-needs-owner.cjs': { mode: 'manual', why: 'checks a historical workflow with live team data' },
   'verify-ollama-shift.cjs': { mode: 'manual', why: 'depends on the in-progress Ollama shift artefacts' },
   'verify-panel.cjs': { mode: 'manual', why: 'probes the running server and its run logger writes data/dashboard.db' },

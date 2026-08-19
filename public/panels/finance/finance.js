@@ -30,6 +30,17 @@ const TEMPLATE = `
       <div id="finCats"></div>
     </section>
 
+    <section class="card">
+      <h2 class="fin-h2">Profit &amp; loss</h2>
+      <div class="fin-toolbar">
+        <div class="mode-tabs" id="finPnlKind">
+          <button class="mode-tab active" data-kind="business">Business</button>
+          <button class="mode-tab" data-kind="personal">Personal</button>
+        </div>
+      </div>
+      <div id="finPnl"></div>
+    </section>
+
     <section class="card" id="finCash"></section>
 
     <section class="card">
@@ -86,6 +97,7 @@ const TEMPLATE = `
 let root = null;
 let account = 'all';
 let month = null;
+let pnlKind = 'business';
 
 const esc = (s) => String(s ?? '').replace(/[&<>"]/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
 const gbp = (p) => `£${(Math.abs(p) / 100).toLocaleString('en-GB', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
@@ -201,6 +213,86 @@ function renderCash(d) {
       so treat every total above as covering the card and transfer spending only.
     </p>
   `;
+}
+
+// The bottom line, over a period rather than one month — companion to "Where it went",
+// which only ever compares two months. Reads /api/finance/pnl, which is the ledger's own
+// figure: the one place this money is counted, so a receipt or a screenshot can be checked
+// against it but never gets its own copy of it.
+async function loadPnl() {
+  if (!root) return;   // may be CALLED after teardown, not only resumed after it
+  const box = root.querySelector('#finPnl');
+  let d;
+  try {
+    d = await api(`/pnl?accountKind=${pnlKind}&months=12`);
+    if (!root) return;   // the panel was torn down mid-await; root is null now
+  } catch (err) {
+    if (!root) return;   // the panel was torn down mid-await; root is null now
+    box.innerHTML = `<p class="fin-error">Could not compute the P&amp;L: ${esc(err.message)}
+      — a failure to compute, not a statement of zero profit.</p>`;
+    return;
+  }
+
+  if (d.state !== 'ok') {
+    box.innerHTML = `<p class="empty-hint">${esc(d.message || 'No transactions on this account yet.')}</p>`;
+    return;
+  }
+
+  const t = d.totals;
+  const monthRow = (m) => `
+    <li class="fin-pnl-row${m.partial ? ' fin-pnl-partial' : ''}">
+      <span class="fin-pnl-month">${esc(m.month)}${m.partial ? ' <b class="fin-r-warn">partial</b>' : ''}</span>
+      <span class="fin-pnl-in">${gbp(m.incomePence)}</span>
+      <span class="fin-pnl-out">${gbp(m.expensePence)}</span>
+      <span class="fin-pnl-net${m.netPence < 0 ? ' fin-neg' : ''}">${m.netPence < 0 ? '−' : ''}${gbp(m.netPence)}</span>
+    </li>`;
+
+  const catRow = (c) => `
+    <li>
+      <span class="fin-fc-cat">${esc(c.category)}</span>
+      <span class="fin-fc-amt">${gbp(c.pence)}</span>
+    </li>`;
+
+  box.innerHTML = `
+    <p class="fin-note">${esc(d.from)} to ${esc(d.to)}
+      (${d.months} month${d.months === 1 ? '' : 's'}${d.windowTruncated ? ` — the ${esc(pnlKind)} account starts here` : ''}),
+      ledger ends ${esc(d.ledgerEndsOn)}.</p>
+
+    <div class="stats-summary">
+      <div class="stat-block"><span class="stat-value">${gbp(t.incomePence)}</span><span class="stat-label">income</span></div>
+      <div class="stat-block"><span class="stat-value">${gbp(t.expensePence)}</span><span class="stat-label">expenses</span></div>
+      <div class="stat-block"><span class="stat-value${t.netPence < 0 ? ' fin-neg' : ''}">${t.netPence < 0 ? '−' : ''}${gbp(t.netPence)}</span><span class="stat-label">net</span></div>
+    </div>
+
+    <h3 class="fin-h3">By month</h3>
+    <ul class="fin-pnl-list">
+      <li class="fin-pnl-row fin-pnl-head">
+        <span class="fin-pnl-month">Month</span>
+        <span class="fin-pnl-in">In</span>
+        <span class="fin-pnl-out">Out</span>
+        <span class="fin-pnl-net">Net</span>
+      </li>
+      ${d.monthly.map(monthRow).join('')}
+    </ul>
+
+    ${t.expenseByCategory.length ? `
+      <h3 class="fin-h3">Expenses by category</h3>
+      <ul class="fin-fc-list">${t.expenseByCategory.map(catRow).join('')}</ul>` : ''}
+
+    ${t.incomeByCategory.length ? `
+      <h3 class="fin-h3">Income by category</h3>
+      <ul class="fin-fc-list">${t.incomeByCategory.map(catRow).join('')}</ul>` : ''}
+
+    ${t.cashPence ? `<p class="fin-note">${gbp(t.cashPence)} withdrawn as cash in this window
+      — not counted as an expense above. See "Cash" for why.</p>` : ''}
+
+    ${d.uncategorisedPence ? `<p class="fin-warn">${gbp(d.uncategorisedPence)} across
+      ${d.uncategorisedCount} transaction${d.uncategorisedCount === 1 ? '' : 's'} in this window
+      ${d.uncategorisedCount === 1 ? 'has' : 'have'} no category yet, so ${d.uncategorisedCount === 1 ? "it isn't" : "they aren't"}
+      in the totals above.</p>` : ''}
+
+    <p class="fin-note fin-dim">${esc(d.excludedNote)}</p>
+    <p class="fin-note fin-dim">${esc(d.caveat)}</p>`;
 }
 
 // The services audit. Backlog #39, and it is an INVENTORY, not a verdict — nothing here
@@ -650,8 +742,10 @@ async function load() {
   renderCategories(d);
   renderCash(d);
 
-  // The services audit does not depend on the month or account selectors — it reads the
-  // whole ledger — but it is loaded here so it can never be defined and left uncalled.
+  // Neither depends on the month/account selectors above — the P&L has its own toolbar,
+  // the services audit reads the whole ledger — but both are loaded here so neither can be
+  // defined and left uncalled.
+  loadPnl();
   loadRecurring();
   // Same reason, same place. `loadRecurring` was itself shipped once defined-and-uncalled,
   // which is a bug with no error message and no visible symptom beyond an empty box.
@@ -690,6 +784,14 @@ export default {
       });
     });
 
+    el.querySelectorAll('#finPnlKind .mode-tab').forEach((b) => {
+      b.addEventListener('click', () => {
+        pnlKind = b.dataset.kind;
+        el.querySelectorAll('#finPnlKind .mode-tab').forEach((x) => x.classList.toggle('active', x === b));
+        loadPnl();
+      });
+    });
+
     el.querySelector('#finAssetForm').addEventListener('submit', async (ev) => {
       ev.preventDefault();
       const out = el.querySelector('#finAssetResult');
@@ -724,5 +826,6 @@ export default {
     root = null;
     account = 'all';
     month = null;
+    pnlKind = 'business';
   },
 };

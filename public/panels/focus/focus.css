@@ -109,9 +109,12 @@
   transition: all 0.15s ease;
 }
 
+/* --accent-fill, not --accent: this is white text as a ground, and --accent is the INK role
+   -- 2.80:1 for white on the station-console ember, same trap as .btn.primary's fix on
+   18 Aug. --accent-fill is the token measured for exactly this pairing (4.99:1 dark). */
 .task-checkbox.checked {
-  background: var(--accent);
-  border-color: var(--accent);
+  background: var(--accent-fill);
+  border-color: var(--accent-fill);
   color: #fff;
 }
 

@@ -16,29 +16,72 @@
   display: flex;
   align-items: center;
   justify-content: space-between;
-  margin-bottom: 24px;
+  gap: 12px 16px;
+  flex-wrap: wrap;
+  margin-bottom: 22px;
 }
 
+/* The page title, station-console pass 18 Aug 2026 -- mono, tracked, capitalised, matching
+   dash/index.html's own h1 exactly (font-family, uppercase, +0.13em there; +0.1em here,
+   slightly tighter because these titles are one word ("Focus", "Money") rather than dash's
+   multi-word headers and a full .13em on a single short word reads as gappy). Weight and
+   size follow dash's h1 too (600, not the 750 this used before the pass) rather than the
+   card's own bold hand -- the mono label is what should signal "title" now, not boldness. */
 .panel-header h1 {
-  font-size: 1.5rem;
-  font-weight: 700;
+  font-family: var(--mono);
+  font-size: clamp(1.15rem, 1rem + 1.2vw, 1.5rem);
+  font-weight: 600;
   margin: 0;
-  letter-spacing: -0.02em;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  line-height: 1.25;
 }
 
 .card {
   background: var(--card);
-  border-radius: 20px;
-  padding: 24px;
+  border-radius: var(--r-card);
+  padding: 22px 24px;
   box-shadow: var(--shadow);
-  margin-bottom: 20px;
+  margin-bottom: 16px;
   border: 1px solid var(--border);
+  transition:
+    box-shadow   var(--t-fast) var(--ease),
+    border-color var(--t-fast) var(--ease);
+  /* Cards rise into place when a panel mounts (keyframes and the reasoning for the names
+     are in shell.css). Rendered together they would land as one slab; the stagger below
+     is what makes it read as a page assembling. Only the CARD element animates -- a
+     panel that re-renders a card's contents every few seconds (work.js, every 8 s) leaves
+     the .card node in place, so nothing re-runs on refresh. */
+  animation: sh-rise var(--t-slow) var(--ease) both;
+}
+
+/* Stagger by sibling index. In every panel the first child of .panel is .panel-header, so
+   the first card is nth-child(2); the delays are 30 ms apart from there and stop growing at
+   the ninth child. Past eight the eye no longer separates the steps, and a long panel
+   (finance runs to eleven cards) should not still be arriving a third of a second in. */
+.card:nth-child(2) { animation-delay: 30ms; }
+.card:nth-child(3) { animation-delay: 60ms; }
+.card:nth-child(4) { animation-delay: 90ms; }
+.card:nth-child(5) { animation-delay: 120ms; }
+.card:nth-child(6) { animation-delay: 150ms; }
+.card:nth-child(7) { animation-delay: 180ms; }
+.card:nth-child(8) { animation-delay: 210ms; }
+.card:nth-child(n+9) { animation-delay: 240ms; }
+
+/* Hover: the edge firms and the shadow lifts. No transform on a card -- it is a surface,
+   not a control, and cards hold hover tooltips (.bar-tooltip) that would jitter over a
+   moving ground. The ground under the text does not change, so no contrast moves. */
+.card:hover {
+  border-color: var(--border-strong);
+  box-shadow: var(--shadow-lift);
+  transition-duration: var(--t-slow);
 }
 
 .card h2 {
-  margin: 0 0 16px;
-  font-size: 1.05rem;
+  margin: 0 0 14px;
+  font-size: 1rem;
   font-weight: 700;
+  letter-spacing: -0.012em;
 }
 
 .badge {
@@ -59,29 +102,56 @@
      keeps its --accent-soft ground. */
   color: var(--ink);
   white-space: nowrap;
+  /* A soft halo in the accent's own hue at low alpha (--accent-glow). It sits OUTSIDE the
+     pill, so the --ink-on---accent-soft pair the comment above was measured for is
+     exactly what it was. */
+  box-shadow: 0 0 0 1px var(--accent-glow), 0 2px 10px -2px var(--accent-glow);
+  transition: box-shadow var(--t-fast) var(--ease);
 }
 
 .badge-icon { font-size: 1rem; }
 .badge-label { font-weight: 500; color: var(--muted); margin-left: 2px; }
 
 .btn {
-  padding: 10px 20px;
-  border-radius: 12px;
+  padding: 10px 18px;
+  border-radius: var(--r-btn);
   border: 1px solid var(--border);
   background: var(--card);
   color: var(--ink);
   font-size: 0.9rem;
   font-weight: 600;
   cursor: pointer;
-  transition: transform 0.1s ease, opacity 0.2s ease, background 0.2s ease;
   display: inline-flex;
   align-items: center;
   justify-content: center;
   text-decoration: none;
+  transition:
+    background-color var(--t-fast) var(--ease),
+    border-color     var(--t-fast) var(--ease),
+    box-shadow       var(--t-fast) var(--ease),
+    transform        var(--t-fast) var(--ease);
 }
 
-.btn:hover { opacity: 0.85; }
-.btn:active { transform: scale(0.96); }
+/* Hover used to be `opacity: 0.85`, and that lowered contrast on every button: opacity
+   fades text and ground together toward whatever is behind them, so a primary button's
+   white-on---accent-fill went from 4.5:1 to 3.6:1 light / 4.1:1 dark the moment you
+   pointed at it (white and --accent-fill each blended 15% toward --card, then compared).
+   Now the ground steps to --ring-bg (--ink on it is 12+:1 light, 11:1 dark; --muted on it
+   is 4.74 light, 4.89 dark, both above AA), the edge firms, and it lifts a pixel. */
+.btn:hover {
+  background-color: var(--ring-bg);
+  border-color: var(--border-strong);
+  box-shadow: var(--shadow-lift);
+  transform: translateY(-1px);
+}
+
+.btn:active {
+  transform: translateY(0) scale(0.97);
+  box-shadow: none;
+}
+
+/* Focus ring: see the element-level `.panel :is(button, a, summary):focus-visible` at the
+   foot of this sheet -- one ring, drawn once, for every control including this one. */
 
 .btn.primary {
   /* --accent-fill, not --accent: white on the plain accent measures 3.55:1 light and
@@ -93,13 +163,45 @@
   min-width: 96px;
 }
 
+/* The primary hover darkens the GROUND under the white text and leaves the text alone --
+   an inset shadow the size of the button, at 7% black -- so its contrast can only go up
+   from 4.54:1. A brightness filter or an opacity would have moved the text too. Outside
+   the button, the accent's own halo. */
+.btn.primary:hover {
+  background-color: var(--accent-fill);
+  border-color: var(--accent-fill);
+  box-shadow: inset 0 0 0 999px rgba(0, 0, 0, 0.07), 0 4px 14px var(--accent-glow);
+}
+
+.btn.primary:active {
+  box-shadow: inset 0 0 0 999px rgba(0, 0, 0, 0.12);
+}
+
+/* Disabled stays LEGIBLE. Not opacity: a half-faded button is a button whose label you
+   cannot read to find out why it is off. --muted on --ring-bg is 4.74:1 light / 4.89 dark,
+   so the wording survives; the flat ground, plain edge and cursor say "not now". Covers
+   the primary button too, which is the one panels disable while a request is in flight
+   ("deriving…", "saving…") -- and that label is exactly the one worth reading. Last of the
+   button rules on purpose: at equal specificity the later rule wins, and a disabled
+   primary must not get its hover fill back the moment the pointer crosses it. */
+.btn:disabled,
+.btn.primary:disabled,
+.btn.primary:disabled:hover {
+  background-color: var(--ring-bg);
+  border-color: var(--border);
+  color: var(--muted);
+  box-shadow: none;
+  transform: none;
+  cursor: not-allowed;
+}
+
 .mode-tabs {
   display: flex;
-  gap: 6px;
+  gap: 4px;
   background: var(--bg);
   padding: 4px;
-  border-radius: 12px;
-  margin-bottom: 24px;
+  border-radius: 8px;
+  margin-bottom: 22px;
 }
 
 .mode-tab {
@@ -110,10 +212,25 @@
   color: var(--muted);
   font-size: 0.82rem;
   font-weight: 600;
-  border-radius: 9px;
+  border-radius: 5px;
   cursor: pointer;
-  transition: all 0.2s ease;
+  /* Named properties rather than `all`: `all` also animates outline, so the focus ring
+     would fade in late instead of appearing when the key lands. */
+  transition:
+    background-color var(--t-fast) var(--ease),
+    color            var(--t-fast) var(--ease),
+    box-shadow       var(--t-fast) var(--ease),
+    transform        var(--t-fast) var(--ease);
 }
+
+/* An inactive tab shows it is a tab: ink comes up, a step of ground appears. --ring-bg on
+   the --bg track is one shade off in both themes; --ink on it clears AA by a wide margin. */
+.mode-tab:hover {
+  background-color: var(--ring-bg);
+  color: var(--ink);
+}
+
+.mode-tab:active { transform: scale(0.97); }
 
 .mode-tab.active {
   background: var(--card);
@@ -137,6 +254,7 @@
 }
 
 .stat-value {
+  font-family: var(--mono);
   font-size: 1.6rem;
   font-weight: 700;
   letter-spacing: -0.02em;
@@ -153,6 +271,7 @@
   text-align: center;
   color: var(--muted);
   font-size: 0.85rem;
+  line-height: 1.5;
   margin: 12px 0 0;
 }
 
@@ -206,8 +325,10 @@
   color: var(--muted);
 }
 
+/* --accent-text, not --accent: this is 0.72rem text on the card, and the plain accent
+   is 3.55:1 there in the light theme. See the token in shell.css. */
 .bar-col.is-today .bar-label {
-  color: var(--accent);
+  color: var(--accent-text);
 }
 
 .bar-tooltip {
@@ -255,4 +376,133 @@
   left: auto;
   right: 0;
   transform: translate(0, -100%);
+}
+
+/* ===== Chrome shared by ELEMENT, not by class ===================================
+   There is no shared input class -- every panel names its own (.fin-in, .td-in, .sf-in,
+   .gl-in, ...) -- and no shared table or details class either. So the rules below reach
+   them by element, scoped under .panel, which every mounted panel and the quiet-hours
+   curtain both render inside. Scoping under .panel is also what gives them the weight to
+   win: `.panel input:focus-visible` is (0,2,1), which beats a panel's `.x-in:focus` at
+   (0,1,1) and focus.css's `.task-form input { outline: none }` at (0,1,1). Every panel
+   that already draws a ring draws this same one -- 2px --accent, offset 1-2px -- so
+   unifying them changes nothing they chose and adds the glow they did not have. */
+
+/* One focus ring for every control the keyboard can land on. --accent on --card is 3.55:1
+   light and 5.75:1 dark, on --bg 3.20:1 light: the 3:1 a focus indicator needs, and it is
+   the ring twelve panel sheets already chose. */
+.panel :is(button, a, summary):focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 2px;
+}
+
+/* Fields: the same ring, plus a glow of the accent at low alpha OUTSIDE the field. The
+   ring is what makes it accessible; the glow is what makes it felt. The field's own
+   ground and text are untouched, so nothing a panel measured moves. */
+.panel :is(input, select, textarea) {
+  transition:
+    border-color var(--t-fast) var(--ease),
+    box-shadow   var(--t-fast) var(--ease);
+}
+
+.panel :is(input, select, textarea):hover {
+  border-color: var(--border-strong);
+}
+
+.panel :is(input, select, textarea):focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 1px;
+  box-shadow: 0 0 0 4px var(--accent-glow);
+}
+
+/* The two check-boxes in Safety were the browser's default blue -- the one control on the
+   page in a colour the palette does not have. --accent-fill is the token measured for
+   white on it, and the tick is white. Checkbox only: there is no radio anywhere in
+   public/, and a selector for one would be a rule that reaches nothing. */
+.panel input[type="checkbox"] {
+  accent-color: var(--accent-fill);
+}
+
+/* Table rows (Income, Projects, the briefing's markdown tables). --ring-bg is one step
+   toward the page ground in both themes; --muted on it is 4.74:1 light / 4.89 dark, so the
+   dimmed rows (.inc-never) still read while highlighted. */
+.panel tbody tr {
+  transition: background-color var(--t-fast) var(--ease);
+}
+
+.panel tbody tr:hover {
+  background-color: var(--ring-bg);
+}
+
+/* <details> opens with its content rising in, instead of appearing. The marker is left
+   native and un-rotated on purpose: goals.css sets `list-style: revert` on its summary and
+   todo.css colours `::marker`, so replacing the marker with a rotating chevron would mean
+   overriding two panels' explicit choices from a shared sheet. */
+.panel details > summary {
+  cursor: pointer;
+  transition: color var(--t-fast) var(--ease);
+}
+
+.panel details[open] > :not(summary) {
+  animation: sh-rise var(--t-slow) var(--ease);
+}
+
+/* Status lamp -- station-console pass, 18 Aug 2026. Matches dash/index.html's .led exactly:
+   a 7px dot, coloured with a soft glow of the same hue, four states. This is a PRIMITIVE,
+   not a retrofit -- it is not wired into any panel by this pass. A panel adopts it by
+   giving a real element `class="led ok|warn|bad|on"` where it already has a genuine
+   ok/warn/bad fact to show; a lamp with nothing behind it is decoration, and the workspace
+   rule against a status nobody can trust applies here as much as anywhere else.
+
+   Only .bad pulses. A pulsing OK lamp is the thing that trains you to stop looking at
+   pulses, so alarm is the only state allowed to move. --led-glow-soft / --led-glow-hard
+   are alpha only, matching how dash/'s own two lamp passes (base + motion) layered a
+   steady glow under a brighter pulse rather than defining two unrelated shadows. */
+:root {
+  --led-glow-soft: 0.5;
+  --led-glow-hard: 0.65;
+}
+
+.led {
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  background: var(--border);
+  flex: none;
+  display: inline-block;
+  transition: background-color var(--t-slow) var(--ease), box-shadow var(--t-slow) var(--ease);
+}
+.led.ok   { background: #6ade7a; box-shadow: 0 0 7px rgba(106, 222, 122, var(--led-glow-soft)); }
+.led.warn { background: #d8a13c; box-shadow: 0 0 7px rgba(216, 161, 60, var(--led-glow-soft)); }
+.led.on   { background: var(--accent); box-shadow: 0 0 7px var(--accent-glow); }
+.led.bad {
+  background: #c4666a;
+  box-shadow: 0 0 8px rgba(196, 102, 106, var(--led-glow-hard));
+  animation: led-pulse 2s var(--ease) infinite;
+}
+@keyframes led-pulse {
+  0%, 100% { opacity: 1; }
+  50%      { opacity: 0.55; }
+}
+
+/* Reduced motion, for what THIS sheet animates. Listed by selector rather than swept
+   with `*`, so a panel's own functional transition (the Focus ring's stroke-dashoffset)
+   is not flattened along with the decoration. Lives here and not in shell.css because
+   this sheet loads second: a reduced-motion .card rule in shell.css would lose the tie
+   to the flat .card rule above. */
+@media (prefers-reduced-motion: reduce) {
+  .card,
+  .panel details[open] > :not(summary) { animation: none; }
+  .card,
+  .badge,
+  .btn,
+  .mode-tab,
+  .led,
+  .panel :is(input, select, textarea),
+  .panel tbody tr,
+  .panel details > summary { transition: none; }
+  .btn:hover,
+  .btn:active,
+  .mode-tab:active { transform: none; }
+  .led.bad { animation: none; }
 }

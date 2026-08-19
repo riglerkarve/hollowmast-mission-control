@@ -25,7 +25,8 @@
   opacity: 0.75;
 }
 
-.brain-warn { color: var(--accent); opacity: 1; }
+/* --accent-text, not --accent: this sits on --card, where plain --accent is 3.55:1. */
+.brain-warn { color: var(--accent-text); opacity: 1; }
 
 /* Two columns on a desk, stacked on a phone — the dashboard binds 0.0.0.0 so it is
    opened from the LAN as often as from here. */

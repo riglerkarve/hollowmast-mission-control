@@ -24,42 +24,183 @@
      Use --accent-fill ONLY where white text sits on it. Two rules do: .btn.primary and
      .nav-item.active. */
   --accent-fill: #bb5834;
+  /* --accent-text is the accent as SMALL TEXT ON A CARD, the third role and the one the
+     two above cannot both serve: --accent on --card is 3.55:1 in the light theme (fails)
+     and 5.75 in the dark (passes); --accent-fill on --card is 4.61 light (passes) and
+     3.43 dark (fails). So the light theme borrows the fill and the dark theme keeps the
+     ink. Used by .bar-col.is-today .bar-label; use it for any other accent-coloured
+     text under 18px that sits on a card. */
+  --accent-text: #bb5834;
+  /* --accent-text is only rated for --card (4.61:1) -- on --bg it is 4.15, which is where
+     finance.css's own .fin-pnl-row .fin-neg override already found it short by hand. Three
+     more sites need exactly that pairing (fin-nw-stale, prj-open, prj-dirty, all recessed
+     rows on --bg), so it is a token here rather than a fourth scoped literal: one step
+     darker again clears BOTH grounds (card 5.53, bg 4.98). Dark theme's ember already
+     clears 7.29:1 on the near-black --bg unchanged, matching the .fin-neg override's own
+     dark fallback. */
+  --accent-text-bg: #a84e2e;
   --work: #d9663d;
   --short: #4d8b6f;
+  /* --short as small text: 4.01:1 on --card, 3.20 on --bg (found auditing finance's
+     "spending down" figures and projects/brain elsewhere in the ember hue). One step
+     darker along the same hue clears both at once (card 5.14, bg 4.63), so -- like
+     --accent-text -- one token serves either ground. Dark theme is untouched: --short
+     carries no dark override today and already passes every dark ground measured. */
+  --short-text: #42785f;
   --long: #3f6fa6;
   --ring-bg: #e8e6df;
   --border: #e5e3db;
-  --sidebar-bg: #1f2320;
+  /* The sidebar rail is dark in EITHER page theme -- an existing decision, not a new one --
+     so it is the one token below moved as part of the station-console pass even though the
+     rest of this light block is untouched: it now matches dash/'s own --ink exactly, so the
+     rail reads the same whichever page theme is active. Verified against the new sidebar
+     text colours: --sidebar-ink 18.36:1, --sidebar-muted 7.34:1 on it -- both improved. */
+  --sidebar-bg: #03050a;
   --sidebar-ink: #f4f3ef;
   --sidebar-muted: #9a9c94;
   --shadow: 0 1px 2px rgba(20, 20, 15, 0.04), 0 8px 24px rgba(20, 20, 15, 0.06);
+  /* The shadow scale is two steps: --shadow at rest, --shadow-lift on hover. A third would
+     be a third opinion about how far off the page a card sits. */
+  --shadow-lift: 0 2px 4px rgba(20, 20, 15, 0.05), 0 14px 32px rgba(20, 20, 15, 0.09);
+  /* The edge a card or a field takes on hover: the same neutral as --border, one step
+     darker in light and one step lighter in dark, so "brighter edge" means the same thing
+     in both themes -- more contrast against the card, never a new hue. */
+  --border-strong: #d3d0c6;
+  /* The accent at low alpha, for halos ONLY -- focus glow, badge glow, the primary
+     button's hover bloom. It never carries text and never sits under it, so the
+     --accent / --accent-fill contrast rules above are untouched by it. */
+  --accent-glow: rgba(217, 102, 61, 0.16);
+  /* Motion. Enter on --t-slow, leave on --t-fast, everything on one ease-out curve, so
+     every surface in the app moves like the same material. Set the transition on the base
+     rule (that is the EXIT) and re-set --t-slow on the :hover rule (that is the ENTER):
+     the transition that runs is the one declared on the state being entered. */
+  --ease: cubic-bezier(0.22, 0.61, 0.36, 1);
+  --t-fast: 120ms;
+  --t-slow: 220ms;
+  /* Station-console pass, 18 Aug 2026 -- see the dark-theme block below for the palette
+     these carry. Structural tokens are NOT theme-scoped: a sharp radius and a monospace
+     figure read as "the same style" in either colour scheme, so both apply here regardless
+     of prefers-color-scheme. */
+  --mono: ui-monospace, "SF Mono", SFMono-Regular, "Cascadia Mono", "Segoe UI Mono", Menlo, Consolas, monospace;
+  --r-card: 10px;
+  --r-btn: 6px;
   color-scheme: light;
 }
 
+/* STATION CONSOLE -- 18 Aug 2026. The dark theme now carries HOLLOWMAST's dash/ control-
+   centre palette verbatim (dash/index.html's own :root: --ink #03050a, --panel #0b1017,
+   --line #1c2530, --text #dde4ec, --ember #e0842e), because that is the one place "the
+   same style" actually exists to copy -- dash/ has no light variant, so the light theme
+   above is untouched rather than an invented match for a reference that isn't there.
+
+   THOSE FIVE NAMES ARE dash/'s OWN, NOT THIS PROJECT'S -- read as hex values copied across,
+   never as custom properties usable here. --line and --ember are not defined anywhere in
+   this file or shared.css; var(--line)/var(--ember) render as nothing, silently, with no
+   error. This project's equivalents are --border (not --line), --card (not --panel),
+   --accent-text or --accent-fill (not --ember, which is two roles here -- see the tokens
+   above for which one). Found the hard way, writing a panel against this exact comment. */
+
+   Every pairing below was computed against these exact hexes before being written, not
+   eyeballed: text ddE4ec on card 0b1017 is 14.88:1 and on bg 03050a 15.91:1; muted 8d98a6
+   on card 6.52:1; ember e0842e as INK (links, active-marker) on card 6.82:1, on bg 7.29:1
+   -- all comfortably clear the two roles that were already fine in the old palette.
+
+   The one role that needed deriving rather than copying is --accent-fill, because dash/
+   never puts white text on its ember -- white on e0842e itself is only 2.80:1. Darkened
+   along the same hue to a85c1a, matching exactly how the ORIGINAL --accent-fill was
+   derived from --accent on 18 Aug: white on a85c1a is 4.99:1. --accent-soft follows the
+   same method as the badge convention already established below (--ink on the tint, never
+   --accent) -- ember at 12% opacity over --card flattens to 251e1a, and --ink on that is
+   12.81:1. */
 @media (prefers-color-scheme: dark) {
   :root {
-    --bg: #17181a;
-    --card: #212327;
-    --ink: #ece9e2;
-    --muted: #9a9c94;
-    --accent: #e58259;
-    --accent-soft: #3a2c26;
-    --accent-fill: #ac6243;
-    --ring-bg: #2c2e32;
-    --border: #2e3034;
-    --sidebar-bg: #0f1011;
-    --shadow: 0 1px 2px rgba(0, 0, 0, 0.3), 0 8px 24px rgba(0, 0, 0, 0.35);
+    --bg: #03050a;
+    --card: #0b1017;
+    --ink: #dde4ec;
+    --muted: #8d98a6;
+    --accent: #e0842e;
+    --accent-soft: #251e1a;
+    --accent-fill: #a85c1a;
+    --accent-text: #e0842e;
+    /* Re-verified against these tokens, not carried over: 7.29:1 on --bg, 6.82 on --card. */
+    --accent-text-bg: #e0842e;
+    /* --short is undarkened in dark mode -- 5.09:1 on --bg, 4.76 on --card, both already
+       clear, so --short-text is the same value rather than a second number to keep in
+       step. */
+    --short-text: #4d8b6f;
+    --ring-bg: #0e141c;
+    --border: #1c2530;
+    --sidebar-bg: #03050a;
+    /* dash/ carries no soft blurred shadow anywhere -- depth there comes from a 1px
+       border and a 2px accent rule, not a glow. Flattened to match: a hairline definition
+       edge at rest, and hover adds a thin ember ring rather than a bigger, softer blur. */
+    --shadow: 0 1px 2px rgba(0, 0, 0, 0.5);
+    --shadow-lift: 0 1px 2px rgba(0, 0, 0, 0.55), 0 0 0 1px rgba(224, 132, 46, 0.18);
+    --border-strong: #2a3542;
+    --accent-glow: rgba(224, 132, 46, 0.22);
     color-scheme: dark;
   }
 }
 
+/* ===== Face lift, 18 Aug 2026 ===================================================
+   Everything above this line is the measured token block and is untouched. What follows
+   is the page frame: the sidebar as a grouped index rather than a flat list, a canvas
+   with some depth, and the type scale the panels' own headers inherit. Nothing here
+   reaches into a panel; every panel-owned class is left to its own sheet. */
+
+:root {
+  --sidebar-w: 236px;
+  /* Group labels and the footer clock: dimmer than the item text, but measured against
+     the column -- #8f928b on #1f2320 is 5.04:1 (light theme column) and on #0f1011 6.03:1,
+     measured; the labels are 10.6px so they need the full 4.5. */
+  --sidebar-label: #8f928b;
+  --sidebar-hover: rgba(255, 255, 255, 0.06);
+  --sidebar-line: rgba(255, 255, 255, 0.08);
+  /* The canvas glow: the accent at very low alpha, top-left, one translucent image over
+     the opaque --bg. ONE image layer, deliberately -- the contrast audit models a single
+     translucent layer over an opaque colour exactly and two stacked layers not at all. */
+  --canvas-glow: rgba(217, 102, 61, 0.07);
+}
+
+@media (prefers-color-scheme: dark) {
+  :root {
+    --sidebar-hover: rgba(255, 255, 255, 0.05);
+    --sidebar-line: rgba(255, 255, 255, 0.06);
+    --canvas-glow: rgba(229, 130, 89, 0.09);
+  }
+}
+
+/* The two entrance motions. Named with a prefix because @keyframes are global and a
+   later sheet with the same name silently replaces the earlier one -- focus.css already
+   defines `fadeIn` and `pop`, and it loads after this file. Both end where the element
+   would have been anyway (opacity 1, no transform), so fill-mode:both leaves nothing
+   behind: a transform of `none` is not a containing block, and opacity 1 is not a stacking
+   context. */
+@keyframes sh-fade {
+  from { opacity: 0; }
+  to   { opacity: 1; }
+}
+@keyframes sh-rise {
+  from { opacity: 0; transform: translateY(6px); }
+  to   { opacity: 1; transform: none; }
+}
+
 * { box-sizing: border-box; }
+
+html { -webkit-text-size-adjust: 100%; }
 
 body {
   margin: 0;
   font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
-  background: var(--bg);
+  line-height: 1.5;
+  background-color: var(--bg);
+  /* The one translucent image over the opaque ground (see --canvas-glow). Fixed so it
+     does not scroll with a long panel and re-lights the top-left on every page. */
+  background-image: radial-gradient(1100px 620px at 12% -10%, var(--canvas-glow), rgba(0, 0, 0, 0) 70%);
+  background-attachment: fixed;
+  background-repeat: no-repeat;
   color: var(--ink);
+  -webkit-font-smoothing: antialiased;
 }
 
 .shell {
@@ -67,23 +208,85 @@ body {
   min-height: 100vh;
 }
 
+/* ---- Sidebar -------------------------------------------------------------------- */
+
 .sidebar {
-  width: 200px;
+  width: var(--sidebar-w);
   flex-shrink: 0;
-  background: var(--sidebar-bg);
+  /* Explicit background-COLOR, not the shorthand: this column sticks, so content scrolls
+     behind it, and an opaque ground is what keeps the nav text measurable against the
+     same colour whatever is passing underneath. No backdrop-filter -- there is nothing to
+     blur through an opaque surface. */
+  background-color: var(--sidebar-bg);
   color: var(--sidebar-ink);
-  padding: 20px 12px;
+  padding: 16px 12px 14px;
   display: flex;
   flex-direction: column;
-  gap: 20px;
+  gap: 12px;
+  /* Sticks to the viewport instead of scrolling away with a long panel. align-self stops
+     the flex parent stretching it to page height (a sticky box has to be shorter than its
+     container to have anywhere to stick), and the height is the viewport so it always
+     covers the visible column. Eighteen items in five groups run past some laptop
+     viewports, so the column scrolls ITSELF rather than losing its tail. */
+  position: sticky;
+  top: 0;
+  align-self: flex-start;
+  height: 100vh;
+  overflow-y: auto;
+  scrollbar-width: thin;
+  scrollbar-color: var(--sidebar-muted) transparent;
+  box-shadow: inset -1px 0 0 var(--sidebar-line);
 }
 
+/* Brand: a mark, a name, a one-line role. The mark is white on --accent-fill, the pair
+   that token exists for. The whole block is a link home so the wordmark does what every
+   wordmark on the web does. */
 .brand {
-  font-size: 1.1rem;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 4px 6px 4px;
+  color: var(--sidebar-ink);
+  text-decoration: none;
+  border-radius: 8px;
+  transition: background-color var(--t-fast) var(--ease);
+}
+.brand:hover { background-color: var(--sidebar-hover); transition-duration: var(--t-slow); }
+.brand:focus-visible { outline: 2px solid var(--sidebar-ink); outline-offset: 2px; }
+
+.brand-mark {
+  flex-shrink: 0;
+  width: 34px;
+  height: 34px;
+  border-radius: 6px;
+  background: var(--accent-fill);
+  color: #fff;
+  font-size: 0.78rem;
+  font-weight: 800;
+  letter-spacing: 0.02em;
+  display: grid;
+  place-items: center;
+  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.25), 0 4px 14px var(--accent-glow);
+}
+
+.brand-text { display: flex; flex-direction: column; min-width: 0; line-height: 1.2; }
+.brand-name {
+  font-size: 0.98rem;
   font-weight: 700;
   letter-spacing: -0.02em;
-  padding: 0 8px;
+  white-space: nowrap;
 }
+/* The line under the name is the clock: derived, tabular so 09:41 and 11:11 sit the
+   same width, and it never breathes. */
+.brand-sub {
+  font-size: 0.7rem;
+  font-weight: 600;
+  color: var(--sidebar-label);
+  letter-spacing: 0.02em;
+  white-space: nowrap;
+  font-variant-numeric: tabular-nums;
+}
+.brand-dot { padding: 0 5px; opacity: 0.6; }
 
 .nav-list {
   list-style: none;
@@ -91,7 +294,29 @@ body {
   padding: 0;
   display: flex;
   flex-direction: column;
-  gap: 2px;
+  gap: 1px;
+}
+
+/* Group labels: small caps, tracked, and the first one sits closer to the brand than the
+   rest sit to the group above -- the gap is the separator, not a rule. */
+.nav-group { padding: 12px 10px 3px; }
+.nav-group:first-child { padding-top: 2px; }
+.nav-label {
+  display: block;
+  font-family: var(--mono);
+  font-size: 0.64rem;
+  font-weight: 700;
+  letter-spacing: 0.16em;
+  text-transform: uppercase;
+  color: var(--sidebar-label);
+}
+
+/* The Garage sits alone at the foot of the list, past a hairline: it is a navigation away
+   from the dashboard rather than a panel, and the rule says so without a label. */
+.nav-group-last {
+  margin-top: 10px;
+  padding: 8px 0 0;
+  border-top: 1px solid var(--sidebar-line);
 }
 
 .nav-item {
@@ -99,40 +324,137 @@ body {
   align-items: center;
   gap: 10px;
   width: 100%;
-  padding: 10px 12px;
+  padding: 7px 10px;
   border: none;
   background: transparent;
   color: var(--sidebar-muted);
-  font-size: 0.9rem;
+  font: inherit;
+  font-size: 0.875rem;
   font-weight: 600;
-  border-radius: 10px;
+  line-height: 1.25;
+  border-radius: 6px;
   cursor: pointer;
   text-align: left;
+  position: relative;            /* anchors the active marker below */
+  transition:
+    background-color var(--t-fast) var(--ease),
+    color            var(--t-fast) var(--ease),
+    transform        var(--t-fast) var(--ease),
+    box-shadow       var(--t-fast) var(--ease);
 }
 
 .nav-item:hover {
-  background: rgba(255, 255, 255, 0.06);
+  background-color: var(--sidebar-hover);
   color: var(--sidebar-ink);
+  /* The glide: two pixels toward the content, into the sidebar's own 12px padding, so it
+     never crosses the column edge or widens the scroll box. Enter on --t-slow; the base
+     rule above returns it on --t-fast. */
+  transform: translateX(2px);
+  transition-duration: var(--t-slow);
+}
+
+.nav-item:active { transform: translateX(2px) scale(0.98); }
+
+/* The keyboard ring is the sidebar's own ink, not the accent: the active item is ALREADY
+   an accent-fill block, and an accent ring around an accent block disappears exactly where
+   it is needed most. --sidebar-ink on --sidebar-bg is the highest-contrast pair this column
+   has. Offset outward so it never crosses the text. */
+.nav-item:focus-visible {
+  outline: 2px solid var(--sidebar-ink);
+  outline-offset: 2px;
 }
 
 .nav-item.active {
   background: var(--accent-fill);
   color: #fff;
+  /* Lifted a hair off the column so the current page reads as the one raised control. The
+     halo is the accent's own hue at low alpha; the text is white on --accent-fill, which is
+     the pair the token exists for -- nothing here changes what the text sits on. */
+  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.25), 0 4px 14px var(--accent-glow);
 }
 
-.nav-icon {
-  font-size: 1rem;
+/* A marker at the column edge, in the accent's ink token (light on the dark column in
+   both themes). Sits in the 12px gutter beside the item -- left:-12px is the sidebar's
+   padding-box edge, so it is inside the scroll box and never clips or scrolls. Second
+   channel for "you are here" after the fill, and it survives a squint. */
+.nav-item.active::before {
+  content: '';
+  position: absolute;
+  left: -12px;
+  top: 7px;
+  bottom: 7px;
+  width: 3px;
+  border-radius: 0 3px 3px 0;
+  background: var(--accent);
 }
+
+/* Glyphs: 16px, drawn in currentColor so they take the item's state for free -- muted at
+   rest, ink on hover, white on the active pill. Slightly transparent at rest so the label
+   leads and the glyph supports; full strength once the item is hot. */
+.nav-icon {
+  flex-shrink: 0;
+  width: 18px;
+  height: 18px;
+  display: grid;
+  place-items: center;
+  opacity: 0.85;
+  transition: opacity var(--t-fast) var(--ease);
+}
+.nav-item:hover .nav-icon,
+.nav-item.active .nav-icon { opacity: 1; }
+.nav-icon svg {
+  width: 16px;
+  height: 16px;
+  fill: none;
+  stroke: currentColor;
+  stroke-width: 1.6;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+}
+
+/* The Garage is a real navigation away from the dashboard, not a panel swap, so it is an
+   <a> and needs the .nav-item look without the button reset fighting it. */
+.nav-link {
+  display: flex;
+  align-items: center;
+  text-decoration: none;
+}
+
+/* ---- Canvas ---------------------------------------------------------------------- */
 
 .content {
   flex: 1;
   min-width: 0;
-  padding: 32px 24px 60px;
+  padding: 28px 24px 64px;
+  /* clip, not hidden: hidden makes this a scroll container and a sticky sidebar's
+     neighbour should not be one; clip only refuses to let anything widen the page. What
+     it refuses is the hover tooltip on the last-but-one bar of a chart -- opacity:0 until
+     hovered, but an invisible absolutely-positioned box still counts toward scrollWidth,
+     and between 641 and ~760px it crossed the content edge by 8px and the whole page
+     scrolled sideways for a thing nobody could see. Vertically it stays visible, which is
+     the one direction a tooltip has to escape in. */
+  overflow-x: clip;
+}
+
+@media (min-width: 900px) {
+  .content { padding: 36px 40px 72px; }
+}
+
+@media (min-width: 1280px) {
+  .content { padding: 44px 56px 88px; }
 }
 
 .panel {
   max-width: 480px;
+  /* Every mount is a page load here -- shell.js clears the root and the panel builds
+     itself fresh -- so the panel fades in as a whole and its cards rise inside it (the
+     stagger is on .card in shared.css). Opacity only at this level, no transform: the
+     Focus panel keeps a position:fixed overlay as a SIBLING of .panel precisely so nothing
+     above it can trap it, and this rule must not become the thing that would. */
+  animation: sh-fade var(--t-slow) var(--ease) both;
 }
+
+/* ---- Narrow: the column becomes a bar ------------------------------------------- */
 
 @media (max-width: 640px) {
   .shell { flex-direction: column; }
@@ -146,17 +468,44 @@ body {
     width: 100%;
     flex-direction: row;
     align-items: center;
-    padding: 12px;
+    gap: 10px;
+    padding: 10px 12px;
     overflow-x: auto;
     -webkit-overflow-scrolling: touch;
+    /* The desktop column's viewport height would make a phone's top bar a full screen
+       tall. It stays sticky -- a top bar the page scrolls under, on its opaque ground --
+       and takes a z-index so the panel passes beneath it rather than over it. */
+    height: auto;
+    align-self: auto;
+    z-index: 10;
+    box-shadow: inset 0 -1px 0 var(--sidebar-line), 0 6px 20px rgba(0, 0, 0, 0.18);
   }
 
-  /* The brand must not be squeezed to nothing by a long nav. */
-  .brand { flex-shrink: 0; }
+  /* The edge marker is drawn in the LEFT gutter, and in a horizontal row the left of an
+     item is the previous item. The filled pill carries "current" on its own here. */
+  .nav-item.active::before { display: none; }
+
+  /* The brand collapses to its mark; the words are the page's title bar's job. */
+  .brand { flex-shrink: 0; padding: 0; }
+  .brand-text { display: none; }
+  .brand-mark { width: 32px; height: 32px; }
 
   .nav-list {
     flex-direction: row;
     flex-wrap: nowrap;
+    align-items: center;
+    gap: 4px;
+  }
+
+  /* Group labels are for a column. In a row they would be four words nobody scrolls
+     to, so the groups collapse to their items and the Garage rule becomes a gap. */
+  .nav-group { display: none; }
+  .nav-group.nav-group-last {
+    display: block;
+    margin: 0 0 0 6px;
+    padding: 0 0 0 10px;
+    border-top: none;
+    border-left: 1px solid var(--sidebar-line);
   }
 
   /* .nav-item is width:100% for the vertical sidebar. Left as-is in a row it makes every
@@ -165,17 +514,10 @@ body {
     width: auto;
     flex-shrink: 0;
     white-space: nowrap;
+    padding: 8px 12px;
   }
 
-  .content { padding: 20px 16px 40px; }
-}
-
-/* The Garage is a real navigation away from the dashboard, not a panel swap, so it is an
-   <a> and needs the .nav-item look without the button reset fighting it. */
-.nav-link {
-  display: flex;
-  align-items: center;
-  text-decoration: none;
+  .content { padding: 20px 16px 48px; }
 }
 
 /* Quiet hours (backlog #29). Plain and calm — no dimming, no countdown, no persuasion.
@@ -200,4 +542,17 @@ body {
      tooltip vertically, and tooltips are already removed at this width, so the two rules
      cannot conflict. Above 640px the chart fits and neither rule applies. */
   .bar-chart { overflow-x: auto; }
+}
+
+/* Reduced motion, for what THIS file animates: the panel fade, the nav glide and press.
+   Scoped to those selectors rather than a `* { animation: none !important }` sweep,
+   because the sweep would also flatten the Focus timer's stroke-dashoffset transition,
+   which is the ring drawing down -- a panel's own, functional motion, not decoration.
+   shared.css carries its own block for its own additions, and has to: this sheet loads
+   first, so a rule here for .card would lose the tie to shared.css's flat .card rule. */
+@media (prefers-reduced-motion: reduce) {
+  .panel { animation: none; }
+  .nav-item, .brand, .nav-icon { transition: none; }
+  .nav-item:hover,
+  .nav-item:active { transform: none; }
 }

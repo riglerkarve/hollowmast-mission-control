@@ -31,8 +31,10 @@
 
 .fin-error { color: var(--accent); font-size: 0.86rem; }
 
-.fin-up   { color: var(--accent); }   /* spending up is not good news */
-.fin-down { color: var(--short); }
+/* --accent-text/--short-text, not the bare tokens: both these deltas sit on --card and the
+   bare tokens are 3.55:1 / 4.01:1 there, under AA for the 12px text this renders as. */
+.fin-up   { color: var(--accent-text); }   /* spending up is not good news */
+.fin-down { color: var(--short-text); }
 .fin-flat { opacity: 0.5; }
 .fin-gone { opacity: 0.55; font-style: italic; }
 .fin-neg  { color: var(--accent); }
@@ -104,6 +106,60 @@
 
 .fin-bar-value { display: flex; gap: 0.5rem; justify-content: flex-end; align-items: baseline; }
 .fin-bar-delta { font-size: 0.76rem; }
+
+/* Profit & loss — added 18 Aug 2026. A period statement, unlike "Where it went" which only
+   ever compares two months. The category lists reuse .fin-fc-list's row shape so the same
+   vocabulary carries over from "What comes in"; the month table is its own 4-column grid.
+   Classes prefixed .fin-pnl-, grepped against public/ first. */
+.fin-pnl-list { list-style: none; margin: 0.4rem 0 0; padding: 0; display: flex; flex-direction: column; gap: 1px; }
+
+.fin-pnl-row {
+  display: grid;
+  grid-template-columns: 5.5rem repeat(3, minmax(4.2rem, 1fr));
+  gap: 0 0.6rem;
+  padding: 0.4rem 0.6rem;
+  background: var(--bg);
+  border-radius: 6px;
+  font-size: 0.85rem;
+  font-variant-numeric: tabular-nums;
+}
+
+/* .fin-pnl-month carried no rule of its own -- the grid's default alignment already put it
+   left, so it looked right and a panel checker still flagged it correctly as undefined.
+   Stated explicitly, matching how the three numeric columns state theirs, and nowrap so the
+   "partial" badge nested inside it cannot wrap onto its own line in the narrow first column. */
+.fin-pnl-month { text-align: left; white-space: nowrap; }
+.fin-pnl-in, .fin-pnl-out, .fin-pnl-net { text-align: right; }
+
+/* The header row is text, not a data row — no background, no tabular alignment tell. */
+.fin-pnl-head {
+  background: none;
+  color: var(--muted);
+  font-size: 0.72rem;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  padding-bottom: 0.2rem;
+}
+
+/* A partial month is marked, not hidden — the same rule /spending already follows for the
+   same reason: an incomplete month read as a complete one understates itself silently. */
+.fin-pnl-partial { border-left: 3px solid var(--border); }
+
+@media (max-width: 620px) {
+  .fin-pnl-row { grid-template-columns: 4rem repeat(3, 1fr); gap: 0 0.3rem; font-size: 0.78rem; }
+}
+
+/* .fin-neg (shared.css-adjacent utility, color:var(--accent)) is calibrated for text sitting
+   on --card -- 4.15:1 even through --accent-text, its safe variant. .fin-pnl-row sits on
+   --bg instead, matching the recessed-row convention every other list in this file already
+   uses (.fin-nw-list li, .fin-fc-list li, .fin-s-row), and --accent on --bg is only 3.20:1
+   light -- found auditing the station-console pass, not introduced by it. Scoped one step
+   darker along the same hue (light theme only; dark theme's ember already clears 7.29:1 on
+   the new near-black --bg unchanged). */
+.fin-pnl-row .fin-neg { color: #a84e2e; }
+@media (prefers-color-scheme: dark) {
+  .fin-pnl-row .fin-neg { color: var(--accent); }
+}
 
 .fin-cash-figure {
   font-size: 1.6rem;
@@ -233,8 +289,10 @@
 .fin-nw-age  { color: var(--muted); font-size: 0.78em; white-space: nowrap; }
 
 /* Over a month old. Not an error — an age. It is coloured rather than hidden because a
-   stale figure that looks current is the whole failure mode this card is designed against. */
-.fin-nw-stale { color: var(--accent); font-weight: 600; }
+   stale figure that looks current is the whole failure mode this card is designed against.
+   --accent-text-bg, not --accent: this row sits on --bg like .fin-pnl-row below it, where
+   plain --accent is 3.20:1. */
+.fin-nw-stale { color: var(--accent-text-bg); font-weight: 600; }
 
 .fin-nw-del {
   background: none; border: 0; color: var(--muted); cursor: pointer;

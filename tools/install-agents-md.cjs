@@ -61,6 +61,21 @@ source; the linked file is authoritative and this summary is not.
 
 // Every directory that is its own git repo. A pointer in a non-repo directory would never be
 // read, and one in a repo without agents working in it is harmless.
+// A repo can carry a standing brief for one agent alongside the shared standard. Where CODEX.md
+// exists, the generated pointer names it — so the brief is found by reading the file Codex
+// already loads, rather than by anyone remembering to mention it.
+const CODEX_LINE = [
+  '',
+  '**This repo carries a standing brief: `CODEX.md`.** Read it after `../AGENTS.md` and before',
+  'starting work. It says what is yours, what is not, and in what order.',
+  '',
+].join('\n');
+
+// The expected content depends on whether that brief exists, so "current" is computed per repo
+// rather than compared against one constant. Comparing every repo to BODY alone would have
+// reported mission-control as permanently stale and rewritten it on every run.
+const expectedFor = (repo) => BODY + (fs.existsSync(path.join(WS, repo, 'CODEX.md')) ? CODEX_LINE : '');
+
 const repos = fs.readdirSync(WS, { withFileTypes: true })
   .filter((e) => e.isDirectory() && fs.existsSync(path.join(WS, e.name, '.git')))
   .map((e) => e.name);
@@ -79,11 +94,11 @@ for (const r of repos) {
   if (!fs.existsSync(p)) {
     missing += 1;
     console.log(`  MISSING   ${r}`);
-    if (APPLY) fs.writeFileSync(p, BODY);
+    if (APPLY) fs.writeFileSync(p, expectedFor(r));
     continue;
   }
   const cur = fs.readFileSync(p, 'utf8');
-  if (cur === BODY) { ok += 1; console.log(`  ok        ${r}`); continue; }
+  if (cur === expectedFor(r)) { ok += 1; console.log(`  ok        ${r}`); continue; }
   // A file somebody wrote by hand is NOT overwritten silently. Clobbering another agent's
   // instructions to install a pointer would be the rudest possible fix.
   if (!cur.includes(MARKER)) {
@@ -93,7 +108,7 @@ for (const r of repos) {
   }
   stale += 1;
   console.log(`  stale     ${r}`);
-  if (APPLY) fs.writeFileSync(p, BODY);
+  if (APPLY) fs.writeFileSync(p, expectedFor(r));
 }
 
 console.log('');
@@ -103,7 +118,7 @@ if (APPLY) {
   // Read back rather than trusting the writes.
   const back = repos.filter((r) => {
     const p = path.join(WS, r, 'AGENTS.md');
-    return fs.existsSync(p) && fs.readFileSync(p, 'utf8') === BODY;
+    return fs.existsSync(p) && fs.readFileSync(p, 'utf8') === expectedFor(r);
   }).length;
   console.log(`  read back: ${back} of ${repos.length - foreign} carry the current pointer`);
 }

@@ -27,11 +27,31 @@
 // figures for a ChatGPT subscription and an invented number would be worse than an ordering.
 const AGENTS = {
   script: { engine: 'none', cost: 'free', what: 'a .cjs script or a SQL query — no model at all' },
-  local: { engine: 'ollama', cost: 'free', what: 'qwen3.5:9b, on this machine, private' },
+  // TWO LOCAL MODELS ARE INSTALLED and only one of them fits. The hardware ceiling is 8 GB of
+  // VRAM on the RTX 5050 laptop, of which ~6.9 GB is usable in practice.
+  //   qwen3.5:9b   6.6 GB  fits, with ~16% already spilling to the CPU. The measured one.
+  //   gemma4:12b   7.6 GB  EXCEEDS the usable VRAM, so expect heavy CPU spill and a large
+  //                        slowdown. Installed since the docs were written; it is offered
+  //                        here as a fact, not a recommendation, and nothing routes to it
+  //                        until somebody measures it against the same probe qwen was run on.
+  local: { engine: 'ollama', cost: 'free', what: 'qwen3.5:9b on this machine, private, free' },
+  'local-big': { engine: 'ollama', cost: 'free', what: 'gemma4:12b -- installed, but 7.6 GB against ~6.9 GB usable VRAM' },
   haiku: { engine: 'claude', cost: 'cheap', what: 'Claude Haiku 4.5' },
   sonnet: { engine: 'claude', cost: 'mid', what: 'Claude Sonnet 5' },
   opus: { engine: 'claude', cost: 'dear', what: 'Claude Opus 5' },
-  codex: { engine: 'codex', cost: 'subscription', what: 'Codex CLI, gpt-5.6-terra, on the owner\'s plan' },
+  // CODEX HAS TIERS TOO. The ordering below is the vendor's own wording, read out of
+  // ~/.codex/models_cache.json rather than ranked by me:
+  //   sol   "Latest frontier agentic coding model."
+  //   terra "Balanced agentic coding model for everyday work."  <- the configured default
+  //   luna  "Fast and affordable agentic coding model."
+  // They map onto opus / sonnet / haiku, so the same cost discipline applies on both sides.
+  //
+  // codex-auto-review is NOT a code reviewer despite the name -- "Automatic approval review
+  // model for Codex", i.e. it decides whether to approve a sandboxed command. Routing reviews
+  // to it on the strength of the word "review" would be a name match, not a capability match.
+  luna: { engine: 'codex', cost: 'subscription', what: 'Codex gpt-5.6-luna -- fast and affordable' },
+  terra: { engine: 'codex', cost: 'subscription', what: 'Codex gpt-5.6-terra -- balanced, the configured default' },
+  sol: { engine: 'codex', cost: 'subscription', what: 'Codex gpt-5.6-sol -- frontier' },
 };
 
 const EFFORT = ['low', 'medium', 'high', 'xhigh', 'max'];
@@ -78,20 +98,46 @@ function dispatch(item = {}) {
   }
 
   if (/\.css\b|stylesheet|contrast|spacing|palette|theme|visual|layout/i.test(text)) {
-    return out('CSS belongs to Codex', 'codex', 'medium',
+    // The design system reaches all 21 panels; one panel's spacing reaches one. Same owner,
+    // different blast radius, and that is the only thing separating the tiers here.
+    const systemWide = /shared\.css|shell\.css|design system|token|all panels|every panel/i.test(text);
+    return out(systemWide ? 'CSS, and it reaches every panel' : 'CSS belongs to Codex',
+      systemWide ? 'sol' : 'terra', systemWide ? 'high' : 'medium',
       'Every stylesheet in this project is Codex\'s by the owner\'s decision of 19 Aug (#18). No other agent edits them; a session that needs a style change files it for Codex.',
       'A design-system change to shared.css or shell.css reaches all 21 panels — raise the effort and check every panel, not the one you were looking at.');
   }
 
   if (kind === 'review' || /\breview\b/i.test(item.title || '')) {
     const authorEngine = String(item.author_engine || 'unknown');
-    const reviewer = authorEngine === 'codex' ? 'opus' : 'codex';
+    const reviewer = authorEngine === 'codex' ? 'opus' : 'sol';
     return out('a review must not share the author\'s engine', reviewer, 'high',
       `The author's engine is ${authorEngine}, so the reviewer must be the other one. A checker sharing the author's assumptions confirms the author's bugs, which is the whole reason a second engine exists here (#16).`,
       'If no independent engine is available the review is REFUSED and recorded as not reviewed — never run same-engine and never recorded as a pass.');
   }
 
   // ---------------------------------------------------------- does it need a model at all
+
+  // THE OWNER'S OWN WORK, and missing this was the single biggest error in the first version.
+  // I handled DET and LOC and never checked YOU — so 15 of 33 open items fell through to the
+  // catch-all and were recommended a mid-tier model for work no agent can do. I then reported
+  // that as "the middle lacks granularity", which was a misdiagnosis of my own table: the
+  // catch-all was not undifferentiated, it was swallowing a category I had forgotten.
+  //
+  // These are NOT no-agent tasks. Every one has a preparable half, and the items say so
+  // themselves: #72 "CSV export, same importer shape. You do the export." #78 "I can prepare
+  // the Pension Tracing Service request and compare providers on fees. You submit it."
+  //
+  // So the recommendation is CHEAP AND BOUNDED. Producing a checklist, a costing, a drafted
+  // letter or a comparison is ordinary work; what makes these items sit open for weeks is the
+  // half no model may do — creating an account, submitting a form, entering identity or
+  // payment details, taking a decision that is his. Spending a dear model on the preparable
+  // half does not move the blocked half one inch.
+  if (String(item.owner || '').toUpperCase() === 'YOU') {
+    return out('the owner must act; an agent can only prepare', 'haiku', 'low',
+      'Blocked on something only he can do — an account, a submission, an export, identity or payment details, or a decision that is his. The preparable half (a checklist, a costing, a draft, a comparison) is ordinary work and does not need a dear model. Spending one on it does not unblock the half that is actually stuck.',
+      'If preparing it needs real judgement — weighing options he will act on, or anything that would read as professional advice — that is a DIFFERENT task and it is opus. Split it rather than raising the effort on this one.');
+  }
+
   if (String(item.owner || '').toUpperCase() === 'DET' && !has(item, AMBIGUOUS)) {
     return out('a deterministic answer exists', 'script', 'low',
       'Already tagged DET, and nothing in the text says the diagnosis is unknown. A deterministic answer is exact, auditable, reproducible by inspection, and free. Measured here: rules did 95.3% of the real categorisation job, the model 4.7%.',

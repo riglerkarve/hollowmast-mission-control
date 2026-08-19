@@ -19,15 +19,45 @@
 // Also adds the accuracy-floor gate ollama-shift.cjs already had and this script did not: the
 // rule-categorised rows already in the ledger are the oracle, scored fresh every run rather
 // than trusted from last week's probe number.
+//
+// IDENTIFIES AS THE SCRIBE, added 20 Aug 2026, after this script and the Scribe custody rule
+// were built the same night without either knowing about the other. Owner decision, 20 Aug:
+// finance and wellbeing are the Scribe's EXCLUSIVE custody -- "no other model may even read
+// them." This script's whole job is finance categorisation with a local model, which is
+// exactly the Scribe's job by definition; the fix is not to stop doing it, it is to stop
+// doing it anonymously. `custodyAllows` is checked explicitly rather than assumed, so the
+// boundary is enforced in code and not just true by coincidence, and every run is recorded
+// through `scribe.recordRun()` so it is visible in `scribe_runs` rather than only in the
+// generic tool-run log.
+//
+// NOT gated behind `scribeCan()`'s capability table. That table refuses any job with no
+// recorded measurement, and this job has never been registered there through
+// `POST /api/team/scribe/measure` -- but it already carries something stronger: `scoreOracle`
+// below re-measures accuracy against a LIVE oracle on every single run, before writing
+// anything, which is fresher evidence than a cached capability-table row could be. Registering
+// this job formally in `scribe_capabilities` is real next work (so the owner can see it in one
+// place with the rest of the Scribe's proven jobs), not a gap in the write itself.
 'use strict';
 require('./_run-log.cjs').record();
 
 const db = require('../server/db');
-// Provenance: every read this process makes is logged against this actor. Without it the
-// access log records 'unknown', which is honest but useless. See server/provenance.js.
-db.setProcessActor('claude');
+// Provenance: 'scribe', not 'claude' -- this run touches finance data under the Scribe's
+// exclusive custody, and folding it into 'claude' would be the wrong-attribution error
+// server/provenance.js exists to prevent, one tier over from why 'schedule' exists.
+db.setProcessActor('scribe');
 require('../server/routes/finance');
 const { checkAvailable, scoreOracle, askBatched } = require('./ollama-run.cjs');
+const scribe = require('../server/scribe.js');
+
+const custody = scribe.custodyAllows('finance', 'scribe', 'write');
+if (!custody.allowed) {
+  // Structurally unreachable today -- this script IS the Scribe, so custody always allows it.
+  // Kept as a real check, not a comment, because the day this becomes reachable is the day
+  // something else tried to touch finance data through this path, and that is exactly the
+  // case the check exists to catch rather than trust.
+  console.log(`\n  REFUSED by Scribe custody: ${custody.why}\n`);
+  process.exit(1);
+}
 
 const MODEL = process.env.PROBE_MODEL || 'qwen3.5:9b';
 const BATCH = 25;            // measured: 25 in one call is ~11s; 25 calls would be minutes
@@ -90,7 +120,10 @@ async function main() {
   const APPLY = process.argv.includes('--apply');
 
   const avail = await checkAvailable();
-  if (!avail.up) process.exit(2);
+  if (!avail.up) {
+    scribe.recordRun(db, { job: 'finance-categorisation', model: MODEL, refused: true, reason: avail.why || 'ollama unreachable' });
+    process.exit(2);
+  }
 
   const rows = db.prepare(
     `SELECT id, counterparty, reference, type, amount_pence
@@ -99,7 +132,11 @@ async function main() {
      ORDER BY ABS(amount_pence) DESC`      // biggest first: if it stops early, it stopped on the small ones
   ).all();
 
-  if (!rows.length) { console.log('nothing uncategorised. rules covered everything.'); return; }
+  if (!rows.length) {
+    scribe.recordRun(db, { job: 'finance-categorisation', model: MODEL, items: 0, wrote: 0, reason: 'nothing uncategorised' });
+    console.log('nothing uncategorised. rules covered everything.');
+    return;
+  }
 
   console.log(`model        ${MODEL}`);
   console.log(`vocabulary   ${CATEGORIES.length} categories, read from finance_rules`);
@@ -124,6 +161,10 @@ async function main() {
     for (const m of score.misses.slice(0, 5)) console.log(`  id ${m.id}  rule ${m.truth}  model ${m.got}`);
   }
   if (!score.ok) {
+    scribe.recordRun(db, {
+      job: 'finance-categorisation', model: MODEL, items: rows.length, wrote: 0,
+      refused: true, reason: 'below accuracy floor', detail: { accuracy: score.accuracy, floor: ACCURACY_FLOOR, seen: score.seen },
+    });
     console.log(`\n${score.why}\n`);
     process.exit(1);
   }
@@ -156,7 +197,13 @@ async function main() {
     failed.slice(0, 5).forEach((f) => console.log(`  id ${f.id}: ${f.why}`));
   }
 
-  if (!APPLY) { console.log('\nnothing written. re-run with --apply to queue these for review.'); return; }
+  if (!APPLY) {
+    scribe.recordRun(db, {
+      job: 'finance-categorisation', model: MODEL, items: rows.length, wrote: 0,
+      reason: 'report-only, --apply not passed', detail: { suggested: suggestions.length, noAnswer: failed.length },
+    });
+    console.log('\nnothing written. re-run with --apply to queue these for review.'); return;
+  }
 
   db.exec('BEGIN');
   try {
@@ -167,6 +214,10 @@ async function main() {
     let n = 0;
     suggestions.forEach((s) => { n += upd.run(s.category, s.id).changes; });
     db.exec('COMMIT');
+    scribe.recordRun(db, {
+      job: 'finance-categorisation', model: MODEL, items: rows.length, wrote: n,
+      detail: { noAnswer: failed.length, oracleAccuracy: score.accuracy },
+    });
     console.log(`\napplied: ${n} suggestions queued for review (category_source='model', reviewed=0)`);
     console.log('none of these are accepted. they are proposals until you say otherwise.');
   } catch (err) {

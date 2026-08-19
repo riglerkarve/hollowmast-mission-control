@@ -19,12 +19,16 @@
 //                      (added 18 Aug: the daily briefing is none of the three above,
 //                      and calling it 'claude' would be exactly the wrong attribution
 //                      this module exists to prevent)
+//   X-MC-By: scribe    added 20 Aug: the Scribe holds exclusive custody of finance and
+//                      wellbeing, and its runs must not fall back to 'unknown' or be
+//                      folded into 'claude' — the same wrong-attribution reasoning as
+//                      'schedule' above, one tier over.
 //   (absent)           unknown
 //
 // Loopback is NOT used as the signal. It cannot be: the browser, a Claude session running
 // curl, and every importer all arrive on 127.0.0.1, so the network tells you nothing about
 // who is typing. Only an explicit claim does.
-const VALID = ['you', 'claude', 'import', 'schedule'];
+const VALID = ['you', 'claude', 'import', 'schedule', 'scribe'];
 
 function readBy(req) {
   const raw = String((req && req.get && req.get('x-mc-by')) || '').trim().toLowerCase();

@@ -140,6 +140,8 @@ async function get(pathname, tok) {
 
     if (RECORD) {
       const db = require('../server/db');
+      // Bulk rows pulled from an external API. Same category as the statement importers.
+      db.setProcessActor('import');
       const income = require('../server/routes/income');
 
       // THE BALANCE IS A DAILY SNAPSHOT, NOT INCOME. It is money that has accrued and has not

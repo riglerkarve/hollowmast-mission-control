@@ -23,6 +23,21 @@ function record() {
   try {
     const db = require('../server/db');
 
+    // @no-actor-by-design: a logger must not overwrite the actor its host tool chose.
+    //
+    // THIS FILE DELIBERATELY SETS NO ACTOR. provenance-check still lists it every run,
+    // marked BY DESIGN with the reason above -- an exemption that hid the file would be
+    // a place to put anything.
+    //
+    // db.setProcessActor writes a MODULE-LEVEL global. A logger that set one would
+    // silently overwrite the actor its host tool chose -- so import-paypal would start
+    // filing its rows under whatever this file picked, and the attribution work would
+    // be undone by the thing measuring it.
+    //
+    // So tool_runs rows carry whatever actor the host already established, and rows
+    // from a tool that set none are honestly `unknown`. That is the correct answer:
+    // the run log does not know who ran it, and should not guess.
+
     db.migrate('runlog', [
       (d) => {
         d.exec(`

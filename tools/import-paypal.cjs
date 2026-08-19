@@ -32,6 +32,8 @@ require('./_run-log.cjs').record();
 const fs = require('node:fs');
 const path = require('node:path');
 const db = require('../server/db');
+// Bulk rows from a PayPal statement export. That is an import by any reading.
+db.setProcessActor('import');
 require('../server/routes/finance');   // for its migrations
 
 // ---- CSV, quoted-field aware. PayPal descriptions contain commas routinely. ---------------

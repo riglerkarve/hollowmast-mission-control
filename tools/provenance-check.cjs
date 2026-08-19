@@ -45,18 +45,25 @@ for (const f of files) {
   // result filtered: a comment line cannot match, because // precedes the keyword.
   if (!/^[ \t]*(?:const|let|var)\s+\w+\s*=\s*require\(['"][^'"]*server\/db['"]\)/m.test(src)) continue;
   const m = src.match(/setProcessActor\(\s*['"]([^'"]*)['"]\s*\)/);
-  users.push({ file: path.relative(ROOT, f).split(path.sep).join('/'), actor: m ? m[1] : null });
+  // A file may DECLINE an actor, and that is different from forgetting one. The marker
+  // must carry its reason on the same line, so an exemption cannot be added silently and
+  // cannot be read later without the argument for it.
+  const ex = src.match(/@no-actor-by-design:(.+)/);
+  users.push({ file: path.relative(ROOT, f).split(path.sep).join('/'), actor: m ? m[1] : null, exempt: ex ? ex[1].trim() : null });
 }
 
-const bad = users.filter((u) => !u.actor);
+const bad = users.filter((u) => !u.actor && !u.exempt);
+const exempt = users.filter((u) => !u.actor && u.exempt);
 const invalid = users.filter((u) => u.actor && !VALID.includes(u.actor));
 
 for (const u of users.sort((a, b) => a.file.localeCompare(b.file))) {
-  const state = !u.actor ? 'UNATTRIBUTED' : VALID.includes(u.actor) ? u.actor : `NOT IN VOCABULARY: ${u.actor}`;
+  const state = u.exempt ? 'BY DESIGN' : !u.actor ? 'UNATTRIBUTED' : VALID.includes(u.actor) ? u.actor : `NOT IN VOCABULARY: ${u.actor}`;
   console.log(`  ${String(state).padEnd(22)} ${u.file}`);
+  if (u.exempt) console.log(`  ${' '.repeat(22)}   ^ no actor on purpose: ${u.exempt}`);
 }
 
 console.log(`\n  ${users.length} in-process database users, vocabulary: ${VALID.join(', ')}`);
+if (exempt.length) console.log(`  ${exempt.length} of them decline an actor on purpose and are listed above with the reason.`);
 
 // ABSENCE AND FAILURE MUST NOT LOOK THE SAME. Zero callers is not a clean bill of health
 // here — this repo has always had importers and a briefing — it means the walk or the
@@ -78,3 +85,5 @@ console.log('\n  Blind to: a dynamic or computed require; a file that opens data
 console.log('  directly with new DatabaseSync, bypassing server/db.js entirely; anything under');
 console.log('  server/ or public/; and any caller outside this repository. It checks that the');
 console.log('  call EXISTS, not that the actor chosen is the honest one for that script.');
+console.log('  An @no-actor-by-design marker is taken at its word: this checks that a reason');
+console.log('  was written down, never that the reason is a good one.');

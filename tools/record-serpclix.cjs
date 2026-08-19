@@ -24,6 +24,8 @@
 require('./_run-log.cjs').record();
 
 const db = require('../server/db');
+// A backfill of the owner's own payment history, transcribed from the service's page. Not 'you' -- he did not type these rows -- and not 'claude', because the figures are his rather than mine. It is data arriving from an outside source.
+db.setProcessActor('import');
 require('../server/routes/income');
 
 const DRY = process.argv.includes('--dry');

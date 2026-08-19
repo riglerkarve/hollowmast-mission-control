@@ -22,6 +22,8 @@
 require('./_run-log.cjs').record();
 
 const db = require('../server/db');
+// This one RECATEGORISES existing rows based on a match I compute. That is analysis, not import, and the log should say a session did it so it can be found and undone.
+db.setProcessActor('claude');
 require('../server/routes/finance');
 
 const APPLY = process.argv.includes('--apply');

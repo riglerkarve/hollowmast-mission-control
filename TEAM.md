@@ -25,6 +25,7 @@ Everything else in this document follows from that.
 | **supervisor** | reads every handover at shift start, drafts the plan, delegates once the plan is confirmed. | **No.** It routes owner-facing items to the manager. |
 | **manager** | scrutinises the plan and confirms or returns it. Quizzes the owner once a day for steering. | **Yes — the only role in the chain that may.** |
 | **architect** | outside the chain. Takes work directly from the owner, owns sequencing and consistency across projects. Still hands over every shift. | Yes — see below. |
+| **scribe** | the free local tier. Holds finance and wellbeing exclusively, and takes the work when the paid tiers are capped. Can only do jobs it has been measured doing. | **No.** Never. |
 
 **The architect is an exception the owner made deliberately on 19 August, and it should stay
 uncomfortable.** It is a *second* channel to him alongside the manager's daily quiz, which is
@@ -61,6 +62,7 @@ defect that invalidates the work in flight — and P0 has always dropped everyth
 | **supervisor** | the manager | the architect, the owner |
 | **manager** | the architect, the owner | — |
 | **architect** | the manager | workers and the supervisor directly |
+| **scribe** | the supervisor | the manager, the architect, the owner |
 
 **Why the architect's inbox is restricted too, and not as a courtesy.** The architect is the
 only role besides the manager that reaches the owner. An unfiltered inbox there rebuilds
@@ -230,6 +232,81 @@ manager carries it into the work. A "no" on a decision is more useful than a "no
 outcome, because it names the thinking rather than the result.
 
 ---
+
+## The Scribe — owner decision, 20 August 2026
+
+> *"it would exclusively have finance and wellbeing... it would be adaptive to only what
+> the model can handle otherwise"* and, in the same breath, *"I want the free model to do
+> actual work should all my subscriptions hit the weekly or session caps."*
+
+The second sentence is the reason the role exists. **Claude Code is capped weekly and Codex
+runs on a subscription; a model on this machine has no cap at all.** Without a tier that
+keeps turning, the workspace stops the moment the paid ones are spent — and the owner is the
+one who finds out.
+
+So the Scribe is a **continuity tier**, not a cheaper worker. It is asked to do the work that
+still needs doing when nothing better is available.
+
+### It ships able to do nothing, and that is the design
+
+`scribe_capabilities` is **empty on delivery**. An unmeasured job is **refused, not
+attempted**. The obvious thing was to seed it with the jobs a 4B ought to manage — and a
+capability list written from expectation is a record of predictions wearing a measurement's
+clothing. It grows one way only: something scored the job against an oracle **it did not
+supply**, and `POST /api/team/scribe/measure` refuses a score with no named oracle and no
+sample size.
+
+Three properties follow from that, and each exists because of a failure already recorded here:
+
+- **Measurements expire after 45 days.** `gpt-oss` silently stopped honouring JSON schemas
+  between releases. An old score is a historical fact, not a current capability.
+- **A failed measurement is kept, not deleted.** The first row in the table is
+  `team-manager-verdict`, scored **0.5 against a floor of 0.8** — see below. Re-measure to
+  change it; **do not lower the floor to clear it.**
+- **Every attempt is recorded, refusals included.** A table holding only successes cannot
+  tell *ran and wrote nothing* from *never ran*, and this tier runs unattended by design.
+
+### Why it is not the Team Manager
+
+The owner asked whether the local model could hold the manager's seat. It was **tested rather
+than argued about**, on the manager's own highest-value act: rejecting a false claim before it
+reached him.
+
+| Run | Evidence | Verdict |
+|---|---|---|
+| 1 | **contradicts** the claim | REJECT |
+| 2 | **supports** the claim | REJECT |
+
+Same question, inverted evidence, identical verdict and near-identical wording. **A verdict
+that does not move with the evidence carries no information** — and it is worse than
+rubber-stamping, because it looks like scrutiny. Recorded as decision #21 with both
+transcripts.
+
+### Custody is not authorship
+
+| Module | Read | Write | Why |
+|---|---|---|---|
+| **finance** | yes | **yes** | Local-only was always the rule, never *no model*. Nothing is disclosed by a model that cannot reach the network. |
+| **wellbeing** | yes | **no** | **Fixed policy, unchanged by this decision:** nothing there may be model-generated — no prose, no pattern, no score. |
+
+Exclusive custody means **no other model may see these**. It does not mean this one may write
+in both. If the wellbeing line is ever relaxed it is relaxed by the owner in writing, in
+`CLAUDE.md` — and not by a capability being measured as accurate. **Accuracy was never the
+objection.**
+
+### Caps are declared, never detected
+
+Nothing in this process can see an upstream quota. A cap-detector that cannot look reports
+*not capped* in exactly the same words as one that looked and found nothing — so a cap is
+asserted by the owner or by a session that hit one:
+
+```
+POST /api/team/scribe/cap    {"tier":"claude","until":null,"note":"weekly limit"}
+POST /api/team/scribe/uncap  {"tier":"claude"}
+```
+
+An **undeclared cap leaves the Scribe idle**, which is the safe direction to be wrong in.
+
 
 ## The rules that are not negotiable
 

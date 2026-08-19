@@ -8,6 +8,8 @@
 //   - a project with nothing open, versus a project whose tracker could not be read
 //   - a status the tracker asserted, versus one this dashboard inferred
 //   - the count of things open, versus the count of things held
+import { responderHTML, wireResponders } from '/panels/team/respond.js';
+
 const api = async (p, opts) => {
   const r = await fetch(`/api/board${p}`, {
     ...opts,
@@ -21,7 +23,20 @@ const esc = (s) => String(s == null ? '' : s)
   .replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
 
 let root = null;
-let state = { filter: 'all', data: null };
+let state = { filter: 'all', data: null, responses: [] };
+
+// Grouped once per render. The responder is the team module's -- one implementation for
+// every item the owner can see, rather than a reply box per panel.
+function byTarget(list) {
+  const m = new Map();
+  for (const r of list || []) {
+    const k = r.kind + '|' + r.ref;
+    if (!m.has(k)) m.set(k, []);
+    m.get(k).push(r);
+  }
+  return m;
+}
+let RESP = new Map();
 
 function sourceCard(s) {
   // ABSENCE AND FAILURE MUST NOT LOOK THE SAME. A tracker that could not be read renders as a
@@ -69,7 +84,8 @@ function itemRow(i) {
     <td class="bd-title">${esc(i.title)}
       <span class="bd-basis" title="how this status was decided">${esc(basis)}</span></td>
     <td class="bd-proj">${esc(i.project)}</td>
-  </tr>`;
+  </tr>
+  <tr class="bd-rrow"><td colspan="4">${responderHTML('board', i.ref, i.title, RESP.get('board|' + i.ref))}</td></tr>`;
 }
 
 function backlogRow(b) {
@@ -80,7 +96,8 @@ function backlogRow(b) {
     <td class="bd-title">${esc(b.title)}
       <span class="bd-basis">${esc(b.owner === 'YOU' ? 'waiting on you' : `for ${b.owner}`)}${b.cluster ? ` · ${esc(b.cluster)}` : ''}</span></td>
     <td class="bd-proj">${esc(b.project || '—')}</td>
-  </tr>`;
+  </tr>
+  <tr class="bd-rrow"><td colspan="4">${responderHTML('todo', b.id, b.title, RESP.get('todo|' + b.id))}</td></tr>`;
 }
 
 function render() {
@@ -131,6 +148,7 @@ function render() {
       <button class="bd-refresh">Re-read the trackers</button>
     </section>`;
 
+  wireResponders(root, load);
   root.querySelectorAll('.bd-tab').forEach((b) => b.addEventListener('click', () => {
     state.filter = b.dataset.f;
     render();
@@ -149,6 +167,14 @@ function render() {
 async function load() {
   try {
     state.data = await api('/');
+    try {
+      const r = await fetch('/api/team/responses', { headers: { 'x-mc-by': 'you' } });
+      RESP = byTarget(r.ok ? (await r.json()).responses : []);
+    } catch {
+      // Could not read the replies. The board still renders; the reply boxes just start empty,
+      // which is honest — an empty box is "none shown", not "none given".
+      RESP = new Map();
+    }
     render();
   } catch (e) {
     root.innerHTML = `<section class="panel bd-panel"><h1>The board</h1>

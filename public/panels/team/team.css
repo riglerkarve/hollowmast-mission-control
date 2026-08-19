@@ -130,3 +130,39 @@
   .tm-gap { grid-template-columns:1fr; gap:7px; }
   .tm-kind { justify-self:start; padding:2px 8px; }
 }
+
+/* ---- the responder. Shared by this panel and the board; styles live here because this is
+   the module that owns team_responses. ---- */
+.rs { margin-top: 10px; }
+.rs-open-btn { background: transparent; border: 1px solid var(--border-strong); color: var(--muted);
+  border-radius: var(--r-btn); padding: 4px 10px; font: inherit; font-size: 11.5px; cursor: pointer; }
+.rs-open-btn:hover { border-color: var(--accent); color: var(--ink); }
+.rs-form { margin-top: 9px; display: flex; flex-direction: column; gap: 8px; }
+.rs-verdicts { display: flex; flex-wrap: wrap; gap: 6px; }
+.rs-vbtn { background: var(--card); border: 1px solid var(--border-strong); color: var(--muted);
+  border-radius: var(--r-btn); padding: 4px 11px; font: inherit; font-size: 12px; cursor: pointer; }
+.rs-vbtn.on { border-color: var(--accent); color: var(--accent-text); background: var(--accent-soft); }
+.rs-text { background: var(--bg); color: var(--ink); border: 1px solid var(--border-strong);
+  border-radius: var(--r-btn); padding: 8px 10px; font: inherit; font-size: 13px; resize: vertical; width: 100%; }
+.rs-actions { display: flex; gap: 10px; align-items: center; flex-wrap: wrap; }
+.rs-send { background: var(--accent-soft); color: var(--accent-text); border: 1px solid var(--accent);
+  border-radius: var(--r-btn); padding: 6px 13px; font: inherit; font-size: 12.5px; cursor: pointer; }
+.rs-send:disabled { opacity: .55; cursor: default; }
+.rs-msg { font-size: 12px; color: var(--muted); }
+
+/* A reply already given is shown back, with whether anyone acted on it. Without that he
+   cannot tell a queue being worked from a queue being ignored, and repeats himself into it. */
+.rs-prev { display: flex; flex-direction: column; gap: 7px; margin-bottom: 9px; }
+.rs-prev-one { border-left: 2px solid var(--tm-warn); padding-left: 10px; }
+.rs-prev-one.rs-done { border-left-color: var(--border-strong); }
+.rs-prev-head { margin: 0 0 3px; display: flex; gap: 8px; align-items: center; flex-wrap: wrap;
+  font-family: var(--mono); font-size: 10.5px; }
+.rs-v { text-transform: uppercase; letter-spacing: .05em; border: 1px solid currentColor;
+  border-radius: 3px; padding: 0 5px; color: var(--muted); }
+.rs-v-agree { color: var(--accent-text); }
+.rs-v-disagree, .rs-v-drop { color: var(--tm-warn); }
+.rs-when { color: var(--muted); }
+.rs-state { color: var(--muted); }
+.rs-open { color: var(--tm-warn); }
+.rs-prev-body { margin: 0; font-size: 13px; color: var(--ink); line-height: 1.5; }
+.rs-note { margin: 4px 0 0; font-size: 12px; color: var(--muted); }

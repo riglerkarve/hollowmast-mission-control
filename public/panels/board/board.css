@@ -78,3 +78,8 @@
 @media (max-width: 700px) {
   .bd-heads { grid-template-columns: 1fr 1fr; }
 }
+
+/* The responder gets its own full-width row under each item: inside a <td> it would fight the
+   column widths, and the board's value is that the columns line up. */
+.bd-rrow > td { border-top: none; padding: 0 10px 10px; }
+.bd-rrow .rs { margin-top: 0; }

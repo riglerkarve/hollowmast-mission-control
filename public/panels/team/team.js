@@ -14,6 +14,8 @@
 // GET /api/team/report, which is the same function `tools/shift-report.cjs` renders its
 // markdown from. A panel that recomputed "what the process missed" would agree with the tool
 // until one of them was edited, and then disagree without either erroring.
+import { responderHTML, wireResponders } from '/panels/team/respond.js';
+
 const api = async (p, opts) => {
   const r = await fetch(`/api/team${p}`, {
     ...opts,
@@ -93,7 +95,7 @@ const FIELDS = [
   ['next', 'Next'],
 ];
 
-function handoverHTML(h) {
+function handoverHTML(h, rs) {
   const stated = FIELDS.filter(([k]) => h[k]);
   const missing = ['done', 'blocked', 'next'].filter((k) => !h[k]);
   return `<details class="tm-ho"${h.needs_owner && !h.owner_resolved_at ? ' open' : ''}>
@@ -112,12 +114,27 @@ function handoverHTML(h) {
           ${k === 'needs_owner' && h.owner_resolved_at ? `<p class="tm-resolved">Resolved without the owner by ${esc(h.owner_resolved_by)} — ${esc(h.owner_resolved_note)}</p>` : ''}
         </div>`).join('')}
       ${missing.length ? `<p class="tm-notstated">Not stated: ${missing.join(', ')} — which is different from "nothing to report".</p>` : ''}
+      ${rs('handover', h.id, `${h.title} — ${h.shift}`)}
     </div>
   </details>`;
 }
 
+// Grouped once, not filtered per row: with 9 handovers and 12 decisions that is 20-plus
+// passes over the same array for nothing.
+function byTarget(list) {
+  const m = new Map();
+  for (const r of list || []) {
+    const k = r.kind + "|" + r.ref;
+    if (!m.has(k)) m.set(k, []);
+    m.get(k).push(r);
+  }
+  return m;
+}
+
 function fullHTML(d) {
   const c = d.counts;
+  const R = byTarget(d.responses);
+  const rs = (kind, ref, label) => responderHTML(kind, ref, label, R.get(kind + "|" + ref));
   const answered = d.steering.filter((s) => s.answer);
   const verdicts = d.plans.filter((p) => p.verdict);
 
@@ -144,7 +161,7 @@ function fullHTML(d) {
 
     <h2 class="tm-h2">Handovers <span class="tm-n">${d.handovers.length}</span></h2>
     ${d.handovers.length
-    ? d.handovers.map(handoverHTML).join('')
+    ? d.handovers.map((h) => handoverHTML(h, rs)).join('')
     : '<p class="tm-empty">No handover was filed for this shift. That is not a quiet shift — it is no report at all, and the two look identical from here.</p>'}
 
     <h2 class="tm-h2">What the process missed <span class="tm-n">${d.gaps.length}</span></h2>
@@ -155,6 +172,7 @@ function fullHTML(d) {
           <h4>${esc(g.head)}</h4>
           ${g.names.length ? `<p class="tm-names">${esc(g.names.join(', '))}</p>` : ''}
           ${g.why ? `<p>${esc(g.why)}</p>` : ''}
+          ${rs('gap', g.kind, g.head)}
         </div>
       </div>`).join('')
     : '<p class="tm-clean">Nothing. Every handover read, every plan resolved, every owner-facing item triaged.</p>'}
@@ -166,6 +184,7 @@ function fullHTML(d) {
         <p class="tm-attr"><span class="who">You</span><span class="role">owner</span><span class="t">${esc(hm(s.answered_at))}</span></p>
         <dl><dt>Decided</dt><dd>${esc(s.answer)}</dd>
         <dt>Manager recommended</dt><dd>${esc(s.recommend)}</dd></dl>
+        ${rs('steering', s.id, s.question.slice(0, 90))}
       </article>`).join('')}
     ${d.decisions.map((x) => `
       <article class="tm-rec">
@@ -177,6 +196,7 @@ function fullHTML(d) {
           ${x.revisit_when ? `<dt>Revisit when</dt><dd>${esc(x.revisit_when)}</dd>` : ''}
           ${x.evidence ? `<dt>Evidence</dt><dd class="mono">${esc(x.evidence)}</dd>` : ''}
         </dl>
+        ${rs('decision', x.id, x.decision)}
       </article>`).join('')}
     ${verdicts.map((p) => `
       <article class="tm-rec">
@@ -217,6 +237,8 @@ function render() {
   }
   root.innerHTML = fullHTML(state.data);
   wireSteering();
+  // Delegated once from the panel root, so a re-render cannot orphan handlers.
+  wireResponders(root, load);
   const sel = root.querySelector('.tm-shift');
   if (sel) sel.addEventListener('change', () => load(sel.value));
 }

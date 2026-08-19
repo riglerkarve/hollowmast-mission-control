@@ -209,6 +209,41 @@ db.migrate('team', [
   (d) => {
     d.exec('ALTER TABLE team_plans ADD COLUMN superseded_by INTEGER REFERENCES team_plans(id)');
   },
+
+  // 5. THE OWNER CAN ANSWER ANY ITEM, not just a steering question.
+  //
+  // Owner instruction, 19 Aug: "Allow me to respond to each item on the reports, bugs etc on
+  // the dashboard." Until now his only reply channel was the steering card — one question a
+  // day, chosen by the manager. Everything else he read was read-only: a bug, a handover, a
+  // decision, a gap. He could form a view on any of it and had nowhere to put it.
+  //
+  // KEYED BY (kind, ref) FOR THE SAME REASON team_assignments IS. The things he responds to
+  // live in different stores — board_items mirrors a file this repo does not own, todo_items
+  // is the backlog, handovers and decisions are here — and a response table per store is how
+  // the same reply ends up in two places. One table, one channel, one thing for the manager
+  // to read.
+  //
+  // `actioned_at` is what stops this being a comment box. A response nobody picks up is the
+  // owner spending attention into a void, which is the exact failure this structure exists to
+  // prevent, running in the opposite direction. Unactioned responses are a reported gap.
+  (d) => {
+    d.exec(`
+      CREATE TABLE team_responses (
+        id          INTEGER PRIMARY KEY AUTOINCREMENT,
+        at          TEXT NOT NULL,
+        shift       TEXT NOT NULL,
+        kind        TEXT NOT NULL,     -- board | todo | handover | decision | plan | gap
+        ref         TEXT NOT NULL,     -- B054 | M73 | handover id | decision id | gap kind
+        label       TEXT,              -- what the item said, so the reply reads on its own later
+        response    TEXT NOT NULL,
+        verdict     TEXT,              -- agree | disagree | drop | later  (optional, his shorthand)
+        actioned_at TEXT,
+        actioned_by TEXT,
+        action_note TEXT
+      )`);
+    d.exec('CREATE INDEX team_responses_target ON team_responses (kind, ref)');
+    provenance.addColumn(d, 'team_responses');
+  },
 ]);
 
 // A shift label both a human and a script can produce without consulting anything.
@@ -511,6 +546,11 @@ function reportFor(shift) {
   const openQ = steering.filter((x) => !x.answer);
   const reported = new Set(handovers.map((h) => h.title));
   const silent = roster.filter((r) => !reported.has(r.title));
+  // Responses are NOT filtered to this shift: a reply the owner left yesterday that nobody
+  // actioned is still open today, and scoping it to the shift would quietly retire it.
+  const openResponses = db.prepare(`SELECT * FROM team_responses WHERE actioned_at IS NULL ORDER BY id`).all();
+  const allResponses = db.prepare(`SELECT * FROM team_responses ORDER BY id DESC LIMIT 200`).all();
+
   const badAttrib = steering.filter((x) => x.answer && (!x.by_whom || x.by_whom === 'unknown'));
 
   // THE OWNER KEPT ALL SIX ON 19 AUG, having been offered the chance to delete any he did not
@@ -544,6 +584,14 @@ function reportFor(shift) {
       'Silence and having nothing to say look identical from here, and the second is rare.'],
     ['unattributed', badAttrib.length, `${badAttrib.length} answered question(s) attributed to unknown`, [],
       'This is the one table holding the owner\'s own judgement; an unattributed row cannot be told from a session answering for him.'],
+    // THE LOOP RUNNING THE OTHER WAY. Every other gap here is the team failing to reach the
+    // owner. This one is the owner reaching the team and nobody picking it up — attention
+    // spent into a void, which is the same failure with the arrow reversed and is the easier
+    // one to miss, because a reply that was read and ignored leaves exactly the same row as
+    // one that was never opened.
+    ['unactioned', openResponses.length, `${openResponses.length} of the owner's responses have not been actioned`,
+      openResponses.slice(0, 8).map((r) => `${r.kind} ${r.ref}`),
+      'He replied and nothing came back. A response with no action is worse than no response, because he has no way to tell which.'],
   ].filter((g) => g[1] > 0).map(([kind, n, head, names, why]) => ({ kind, n, head, names, why }));
 
   return {
@@ -554,6 +602,7 @@ function reportFor(shift) {
     decisions,
     assignments,
     roster,
+    responses: allResponses,
     gaps,
     counts: {
       handovers: handovers.length,
@@ -571,6 +620,51 @@ function reportFor(shift) {
 
 router.get('/shifts', (req, res) => res.json({ shifts: shifts() }));
 router.get('/report', (req, res) => res.json(reportFor(req.query.shift)));
+
+// -------------------------------------------------------------------------- responses
+
+const VERDICTS = ['agree', 'disagree', 'drop', 'later'];
+
+router.post('/respond', express.json(), (req, res) => {
+  const b = req.body || {};
+  if (!b.kind || !b.ref) return res.status(400).json({ error: 'kind and ref are required — a response with no target cannot be acted on' });
+  if (!b.response || !String(b.response).trim()) return res.status(400).json({ error: 'response is required' });
+  if (b.verdict && !VERDICTS.includes(b.verdict)) return res.status(400).json({ error: `verdict must be one of ${VERDICTS.join(', ')}` });
+  const info = db.prepare(`
+    INSERT INTO team_responses (at, shift, kind, ref, label, response, verdict, by_whom)
+    VALUES (?,?,?,?,?,?,?,?)`)
+    .run(new Date().toISOString(), b.shift || shiftLabel(), b.kind, String(b.ref),
+      b.label || null, String(b.response).trim(), b.verdict || null, req.by || 'unknown');
+  res.json({ ok: true, id: info.lastInsertRowid });
+});
+
+// Every response, or the ones on one item. The panel asks for all of them once and groups
+// them itself rather than making a request per row.
+router.get('/responses', (req, res) => {
+  const { kind, ref, open } = req.query;
+  const where = [];
+  const args = [];
+  if (kind) { where.push('kind = ?'); args.push(kind); }
+  if (ref) { where.push('ref = ?'); args.push(String(ref)); }
+  if (open === '1') where.push('actioned_at IS NULL');
+  res.json({
+    responses: db.prepare(`SELECT * FROM team_responses ${where.length ? `WHERE ${where.join(' AND ')}` : ''} ORDER BY id DESC LIMIT 300`).all(...args),
+  });
+});
+
+// The manager marks a response actioned, with a note saying what was done about it. The note
+// is required for the same reason a verdict is: "actioned" with no account of how is
+// indistinguishable from someone clearing their queue.
+router.post('/responses/:id/actioned', express.json(), (req, res) => {
+  const { by, note } = req.body || {};
+  if (!by || !note) return res.status(400).json({ error: 'by and note are both required — "actioned" with no account of what was done is a cleared queue, not a closed loop' });
+  const row = db.prepare('SELECT * FROM team_responses WHERE id = ?').get(req.params.id);
+  if (!row) return res.status(404).json({ error: 'no such response' });
+  if (row.actioned_at) return res.status(409).json({ error: `already actioned by ${row.actioned_by}` });
+  db.prepare('UPDATE team_responses SET actioned_at = ?, actioned_by = ?, action_note = ? WHERE id = ?')
+    .run(new Date().toISOString(), by, note, row.id);
+  return res.json({ ok: true });
+});
 
 // --------------------------------------------------------------------------- decisions
 

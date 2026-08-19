@@ -78,3 +78,12 @@ Thumbs.db
 # accidentally committed in the window between creating it and remembering to ignore it.
 data/honeygain-token.txt
 data/*-token.txt
+
+# The HOLLOWMAST dash proxy password. Ignored before the file exists.
+data/dash-password.txt
+
+# Credentials for the stats sources, ignored BEFORE they can exist. The order is the safety
+# property: the dangerous window is the minute between creating a credential file and
+# remembering to ignore it, and that window is how a key gets committed for good.
+data/reports-admin-key.txt
+data/ga-service-account.json

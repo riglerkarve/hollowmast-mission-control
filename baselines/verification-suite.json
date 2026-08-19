@@ -3,6 +3,7 @@
   "generatedBy": "tools/verify-suite.cjs",
   "contract": [
     { "tool": "check-claim.cjs", "mode": "manual", "args": [], "reason": "requires a specific claim and target path", "temporaryDatabase": false },
+    { "tool": "concurrency-surface-audit.cjs", "mode": "safe", "args": [], "reason": null, "temporaryDatabase": false },
     { "tool": "endpoint-shapes.cjs", "mode": "manual", "args": [], "reason": "probes the running server and records access-log reads", "temporaryDatabase": false },
     { "tool": "figure-ownership.cjs", "mode": "manual", "args": [], "reason": "compares live API data and records access-log reads", "temporaryDatabase": false },
     { "tool": "gate-check.cjs", "mode": "manual", "args": [], "reason": "deliberately creates, revokes, and expires live gate state", "temporaryDatabase": false },

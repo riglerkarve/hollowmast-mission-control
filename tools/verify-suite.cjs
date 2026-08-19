@@ -29,6 +29,7 @@ const CHECK_NAME = /(?:check|audit|verify|integrity|scan)|^(?:migrate-from-zero|
 // UNCLASSIFIED until somebody decides whether it belongs in unattended execution.
 const checks = {
   'check-claim.cjs': { mode: 'manual', why: 'requires a specific claim and target path' },
+  'concurrency-surface-audit.cjs': { mode: 'safe', args: [] },
   'endpoint-shapes.cjs': { mode: 'manual', why: 'probes the running server and records access-log reads' },
   'figure-ownership.cjs': { mode: 'manual', why: 'compares live API data and records access-log reads' },
   'gate-check.cjs': { mode: 'manual', why: 'deliberately creates, revokes, and expires live gate state' },

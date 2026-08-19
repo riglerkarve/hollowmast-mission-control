@@ -80,7 +80,7 @@ function itemRow(i) {
   }[i.status_basis] || i.status_basis;
   return `<tr>
     <td class="bd-ref">${esc(i.ref)}</td>
-    <td>${sev}<span class="bd-kind">${esc(i.kind)}</span></td>
+    <td>${sev}<span class="bd-kind">${esc(i.kind)}</span>${i.dispatch ? `<span class="bd-kind" title="${esc(i.dispatch.why)}">${esc(i.dispatch.model)} · ${esc(i.dispatch.effort)}</span>` : ''}</td>
     <td class="bd-title">${esc(i.title)}
       <span class="bd-basis" title="how this status was decided">${esc(basis)}</span></td>
     <td class="bd-proj">${esc(i.project)}</td>
@@ -92,7 +92,7 @@ function backlogRow(b) {
   return `<tr>
     <td class="bd-ref">${esc(b.id)}</td>
     <td><span class="bd-sev bd-${esc(b.priority)}">${esc(b.priority)}</span>
-        <span class="bd-kind">${esc(b.kind || 'untriaged')}</span></td>
+        <span class="bd-kind">${esc(b.kind || 'untriaged')}</span>${b.dispatch ? `<span class="bd-kind" title="${esc(b.dispatch.why)}">${esc(b.dispatch.model)} · ${esc(b.dispatch.effort)}</span>` : ''}</td>
     <td class="bd-title">${esc(b.title)}
       <span class="bd-basis">${esc(b.owner === 'YOU' ? 'waiting on you' : `for ${b.owner}`)}${b.cluster ? ` · ${esc(b.cluster)}` : ''}</span></td>
     <td class="bd-proj">${esc(b.project || '—')}</td>

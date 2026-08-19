@@ -27,6 +27,7 @@ const path = require('node:path');
 const db = require('../db');
 const provenance = require('../provenance');
 const todo = require('./todo');
+const { dispatch } = require('../dispatch');
 const { SOURCES, importAll } = require('../trackers');
 
 const router = express.Router();
@@ -96,17 +97,22 @@ function summary() {
     SELECT b.* FROM board_imports b
       JOIN (SELECT source, MAX(id) id FROM board_imports GROUP BY source) m ON m.id = b.id`).all();
 
+  // Each item carries its recommended agent, model and effort -- DERIVED here, never stored.
+  // A stored recommendation goes stale the moment the item is re-prioritised or re-scoped,
+  // and a field the owner has to fill in is the surface-to-feed the workspace gate rejects.
+  const withDispatch = (rows) => rows.map((r) => ({ ...r, dispatch: dispatch(r) }));
+
   let backlog = [];
   let backlogError = null;
   try {
-    backlog = todo.openForBoard();
+    backlog = withDispatch(todo.openForBoard());
   } catch (e) {
     // COULD NOT LOOK is not the same as nothing open. An empty backlog on a broken accessor
     // would render as "all clear" on the one screen that exists to prevent that.
     backlogError = String((e && e.message) || e).slice(0, 200);
   }
 
-  const openItems = items.filter((i) => i.status === 'open' || i.status === 'unknown');
+  const openItems = withDispatch(items.filter((i) => i.status === 'open' || i.status === 'unknown'));
 
   // Every project that appears anywhere, so a project with zero open items is still listed —
   // "nothing open on thin-air" and "thin-air is not being read" must look different.

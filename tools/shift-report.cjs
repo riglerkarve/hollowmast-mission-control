@@ -32,7 +32,11 @@ const team = require('../server/routes/team');
 
 const argv = process.argv.slice(2);
 const arg = (n) => { const i = argv.indexOf(`--${n}`); return i >= 0 ? argv[i + 1] : null; };
-const SHIFT = arg('shift') || team.shiftLabel();
+// WHICH SHIFT IS NOT DECIDED HERE EITHER. This read `arg('shift') || team.shiftLabel()`, so
+// when the clock rolled to evening the tool generated an empty evening report while the API,
+// which had just been taught to default to the latest shift WITH activity, returned the
+// afternoon. Two owners for "which shift", disagreeing within a minute of the fix landing.
+// The module decides; this passes through whatever was asked for and reads the answer back.
 const OUT = arg('out');
 
 const L = [];
@@ -42,10 +46,11 @@ const p = (s = '') => L.push(s);
 // reader; the panel became a second reader, and two readers deriving the same absences from
 // the same tables agree right up until one is edited. `team.reportFor` is the one owner, and
 // this file only renders it.
-const R = team.reportFor(SHIFT);
+const R = team.reportFor(arg('shift'));
 const {
   handovers, plans, steering, decisions, assignments, roster,
 } = R;
+const SHIFT = R.shift;
 
 p(`# Shift report — ${SHIFT}`);
 p();

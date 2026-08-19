@@ -195,6 +195,20 @@ db.migrate('team', [
       )`);
     provenance.addColumn(d, 'team_decisions');
   },
+
+  // 4. A plan can be SUPERSEDED, and until this existed that looked identical to a stall.
+  //
+  // Reported by another session and reproduced here: plan #3 was drafted 15:31 and neither
+  // confirmed nor returned, so the report called it "drafted, never put to the manager". Plan
+  // #4's own opening line is "revision of id 3, folding in the answer to steering #2", drafted
+  // three minutes later and confirmed four minutes after that. It was replaced, not abandoned.
+  //
+  // Supersession and stalling produce IDENTICAL NULLS in confirmed_at and returned_at. The
+  // report was crying wolf on a plan that had been correctly handled, which is the failure
+  // that gets a checker switched off.
+  (d) => {
+    d.exec('ALTER TABLE team_plans ADD COLUMN superseded_by INTEGER REFERENCES team_plans(id)');
+  },
 ]);
 
 // A shift label both a human and a script can produce without consulting anything.
@@ -340,6 +354,18 @@ router.patch('/plan/:id', express.json(), (req, res) => {
   return res.json({ ok: true, plan: db.prepare('SELECT * FROM team_plans WHERE id = ?').get(plan.id) });
 });
 
+// Mark a draft as replaced by a later plan. This is the supervisor's to set — it is the only
+// role that knows whether it revised a plan or abandoned it, and both leave the same nulls.
+router.post('/plan/:id/superseded-by/:newId', express.json(), (req, res) => {
+  const old = db.prepare('SELECT * FROM team_plans WHERE id = ?').get(req.params.id);
+  const neu = db.prepare('SELECT * FROM team_plans WHERE id = ?').get(req.params.newId);
+  if (!old || !neu) return res.status(404).json({ error: 'no such plan' });
+  if (neu.id <= old.id) return res.status(400).json({ error: 'a plan can only be superseded by a LATER one' });
+  if (old.confirmed_at) return res.status(409).json({ error: 'that plan was confirmed — it was acted on, not replaced' });
+  db.prepare('UPDATE team_plans SET superseded_by = ? WHERE id = ?').run(neu.id, old.id);
+  return res.json({ ok: true });
+});
+
 router.get('/plan', (req, res) => {
   res.json({ plans: db.prepare('SELECT * FROM team_plans ORDER BY id DESC LIMIT 20').all() });
 });
@@ -441,7 +467,12 @@ function shifts() {
 }
 
 function reportFor(shift) {
-  const s = shift || shiftLabel();
+  // DEFAULTS TO THE LATEST SHIFT THAT HAS ANYTHING IN IT, not to the clock. Caught at 18:00
+  // today: the label rolled to `-evening`, the report came back empty, and an empty report
+  // reads as "the team did nothing" rather than "this shift has not started". The first is a
+  // damning claim about people; the second is a timestamp. They must not render the same.
+  const latest = shifts()[0];
+  const s = shift || (latest && latest.shift) || shiftLabel();
   const handovers = db.prepare('SELECT * FROM team_handovers WHERE shift = ? ORDER BY at').all(s);
   const plans = db.prepare('SELECT * FROM team_plans WHERE shift = ? ORDER BY id').all(s);
   const steering = db.prepare('SELECT * FROM team_steering WHERE shift = ? ORDER BY id').all(s)
@@ -451,9 +482,32 @@ function reportFor(shift) {
   const roster = db.prepare('SELECT * FROM team_sessions WHERE retired_at IS NULL').all();
 
   const unread = handovers.filter((h) => !h.read_at);
-  const drafts = plans.filter((x) => !x.confirmed_at && !x.returned_at);
   const confirmedNoWork = plans.filter((x) => x.confirmed_at && !assignments.some((a) => a.plan_id === x.id));
-  const untriaged = handovers.filter((h) => h.needs_owner && !h.owner_resolved_at);
+
+  // A DRAFT WITH A LATER PLAN BEHIND IT IS AMBIGUOUS, NOT STALLED. `superseded_by` settles it
+  // when set; when it is not, a draft followed by another plan in the same shift is reported
+  // as "superseded or abandoned, nothing records which" rather than asserted to be a stall.
+  // Naming the ambiguity is the honest move — picking one is how a report loses its reader.
+  const drafts = plans.filter((x) => !x.confirmed_at && !x.returned_at && !x.superseded_by);
+  const maybeSuperseded = drafts.filter((x) => plans.some((y) => y.id > x.id));
+  const trulyStalled = drafts.filter((x) => !plans.some((y) => y.id > x.id));
+
+  // OWNER ITEMS ARE COUNTED AS DISTINCT ASKS, NOT AS HANDOVERS. A handover can be re-filed but
+  // not amended, so a session with a standing ask re-states it verbatim every shift end.
+  // Measured: the Coding Agent filed three handovers within two minutes whose owner blocks are
+  // 8-for-8 identical lines, and the Website Agent two that are 4-for-4. Counting rows made
+  // "6 untriaged" out of THREE real asks — doubling the one gap the owner said he cared most
+  // about, and inflating a queue the manager is meant to work through.
+  const openOwner = handovers.filter((h) => h.needs_owner && !h.owner_resolved_at);
+  const askKey = (s) => String(s).replace(/\s+/g, ' ').trim().toLowerCase().slice(0, 400);
+  const distinctAsks = new Map();
+  for (const h of openOwner) {
+    const k = `${h.title}|${askKey(h.needs_owner)}`;
+    // Keep the LATEST re-filing, because that is the one whose wording the session stands by.
+    distinctAsks.set(k, h);
+  }
+  const untriaged = [...distinctAsks.values()];
+  const refilings = openOwner.length - untriaged.length;
   const openQ = steering.filter((x) => !x.answer);
   const reported = new Set(handovers.map((h) => h.title));
   const silent = roster.filter((r) => !reported.has(r.title));
@@ -467,17 +521,25 @@ function reportFor(shift) {
     ['unread', unread.length, `${unread.length} of ${handovers.length} handovers never read`,
       unread.map((h) => h.title),
       'A handover nobody reads is a shift that reported into nothing, and the session that wrote it has no way to know.'],
-    ['hanging', drafts.length, `${drafts.length} plan(s) drafted, never put to the manager`,
-      drafts.map((d) => `#${d.id}`),
-      'Neither confirmed nor returned, so nothing can be delegated against them and nothing marks them abandoned.'],
+    ['hanging', trulyStalled.length, `${trulyStalled.length} plan(s) drafted, never put to the manager`,
+      trulyStalled.map((d) => `#${d.id}`),
+      'Neither confirmed nor returned, and nothing came after them, so nothing can be delegated against them and nothing marks them abandoned.'],
+    ['unresolved', maybeSuperseded.length, `${maybeSuperseded.length} draft(s) left open with a later plan behind them`,
+      maybeSuperseded.map((d) => `#${d.id}`),
+      'Superseded or abandoned — nothing records which, because both leave confirmed_at and returned_at null. Set superseded_by to settle it.'],
     ['undelegated', confirmedNoWork.length, `${confirmedNoWork.length} confirmed plan(s) with no work delegated`,
       confirmedNoWork.map((d) => `#${d.id}`),
       'The chain ran handover to plan to confirm, and stopped. From every other view this looks identical to success.'],
-    ['untriaged', untriaged.length, `${untriaged.length} owner-facing item(s) untriaged`,
+    ['untriaged', untriaged.length, `${untriaged.length} distinct owner-facing ask(s) untriaged`,
       untriaged.map((h) => h.title),
-      'These are the only route a worker has to the owner. Until the manager triages them they reach nobody.'],
+      `These are the only route a worker has to the owner. Until the manager triages them they reach nobody.${refilings ? ` Counted as DISTINCT ASKS: ${refilings} further handover(s) re-state one of these verbatim, because a handover can be re-filed but not amended.` : ''}`],
     ['unanswered', openQ.length, `${openQ.length} steering question(s) waiting on the owner`, [], ''],
-    ['silent', silent.length, `${silent.length} session(s) on the roster filed nothing`,
+    // SILENCE ONLY MEANS SOMETHING ONCE A SHIFT HAS STARTED REPORTING. With zero handovers
+    // filed, every session on the roster is "silent" by construction — the evening shift
+    // opened with a plan and no handovers and the report accused all ten of filing nothing,
+    // which is a damning sentence about people generated by the clock. A shift that has not
+    // reported yet is a timestamp; a shift where some reported and others did not is a gap.
+    ['silent', handovers.length ? silent.length : 0, `${silent.length} session(s) on the roster filed nothing`,
       silent.map((x) => x.title),
       'Silence and having nothing to say look identical from here, and the second is rare.'],
     ['unattributed', badAttrib.length, `${badAttrib.length} answered question(s) attributed to unknown`, [],
@@ -495,6 +557,8 @@ function reportFor(shift) {
     gaps,
     counts: {
       handovers: handovers.length,
+      ownerAsks: untriaged.length,
+      ownerRefilings: refilings,
       roster: roster.length,
       plans: plans.length,
       confirmed: plans.filter((x) => x.confirmed_at).length,

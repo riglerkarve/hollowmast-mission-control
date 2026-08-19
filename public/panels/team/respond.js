@@ -60,8 +60,24 @@ export function responderHTML(kind, ref, label, existing) {
 
 // Delegated from one listener on the panel root, so a re-render cannot leave orphaned
 // handlers behind and nothing has to be re-wired per item.
+// THE CALLBACK IS REFRESHED EVERY MOUNT; THE LISTENER IS ATTACHED ONCE. Those are different
+// lifetimes and the first version conflated them: it bailed out entirely when __rsWired was
+// already set, which is true the moment a second panel mounts, because the board and the shift
+// share one #panelRoot. The retained callback then belonged to the FIRST panel, whose
+// unmount() had set its module-level `root` to null — so a send from the second panel was
+// stored on the server and the owner was told "Not sent. Nothing was recorded; try again."
+//
+// Reproduced before fixing: rows went 0 -> 1 on the server while the UI printed that message.
+// A write that succeeds and reports failure is the worst shape available — it is wrong in the
+// direction that makes him do it again, and duplicates are exactly what the response queue
+// must not fill with.
+//
+// Found by Codex on its first review, in a guard I had added specifically to avoid orphaned
+// handlers. The guard was right about the listener and wrong about the callback.
 export function wireResponders(root, onSent) {
-  if (!root || root.__rsWired) return;
+  if (!root) return;
+  root.__rsOnSent = onSent;
+  if (root.__rsWired) return;
   root.__rsWired = true;
 
   root.addEventListener('click', async (ev) => {
@@ -95,6 +111,10 @@ export function wireResponders(root, onSent) {
 
     send.disabled = true;
     msg.textContent = 'Sending…';
+
+    // TWO try BLOCKS, BECAUSE THE TWO FAILURES MEAN OPPOSITE THINGS. One block reported a
+    // refresh error as "Nothing was recorded" while the row was already in the database —
+    // telling him to send again, which is how a response queue fills with duplicates.
     try {
       const r = await fetch('/api/team/respond', {
         method: 'POST',
@@ -108,12 +128,22 @@ export function wireResponders(root, onSent) {
         }),
       });
       if (!r.ok) throw new Error(`${r.status} ${(await r.json().catch(() => ({}))).error || ''}`);
-      // Reload from the server rather than patching the DOM optimistically: a reply that
-      // shows as sent and was not is the one failure this control must not have.
-      if (onSent) await onSent();
     } catch (e) {
+      // Nothing was written. This message is safe to act on.
       send.disabled = false;
       msg.textContent = `Not sent — ${e.message}. Nothing was recorded; try again.`;
+      return;
+    }
+
+    // Saved. Reload from the server rather than patching the DOM optimistically. The callback
+    // is read off the root at CALL time, not from the closure: the closure captures whichever
+    // panel wired the listener first, and that panel outlives its own mount.
+    try {
+      const cb = root.__rsOnSent;
+      if (cb) await cb();
+    } catch (e) {
+      send.disabled = false;
+      msg.textContent = `Saved — but the page could not refresh (${e.message}). Reload to see it. Do NOT send again.`;
     }
   });
 }

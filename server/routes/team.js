@@ -656,8 +656,14 @@ router.get('/responses', (req, res) => {
 // is required for the same reason a verdict is: "actioned" with no account of how is
 // indistinguishable from someone clearing their queue.
 router.post('/responses/:id/actioned', express.json(), (req, res) => {
-  const { by, note } = req.body || {};
-  if (!by || !note) return res.status(400).json({ error: 'by and note are both required — "actioned" with no account of what was done is a cleared queue, not a closed loop' });
+  // TRIMMED, not merely truthy. "   " is a truthy string, so the first version accepted a
+  // whitespace-only note and marked the response actioned with no account of what was done —
+  // clearing the unactioned gap while violating the rule this endpoint exists to enforce.
+  // The `response` field was already trimmed; these two were not, which is the kind of
+  // inconsistency that survives review because both lines read as validation.
+  const by = String((req.body || {}).by || '').trim();
+  const note = String((req.body || {}).note || '').trim();
+  if (!by || !note) return res.status(400).json({ error: 'by and note are both required, and neither may be blank — "actioned" with no account of what was done is a cleared queue, not a closed loop' });
   const row = db.prepare('SELECT * FROM team_responses WHERE id = ?').get(req.params.id);
   if (!row) return res.status(404).json({ error: 'no such response' });
   if (row.actioned_at) return res.status(409).json({ error: `already actioned by ${row.actioned_by}` });

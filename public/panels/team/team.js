@@ -203,6 +203,7 @@ function fullHTML(d) {
         <h3>Plan #${p.id} — ${p.confirmed_at ? 'confirmed' : 'returned'}</h3>
         <p class="tm-attr"><span class="who">${esc(p.confirmed_by || 'the manager')}</span><span class="role">manager</span><span class="t">${esc(hm(p.confirmed_at || p.returned_at))}</span></p>
         <dl><dt>Verdict</dt><dd>${esc(p.verdict)}</dd></dl>
+        ${rs('plan', p.id, `Plan #${p.id} — ${p.shift}`)}
       </article>`).join('')}
 
     <h2 class="tm-h2">Plans <span class="tm-n">${d.plans.length}</span></h2>

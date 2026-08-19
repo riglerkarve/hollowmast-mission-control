@@ -2,7 +2,9 @@
 // only writes the sentence that introduces them.
 //
 //   node scripts/briefing.cjs           generate for today, write to reports/ and the DB
-//   node scripts/briefing.cjs --dry     print it, write nothing
+//   node scripts/briefing.cjs --dry     print a read-only preview from stored data; skips
+//                                       Gmail sync, queued work, the CLAUDE.md stamp and access
+//                                       logging, so the preview may be stale
 //   node scripts/briefing.cjs --date 2026-08-12
 //
 // Descends from income-portfolio/scripts/daily-briefing.mjs and keeps its two best ideas:
@@ -44,6 +46,15 @@
 const fs = require('node:fs');
 const path = require('node:path');
 
+const args = process.argv.slice(2);
+const DRY = args.includes('--dry');
+const dateIdx = args.indexOf('--date');
+const TODAY = dateIdx >= 0 ? args[dateIdx + 1] : new Date().toISOString().slice(0, 10);
+
+// db.js normally records reads of sensitive tables. That is a persistent write, so turn it
+// off before loading the database for a genuinely read-only preview.
+if (DRY) process.env.MC_DISABLE_ACCESS_LOG = '1';
+
 const db = require('../server/db');
 // Provenance: this runs from Task Scheduler with no human and no request, so without
 // this every read it makes is logged 'unknown'. See server/provenance.js.
@@ -74,11 +85,6 @@ const analytics = require('../server/routes/analytics');
 const ROOT = path.join(__dirname, '..');
 const HOST = 'http://127.0.0.1:11434';
 const MODEL = process.env.PROBE_MODEL || 'qwen3.5:9b';
-
-const args = process.argv.slice(2);
-const DRY = args.includes('--dry');
-const dateIdx = args.indexOf('--date');
-const TODAY = dateIdx >= 0 ? args[dateIdx + 1] : new Date().toISOString().slice(0, 10);
 
 const gbp = (p) => `£${(Math.abs(p) / 100).toFixed(2)}`;
 
@@ -338,6 +344,11 @@ async function writeProse(facts) {
 function render(facts, prose) {
   const L = [];
   L.push(`# Briefing — ${facts.date}\n`);
+
+  if (DRY) {
+    L.push('> **Dry run — read-only preview.** Gmail sync, queued work, the CLAUDE.md count stamp, '
+      + 'and database access logging were not run. This uses the current stored data, so it may be stale.\n');
+  }
 
   if (prose.text) L.push(`${prose.text}\n`);
   else L.push(`_(No opening line: the local model was unavailable — ${prose.why}. Every number below is unaffected; they are computed in SQL.)_\n`);
@@ -756,14 +767,28 @@ async function syncGmail() {
   });
 }
 async function main() {
-  await syncGmail();
-  await runWork();
-  stampDocs();               // M57: regenerate the counted blocks in CLAUDE.md            // M43: the queue runs on the same one pass, not a task of its own          // before gatherFacts, so today's figures include today's mail
+  const writesAtStart = DRY ? db.prepare('SELECT total_changes() AS n').get().n : null;
+  if (DRY) {
+    console.log('dry-run: Gmail sync, queued work, CLAUDE.md stamp and database access logging skipped; preview uses stored data and may be stale');
+  } else {
+    await syncGmail();
+    await runWork();
+    stampDocs(); // Run before gatherFacts so the normal daily pass includes its fresh data.
+  }
   const facts = gatherFacts();
   const prose = await writeProse(facts);
   const md = render(facts, prose);
 
-  if (DRY) { console.log(md); return; }
+  if (DRY) {
+    const writes = db.prepare('SELECT total_changes() AS n').get().n - writesAtStart;
+    if (writes !== 0) {
+      console.error(`dry-run: REFUSED to claim read-only; this process made ${writes} SQLite write(s)`);
+      process.exitCode = 1;
+      return;
+    }
+    console.log(md);
+    return;
+  }
 
   const dir = path.join(ROOT, 'reports');
   fs.mkdirSync(dir, { recursive: true });

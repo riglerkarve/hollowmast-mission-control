@@ -108,6 +108,10 @@ function currentActor() {
 }
 
 function note(sql) {
+  // A read-only caller (currently briefing.cjs --dry) must not turn its reads into a
+  // persistent access-log write. The flag is process-local and opt-in, so normal audit
+  // coverage is unchanged.
+  if (process.env.MC_DISABLE_ACCESS_LOG === '1') return;
   const found = String(sql).match(SENSITIVE_RE);
   if (!found) return;
 

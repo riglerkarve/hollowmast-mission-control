@@ -32,6 +32,34 @@
 'use strict';
 require('./_run-log.cjs').record();
 
+// Does the file that contains this URL already say it is retired? Looks for an explicit
+// marker, or for the URL appearing after a "Withdrawn" heading in the same document.
+function makeKnown(files) {
+  const marked = new Set();
+  for (const f of files) {
+    let text = "";
+    try { text = require("node:fs").readFileSync(f, "utf8"); } catch { continue; }
+    const lines = text.split("\n");
+    let withdrawnLevel = 0;   // 0 = not inside a Withdrawn section
+    for (const line of lines) {
+      const h = line.match(/^(#{1,4})\s/);
+      if (h) {
+        const lvl = h[1].length;
+        // A SUB-heading does not leave the section. Only a heading at the same or higher
+        // level does. The first version reset on any heading, so "### NHS Strength and Flex"
+        // immediately cancelled the "## Withdrawn" it sat under, and the whole mechanism
+        // silently did nothing.
+        if (/withdrawn/i.test(line)) withdrawnLevel = lvl;
+        else if (withdrawnLevel && lvl <= withdrawnLevel) withdrawnLevel = 0;
+      }
+      const marker = /@link-known-moved/.test(line);
+      if (!withdrawnLevel && !marker) continue;
+      for (const m of line.matchAll(/https?:\/\/[^\s`"'<>)]+/g)) marked.add(m[0].replace(/[.,)]+$/, ""));
+    }
+  }
+  return (u) => marked.has(u);
+}
+
 const fs = require('node:fs');
 const path = require('node:path');
 
@@ -63,7 +91,7 @@ const canon = (u) => {
   } catch { return String(u).toLowerCase(); }
 };
 
-async function check(url) {
+async function check(url, known) {
   const ctl = new AbortController();
   const t = setTimeout(() => ctl.abort(), TIMEOUT_MS);
   try {
@@ -88,6 +116,13 @@ async function check(url) {
     }
 
     if (canon(res.url) !== canon(url)) {
+      // A link the source already documents as retired is not an open finding. Two ways to
+      // say so: an explicit @link-known-moved marker, or the URL sitting under a heading
+      // that says Withdrawn. The second is what workout-programmes.md already does, so the
+      // checker now reads the document instead of contradicting it.
+      if (typeof known === "function" && known(url)) {
+        return { state: "KNOWN-MOVED", code: res.status, url, to: res.url };
+      }
       return { state: 'MOVED', code: res.status, url, to: res.url };
     }
 
@@ -116,32 +151,38 @@ async function check(url) {
   }
 
   const report = [];
+  const known = makeKnown(docs.map((x) => path.join(DIR, x)));
   for (const doc of docs) {
     const urls = urlsIn(fs.readFileSync(path.join(DIR, doc), 'utf8'));
     // Sequential on purpose. A dozen links is not worth hammering five hosts in parallel,
     // and a burst is the fastest way to turn a working check into a rate-limited one.
     const results = [];
-    for (const u of urls) results.push(await check(u));
+    for (const u of urls) results.push(await check(u, known));
     report.push({ doc, results });
   }
 
   if (JSON_OUT) { console.log(JSON.stringify(report, null, 1)); return; }
 
-  let gone = 0; let moved = 0; let unknown = 0; let ok = 0;
+  let gone = 0; let knownMoved = 0; let moved = 0; let unknown = 0; let ok = 0;
   for (const { doc, results } of report) {
     console.log(`\n  ${doc}  —  ${results.length} link(s)`);
     for (const r of results) {
-      const tag = { OK: 'ok     ', MOVED: 'MOVED  ', GONE: 'GONE   ', UNKNOWN: 'unknown' }[r.state];
+      const tag = { OK: 'ok     ', MOVED: 'MOVED  ', GONE: 'GONE   ', UNKNOWN: 'unknown', 'KNOWN-MOVED': 'known  ' }[r.state];
       const short = r.url.replace(/^https?:\/\//, '').slice(0, 62);
       console.log(`    ${tag} ${short}${r.state === 'MOVED' ? `\n            -> ${r.to.replace(/^https?:\/\//, '').slice(0, 62)}` : ''}${r.why ? `  (${r.why})` : ''}`);
       if (r.state === 'OK') ok += 1;
       else if (r.state === 'MOVED') moved += 1;
       else if (r.state === 'GONE') gone += 1;
+      else if (r.state === 'KNOWN-MOVED') knownMoved += 1;
       else unknown += 1;
     }
   }
 
   console.log(`\n  ${ok} fine · ${moved} moved · ${gone} gone · ${unknown} could not judge`);
+  if (knownMoved) {
+    console.log(`  ${knownMoved} link(s) MOVED and the document already says so - counted separately,`);
+    console.log('  because a finding the source has already explained is not an open finding.');
+  }
   if (moved) console.log('  MOVED is the one to read: a 200 that is no longer the page you linked.');
   if (unknown) console.log('  "could not judge" is NOT a dead link and is not counted as one.');
 

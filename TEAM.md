@@ -207,6 +207,23 @@ plans drafted and never put to the manager, confirmed plans with nothing delegat
 items sitting untriaged, sessions that filed nothing — those are absences, and they are derived,
 so nobody has to remember to file them.
 
+**Feedback is ASKED FOR AS A QUIZ, never as an open question** — owner instruction, 19 August:
+*"Anytime you want feedback ask me as a quiz."* An open "what do you think?" makes him find the
+question inside the answer, which is the same tax this whole structure exists to remove. A
+quiz has already done that work: it names what is actually in doubt, offers the real
+alternatives, and states what each one costs.
+
+Three things that follow, and they apply to the manager's steering quiz and the architect's
+review questions identically:
+
+- **Carry a recommendation into the feedback question too.** "Was this right?" with no view is
+  handing the thinking back — the same failure `POST /api/team/steering` refuses outright.
+- **Offer the reversal as a real option, with its cost.** A "no" on a *decision* names the
+  reasoning to stop using; a "no" on an *outcome* names only the result, and the team learns
+  nothing it can apply next shift.
+- **Use multi-select for "which of these matter".** A list of gaps or findings is not mutually
+  exclusive, and forcing one pick invents a priority he did not set.
+
 **Feedback comes back through the manager**, and lands in the next plan. That is the loop: the
 report says what was decided and why, the owner says which reasoning to stop using, and the
 manager carries it into the work. A "no" on a decision is more useful than a "no" on an

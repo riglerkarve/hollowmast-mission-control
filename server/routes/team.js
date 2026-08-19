@@ -244,6 +244,79 @@ db.migrate('team', [
     d.exec('CREATE INDEX team_responses_target ON team_responses (kind, ref)');
     provenance.addColumn(d, 'team_responses');
   },
+
+  // 6. WHICH ENGINE a roster member is, because from 19 Aug the team is not all one model.
+  //
+  // Owner: "codex will also have worker roles - working alongside you and the team managers."
+  // That amends the earlier call that Codex would be a reviewer and nothing else, and it
+  // creates a problem the roster could not previously express.
+  //
+  // THE REVIEWER MUST NOT SHARE THE AUTHOR'S BLIND SPOTS. That sentence is the whole reason a
+  // second model was chosen: the most expensive recurring failure recorded in this workspace
+  // is a checker built from the same assumption as the code confirming the code. If Codex
+  // writes a commit as a worker and Codex also reviews it, that failure is rebuilt exactly,
+  // with two models involved and no more independence than one.
+  //
+  // So `engine` is recorded per member and a review can be checked against it. It is nullable
+  // for the rows already there, and unknown is a real value: a member whose engine nobody
+  // recorded must NOT be assumed to be Claude, because that assumption is the one that would
+  // let a self-review through.
+  (d) => {
+    d.exec("ALTER TABLE team_sessions ADD COLUMN engine TEXT");   // claude | codex | other | NULL
+    // Everything on the roster before this line was a Claude Code session -- that is a fact
+    // about how they got there (the roster was seeded from CCD sessions), not an assumption.
+    d.exec("UPDATE team_sessions SET engine = 'claude' WHERE engine IS NULL");
+  },
+
+  // 7. Reviews, with BOTH engines on every row.
+  //
+  // Owner's rules, 19 Aug: a review by the same engine that wrote the code is REFUSED and
+  // recorded as "not reviewed"; and when the two engines disagree, the Team Manager
+  // arbitrates.
+  //
+  // `author_engine` and `reviewer_engine` are both stored because independence is a property
+  // of the PAIR, and a row holding only the reviewer cannot be checked afterwards. `outcome`
+  // separates the three states that must never merge: reviewed, refused-for-independence, and
+  // could-not-run. The second is an honest absence; the third is a failure. A schema that
+  // recorded only "no findings" would render all three identically, which is the exact shape
+  // the owner rejected when he chose refusal over a lower-confidence label.
+  //
+  // arbiter_engine exists because the arbiter is NOT neutral and he accepted that knowingly:
+  // the Manager is a Claude session, so on a Claude-versus-Codex disagreement it shares one
+  // side's engine. It cannot be enforced away, so it is recorded and becomes countable -- a
+  // lean toward the arbiter's own engine shows up as data rather than as a suspicion.
+  (d) => {
+    d.exec(`
+      CREATE TABLE team_reviews (
+        id              INTEGER PRIMARY KEY AUTOINCREMENT,
+        at              TEXT NOT NULL,
+        shift           TEXT NOT NULL,
+        target          TEXT NOT NULL,      -- a commit sha, a branch, or 'uncommitted'
+        repo            TEXT NOT NULL,
+        author          TEXT,               -- roster title, where known
+        author_engine   TEXT,               -- claude | codex | unknown
+        reviewer        TEXT NOT NULL,
+        reviewer_engine TEXT NOT NULL,
+        outcome         TEXT NOT NULL,      -- reviewed | refused_same_engine | could_not_run
+        findings        INTEGER,            -- NULL when not reviewed; 0 is a real answer
+        body            TEXT,
+        note            TEXT
+      )`);
+    d.exec(`
+      CREATE TABLE team_arbitrations (
+        id            INTEGER PRIMARY KEY AUTOINCREMENT,
+        at            TEXT NOT NULL,
+        review_id     INTEGER REFERENCES team_reviews(id),
+        finding       TEXT NOT NULL,
+        claimed_by    TEXT NOT NULL,        -- which engine raised it
+        disputed_by   TEXT NOT NULL,
+        arbiter       TEXT NOT NULL,
+        arbiter_engine TEXT NOT NULL,       -- so a lean toward its own engine is countable
+        ruling        TEXT NOT NULL,        -- upheld | rejected
+        because       TEXT NOT NULL
+      )`);
+    provenance.addColumn(d, 'team_reviews');
+  },
 ]);
 
 // A shift label both a human and a script can produce without consulting anything.
@@ -262,6 +335,7 @@ router.get('/roster', (req, res) => {
 
 router.post('/roster', express.json(), (req, res) => {
   const { id, title, role, project, cwd } = req.body || {};
+  const engine = (req.body || {}).engine || null;
   if (!id || !title) return res.status(400).json({ error: 'id and title are required' });
   if (!ROLES.includes(role)) return res.status(400).json({ error: `role must be one of ${ROLES.join(', ')}` });
   const now = new Date().toISOString();
@@ -270,6 +344,7 @@ router.post('/roster', express.json(), (req, res) => {
               ON CONFLICT(id) DO UPDATE SET title=excluded.title, role=excluded.role,
                 project=excluded.project, cwd=excluded.cwd, last_seen=excluded.last_seen`)
     .run(id, title, role, project || null, cwd || null, now, now);
+  if (engine) db.prepare('UPDATE team_sessions SET engine = ? WHERE id = ?').run(engine, id);
   return res.json({ ok: true, session: db.prepare('SELECT * FROM team_sessions WHERE id = ?').get(id) });
 });
 

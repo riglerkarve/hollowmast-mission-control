@@ -66,6 +66,20 @@ if (renamed.length) {
   if (NO_HTTP) { process.exitCode = bad ? 1 : 0; return; }
 
   console.log(`  probing ${BASE} …`);
+
+  // IS THE SERVER THERE AT ALL? Ask once, before probing 28 prefixes. Without this a stopped
+  // service renders as 28 route failures -- a real outage described as a code problem, which
+  // sends the reader to the wrong file. I nearly "fixed" this checker because of it.
+  try {
+    await fetch(BASE + "/api/status", { signal: AbortSignal.timeout(5000) });
+  } catch (e) {
+    const why = (e.cause && e.cause.code) || e.name;
+    console.log("    THE SERVER IS NOT ANSWERING at " + BASE + " (" + why + ").");
+    console.log("    Not probing the routes: every one would report a failure it did not cause.");
+    console.log("    Start it with: node tools/restart.cjs   then run this again.");
+    console.log("    The static checks above are unaffected and still valid.");
+    return;
+  }
   let unreachable = 0;
   for (const m of mounts) {
     let code;

@@ -63,8 +63,8 @@ if (row.answer) {
   process.exit(1);
 }
 
-db.prepare('UPDATE team_steering SET answer = ?, answered_at = ? WHERE id = ?')
-  .run(answer, new Date().toISOString(), id);
+db.prepare('UPDATE team_steering SET answer = ?, answered_at = ?, by_whom = ? WHERE id = ?')
+  .run(answer, new Date().toISOString(), 'you', id);
 
 const back = db.prepare('SELECT * FROM team_steering WHERE id = ?').get(id);
 console.log(`\n  Recorded against #${id}: ${back.answer}`);

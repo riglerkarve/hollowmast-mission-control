@@ -52,8 +52,14 @@ let mountAbort = null;   // aborted when the panel that owns it is torn down
 // unstyled content on every panel switch is a worse defect than the one being fixed.
 // A stylesheet that fails to load resolves anyway: a panel with plain styling beats a
 // panel that never appears.
+// EXPORTED, because a panel can be mounted from somewhere other than the registry and the
+// stylesheet must follow it there. It did not, and the cost was invisible: `todo` was removed
+// from PANELS when the backlog moved inside Focus, so nothing triggered todo.css, and the
+// backlog rendered 1,378 elements against ZERO matching rules for as long as it lived there.
+// Nothing errored — an unstyled panel is a working panel that looks wrong, which is why it
+// survived review. One owner for "load this panel's sheet"; embedders call it too. (M72)
 const sheetsLoaded = new Set();
-function panelStyles(name) {
+export function panelStyles(name) {
   if (sheetsLoaded.has(name)) return Promise.resolve();
   const href = `/panels/${name}/${name}.css`;
   if (document.querySelector(`link[href="${href}"]`)) { sheetsLoaded.add(name); return Promise.resolve(); }

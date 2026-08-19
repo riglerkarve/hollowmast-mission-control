@@ -354,12 +354,27 @@ router.post('/steering', express.json(), (req, res) => {
   res.json({ ok: true, id: info.lastInsertRowid });
 });
 
+// WHO ANSWERED IS RECORDED, and the first version did not record it — the UPDATE set the
+// answer and the timestamp and left `by_whom` at whatever the INSERT had put there, which is
+// the asking session. So "the owner decided" and "a session decided on his behalf" were the
+// same row, and I had already produced one of each: steering #2 was answered by the owner
+// through the architect session, and only the prose said so.
+//
+// That distinction is the whole point of this table. Every other decision here can be
+// re-derived from data; a steering answer cannot, because it IS the owner's judgement. An
+// answer wrongly attributed to him is exactly the fabrication provenance.js exists to
+// prevent, and unlike an honest gap it cannot be found again later.
 router.post('/steering/:id/answer', express.json(), (req, res) => {
   const { answer } = req.body || {};
   if (!answer) return res.status(400).json({ error: 'answer is required' });
-  db.prepare('UPDATE team_steering SET answer = ?, answered_at = ? WHERE id = ?')
-    .run(answer, new Date().toISOString(), req.params.id);
-  res.json({ ok: true });
+  const row = db.prepare('SELECT answer FROM team_steering WHERE id = ?').get(req.params.id);
+  if (!row) return res.status(404).json({ error: 'no such steering question' });
+  // Answering twice is refused rather than overwritten, matching tools/steering-answer.cjs:
+  // the first answer is the one the team acted on, and a changed decision is a new question.
+  if (row.answer) return res.status(409).json({ error: 'already answered — a changed decision is a new question, not an edit' });
+  db.prepare('UPDATE team_steering SET answer = ?, answered_at = ?, by_whom = ? WHERE id = ?')
+    .run(answer, new Date().toISOString(), req.by || 'unknown', req.params.id);
+  res.json({ ok: true, by: req.by || 'unknown' });
 });
 
 function openSteering() {

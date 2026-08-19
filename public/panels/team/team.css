@@ -1,0 +1,51 @@
+/* team — the decisions waiting on the owner, inside Focus.
+
+   Every custom property below is checked against a DEFINITION in shell.css, not against a
+   mention. Grepping for the token name rather than `--name:` is how two properties that do
+   not exist anywhere ended up in a panel earlier today. */
+
+.tm-card { margin-bottom: 16px; }
+.tm-lede { color: var(--muted); font-size: 12px; margin: 0 0 14px; }
+.tm-n { font-variant-numeric: tabular-nums; color: var(--accent-text); background: var(--accent-soft);
+  border-radius: 10px; padding: 1px 8px; font-size: 13px; margin-left: 6px; }
+
+.tm-q + .tm-q { border-top: 1px solid var(--border); margin-top: 18px; padding-top: 18px; }
+.tm-question { color: var(--ink); font-size: 15px; line-height: 1.45; margin: 0 0 12px; max-width: 66ch; }
+
+/* Options stack on a phone and sit in a row on a desktop. He answers these from the phone as
+   often as not, which is the whole reason this exists rather than a terminal command. */
+.tm-opts { display: flex; flex-wrap: wrap; gap: 8px; }
+.tm-opt { flex: 1 1 200px; text-align: left; background: var(--card); color: var(--ink);
+  border: 1px solid var(--border-strong); border-radius: var(--r-card);
+  padding: 10px 12px; cursor: pointer; font: inherit; display: block; }
+.tm-opt:hover:not(:disabled) { border-color: var(--accent); }
+.tm-opt:disabled { opacity: .55; cursor: default; }
+.tm-opt b { display: block; font-size: 13px; }
+
+/* The recommendation is marked, never pre-selected. A default that answers for him is not a
+   recommendation, and this is the one control in the dashboard where that distinction is the
+   entire point of the role asking. */
+.tm-rec { border-color: var(--accent); }
+.tm-tag { display: inline-block; margin-top: 3px; font-size: 10px; text-transform: uppercase;
+  letter-spacing: .06em; color: var(--accent-text); }
+.tm-cost { display: block; margin-top: 5px; font-size: 11px; color: var(--muted); line-height: 1.4; }
+
+.tm-free { display: flex; gap: 8px; flex-wrap: wrap; }
+.tm-input { flex: 1 1 220px; background: var(--bg); color: var(--ink);
+  border: 1px solid var(--border-strong); border-radius: var(--r-btn); padding: 8px 10px; font: inherit; font-size: 13px; }
+.tm-send { background: var(--card); color: var(--ink); border: 1px solid var(--border-strong);
+  border-radius: var(--r-btn); padding: 8px 14px; cursor: pointer; font: inherit; font-size: 13px; }
+
+/* Full size, not fine print. The reasoning is what makes the buttons above a decision rather
+   than a guess, so it is not collapsed behind anything. */
+.tm-why { margin: 12px 0 0; font-size: 12px; color: var(--muted); line-height: 1.5; max-width: 72ch; }
+.tm-why b { color: var(--ink); }
+
+.tm-status { margin: 8px 0 0; font-size: 12px; color: var(--ink); }
+
+.tm-bad { border-color: var(--accent); }
+.tm-alarm { color: var(--ink); font-size: 13px; margin: 0; }
+
+@media (max-width: 560px) {
+  .tm-opt { flex: 1 1 100%; }
+}

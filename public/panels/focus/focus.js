@@ -3,6 +3,14 @@ import { renderBarChart } from '/shared.js';
 // mounted into a div — one implementation, one owner. Owner's instruction, 18 Aug 2026:
 // the backlog's native home is Focus.
 import backlogPanel from '/panels/todo/todo.js';
+import steeringCard from '/panels/team/team.js';
+// A panel mounted from here is NOT mounted from the registry, so nothing else loads its
+// stylesheet. That is M72: the backlog rendered 1,378 elements against zero matching rules
+// for as long as it has lived inside Focus, because `todo` left the PANELS map and its sheet
+// went with it. Nothing errored — it just looked wrong, which is why it survived review.
+// Every panel embedded here loads its own sheet through shell.js's loader, so there is one
+// owner for "load this panel's CSS" rather than two that disagree by omission.
+import { panelStyles } from '/shell.js';
 
 const DURATIONS = { work: 25 * 60, short: 5 * 60, long: 15 * 60 };
 const RING_CIRCUMFERENCE = 2 * Math.PI * 100;
@@ -49,6 +57,8 @@ const TEMPLATE = `
       <h2>What are you working on?</h2>
       <div id="focusNow"></div>
     </section>
+
+    <div id="focusSteering"></div>
 
     <div id="focusBacklog"></div>
 
@@ -292,6 +302,7 @@ function createPanel() {
         streakCount: container.querySelector('#streakCount'),
         focusNow: container.querySelector('#focusNow'),
         focusBacklog: container.querySelector('#focusBacklog'),
+        focusSteering: container.querySelector('#focusSteering'),
         celebrateOverlay: container.querySelector('#celebrateOverlay'),
         celebrateText: container.querySelector('#celebrateText'),
         barChart: container.querySelector('#barChart'),
@@ -322,6 +333,13 @@ function createPanel() {
       onBacklogChanged = () => refreshActiveTask();
       container.addEventListener('td:focus', onBacklogFocus);
       container.addEventListener('td:changed', onBacklogChanged);
+      // Load the embedded panels' stylesheets before mounting them. Fire-and-forget: the
+      // loader resolves on error too, because unstyled beats absent — but nothing here may
+      // wait on a stylesheet, since a slow sheet must not delay the timer.
+      panelStyles('todo');
+      panelStyles('team');
+
+      steeringCard.mount(el.focusSteering);
       backlogPanel.mount(el.focusBacklog, { embedded: true });
 
       renderTimer();
@@ -337,6 +355,7 @@ function createPanel() {
       // The embedded panel holds an AbortController and three listeners of its own. Not
       // unmounting it leaks a fetch that resolves into a dead DOM.
       backlogPanel.unmount();
+      steeringCard.unmount();
       if (container && onBacklogFocus) container.removeEventListener('td:focus', onBacklogFocus);
       if (container && onBacklogChanged) container.removeEventListener('td:changed', onBacklogChanged);
       onBacklogFocus = onBacklogChanged = null;

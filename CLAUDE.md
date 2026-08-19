@@ -389,8 +389,23 @@ one click handler. `focus.unmount()` must keep calling `backlogPanel.unmount()` 
 it the embedded panel’s in-flight fetch resolves into a dead DOM.
 
 `todo` was removed from the `PANELS` registry, so an old `#todo` deep link falls back to
-Focus, which is where the backlog now is. `todo.css` is still loaded from `index.html` —
-the embedded panel needs it.
+Focus, which is where the backlog now is.
+
+**This paragraph used to end "`todo.css` is still loaded from `index.html` — the embedded
+panel needs it", and that was false for as long as it was written.** There was no such link,
+in `index.html` or anywhere else. `shell.js` loads a panel's stylesheet by convention *when
+the registry mounts it*, so removing `todo` from `PANELS` took its CSS with it, silently.
+
+Measured in the browser on 19 Aug: **1,378 elements carrying `td-` classes, and zero `.td-`
+rules in any loaded sheet.** `.td-panel` computed to `padding: 0px`. The owner's primary
+working surface had been rendering completely unstyled since the move, and nothing errored —
+an unstyled panel is a working panel that looks wrong, which is why it survived every review.
+The doc asserting the opposite is what stopped anyone checking (M72).
+
+Fixed by giving stylesheet loading **one owner**: `panelStyles(name)` is exported from
+`shell.js`, and `focus.js` calls it for every panel it embeds. A future embedded panel cannot
+repeat this, because the embedder loads the sheet rather than hoping the registry did.
+Verified after: `.td-` rules 0 → 89.
 
 **The spreadsheet is now a DERIVED artefact. Regenerate it from `Export CSV`; never
 edit it alongside the store.** This is not housekeeping — the drift is already on

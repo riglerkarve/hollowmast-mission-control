@@ -83,6 +83,21 @@ function main() {
   // Distinguishes "looked and it was fine" from "found nothing", which is the whole point.
   console.log('  checked every file against every line: no gaps, no dangling, no duplicates');
 
+  // OVER THE LIMIT IS NOT A NOTE. Above HARD_KB the index is being TRUNCATED when a session
+  // loads it: entries past the cut are silently absent, which is the one failure a memory
+  // index must never have. This branch has to come first, because the warning branch below
+  // fires for this case too and describes it as a slope problem.
+  if (kb > HARD_KB) {
+    console.log(`  OVER    ${(kb - HARD_KB).toFixed(1)}KB past the ${HARD_KB}KB read limit.`);
+    console.log('  MEMORY.md is being truncated at session start. Entries past the cut are');
+    console.log('  invisible to a new session -- present on disk, absent from the index it reads.');
+    console.log('');
+    console.log('  Trimming hooks will not fix it. Each line carries the title TWICE, once as');
+    console.log('  text and once as the filename, which is about 45 bytes an entry of pure');
+    console.log('  duplication; even zero-length hooks leave roughly 21KB. It needs fewer');
+    console.log('  entries -- consolidation -- or a line format that does not repeat the title.');
+    process.exitCode = 1;
+  } else
   if (kb > WARN_KB) {
     console.log('');
     console.log(`  NOTE  above ${WARN_KB}KB. Not broken — the limit is ${HARD_KB}KB — but the`);

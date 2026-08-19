@@ -4,7 +4,7 @@
 //
 //   node tools/ollama-shift.cjs             measure and report, write nothing
 //   node tools/ollama-shift.cjs --apply     write the answers it earned the right to write
-//   node tools/ollama-shift.cjs --cloud     use gpt-oss:20b-cloud instead of qwen3.5:9b
+//   node tools/ollama-shift.cjs --cloud     use the shared cloud default instead of the local default
 //
 // THE JOB. 33 open backlog items have no `kind`, and `kind` is an input to server/dispatch.js —
 // a bug with a known cause routes differently from an investigation. So filling it improves
@@ -34,7 +34,7 @@ const ollama = require('../server/ollama');
 const APPLY = process.argv.includes('--apply');
 const USE_CLOUD = process.argv.includes('--cloud');
 const MODEL = process.argv.find((a) => /^--model=/.test(a))?.split('=')[1]
-  || (USE_CLOUD ? 'gpt-oss:20b-cloud' : ollama.LOCAL_DEFAULT);
+  || (USE_CLOUD ? ollama.CLOUD_DEFAULT : ollama.LOCAL_DEFAULT);
 const BATCH = 10;
 const ACCURACY_FLOOR = 0.8;
 
@@ -92,8 +92,18 @@ async function askBatch(items) {
   // --------------------------------------------------------------- the rules pass
   const settled = known.filter((r) => byRule(r) === r.kind);
   const tail = rows;
+  // RULED AND MODELTAIL ARE COMPUTED HERE, ONCE, because a P2 Codex found on independent
+  // review (M114) traced to exactly this being computed twice with two different meanings.
+  // The line below used to print settled.length / rows.length -- the ORACLE (known rows the
+  // rule reproduces) divided by the UNLABELLED count. Those are different populations, and
+  // the percentage could exceed 100% or simply be wrong; it was never the "needed no model"
+  // figure it claimed to be. `ruled` -- unlabelled rows the rule itself can settle -- is the
+  // honest numerator, and it also used to exist only inside `if (APPLY)`, so a plain report
+  // run never saw it at all.
+  const ruled = tail.map((r) => ({ ...r, kind: byRule(r) })).filter((r) => r.kind);
+  const modelTail = tail.filter((r) => !byRule(r));
   console.log(`  oracle: ${settled.length} items already labelled and reproducible by rule; ${tail.length} unlabelled`);
-  console.log(`  -> ${Math.round((settled.length / rows.length) * 100)}% needed no model at all\n`);
+  console.log(`  -> ${tail.length ? Math.round((ruled.length / tail.length) * 100) : 0}% of the unlabelled rows the rules can settle without a model\n`);
 
   if (!settled.length) {
     console.log('  NO ORACLE. The rules settled nothing, so there is nothing to score the model');
@@ -157,8 +167,7 @@ async function askBatch(items) {
     // "nothing left to do", because a manual pass minutes earlier had covered those twelve.
     // Measured afterwards: 12 of 12 rule-settleable items hold the matching kind, so no data
     // was harmed -- by luck rather than by design, which is not a defence.
-    const ruled = tail.map((r) => ({ ...r, kind: byRule(r) })).filter((r) => r.kind);
-    const modelTail = tail.filter((r) => !byRule(r));
+    // `ruled` and `modelTail` are computed once, above, before this block -- not re-derived here.
     db.withTransaction(() => { for (const s of ruled) applied += up.run(s.kind, s.id).changes; });
     console.log(`\n  wrote ${applied} kinds from the RULES (exact, auditable, free).`);
 

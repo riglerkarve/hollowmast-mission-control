@@ -1,0 +1,29 @@
+{
+  "version": 1,
+  "generatedBy": "tools/verify-suite.cjs",
+  "contract": [
+    { "tool": "check-claim.cjs", "mode": "manual", "args": [], "reason": "requires a specific claim and target path", "temporaryDatabase": false },
+    { "tool": "endpoint-shapes.cjs", "mode": "manual", "args": [], "reason": "probes the running server and records access-log reads", "temporaryDatabase": false },
+    { "tool": "figure-ownership.cjs", "mode": "manual", "args": [], "reason": "compares live API data and records access-log reads", "temporaryDatabase": false },
+    { "tool": "gate-check.cjs", "mode": "manual", "args": [], "reason": "deliberately creates, revokes, and expires live gate state", "temporaryDatabase": false },
+    { "tool": "link-check.cjs", "mode": "manual", "args": [], "reason": "makes external network requests and can be rate-limited", "temporaryDatabase": false },
+    { "tool": "memory-index-check.cjs", "mode": "manual", "args": [], "reason": "its run logger writes data/dashboard.db", "temporaryDatabase": false },
+    { "tool": "migrate-from-zero.cjs", "mode": "safe", "args": [], "reason": null, "temporaryDatabase": true },
+    { "tool": "provenance-check.cjs", "mode": "manual", "args": [], "reason": "its run logger writes data/dashboard.db", "temporaryDatabase": false },
+    { "tool": "restore-backup.cjs", "mode": "safe", "args": [], "reason": null, "temporaryDatabase": true },
+    { "tool": "routes-check.cjs", "mode": "safe", "args": ["--no-http"], "reason": null, "temporaryDatabase": false },
+    { "tool": "schema-integrity.cjs", "mode": "safe", "args": ["--self-test"], "reason": null, "temporaryDatabase": true },
+    { "tool": "secrets-scan.cjs", "mode": "manual", "args": [], "reason": "its run logger writes data/dashboard.db", "temporaryDatabase": false },
+    { "tool": "tool-audit.cjs", "mode": "safe", "args": [], "reason": null, "temporaryDatabase": false },
+    { "tool": "usage-contract-audit.cjs", "mode": "safe", "args": [], "reason": null, "temporaryDatabase": false },
+    { "tool": "vanished.cjs", "mode": "manual", "args": [], "reason": "the configured pre-commit hook is currently absent", "temporaryDatabase": false },
+    { "tool": "verify-access-log-floor.cjs", "mode": "safe", "args": [], "reason": null, "temporaryDatabase": false },
+    { "tool": "verify-checkers.cjs", "mode": "manual", "args": [], "reason": "plants defects in the shared working tree while proving checkers", "temporaryDatabase": false },
+    { "tool": "verify-m73-needs-owner.cjs", "mode": "manual", "args": [], "reason": "checks a historical workflow with live team data", "temporaryDatabase": false },
+    { "tool": "verify-ollama-shift.cjs", "mode": "manual", "args": [], "reason": "depends on the in-progress Ollama shift artefacts", "temporaryDatabase": false },
+    { "tool": "verify-panel.cjs", "mode": "manual", "args": [], "reason": "probes the running server and its run logger writes data/dashboard.db", "temporaryDatabase": false },
+    { "tool": "verify-restart-lock.cjs", "mode": "safe", "args": [], "reason": null, "temporaryDatabase": true },
+    { "tool": "verify-route-failures.cjs", "mode": "safe", "args": [], "reason": null, "temporaryDatabase": true },
+    { "tool": "verify-shift-report.cjs", "mode": "manual", "args": [], "reason": "depends on the current shift report and in-progress artefacts", "temporaryDatabase": false }
+  ]
+}

@@ -5,11 +5,33 @@ tier.
 
 ---
 
-## Start here: Ollama is not an agent
+## Start here: Ollama is not an agent — with one correction
 
 It has no scheduler, no memory between calls, and no way to pick up work. It is a model server.
 **Every job below needs something to drive it**, and this week that is Codex during its own
 shifts — not a new scheduled task.
+
+**The correction, found after this plan was first written.** `ollama launch <name>` exists and
+offers **19 agent integrations** — Claude Code, Codex, OpenCode, Hermes, Qwen Code, Cline and
+others. So Ollama *can* drive an agent, and the sentence above was too absolute.
+
+But it changes less than it appears to, because of what it launches them **against**:
+
+> `ollama launch claude` runs Claude Code **backed by an Ollama model** — `qwen3.5:4b` or
+> `gpt-oss:120b-cloud` — not by Opus. `ollama launch codex` does the same to Codex.
+
+**For the two agents already working here, that is a downgrade, not an upgrade.** Claude Code
+runs on Opus 5 and Codex on gpt-5.6-terra through a paid subscription. Re-pointing either at a
+4B model would make it dramatically weaker at the work it is doing.
+
+**And there is a specific hazard: `ollama launch codex` would reconfigure the Codex that is
+about to run 27 unattended tasks.** Its live config is `model = "gpt-5.6-terra"`,
+`model_reasoning_effort = "high"`, `auth_mode = chatgpt`. **This was deliberately NOT tested** —
+finding out by trying it could break the agent mid-plan, and a four-day unattended run is the
+worst possible moment to discover a reconfiguration.
+
+**Do not run any `ollama launch` command this week.** If one is wanted later, see the last
+section.
 
 That is a deliberate refusal. Five scheduled tasks already exist and each is a thing that can
 silently stop. Adding a sixth during four unattended days is the same call the main plan makes
@@ -158,3 +180,37 @@ that deterministic rules did **95.3%** of the one real job while the model did *
 **The recommendation:** keep it, and stop looking for work for it. It earns its place as the
 tier that *can* see private data, not as a workhorse — and the moment somebody invents jobs to
 justify a model, the model has started costing more than it returns.
+
+---
+
+## If a third agent is ever wanted — which, and why not yet
+
+`ollama launch` offers 19 harnesses. The only role a third one could usefully fill here is a
+**third independent review voice**, because cross-engine review is the one thing that has
+demonstrably found what neither engine finds alone. Anything else duplicates Claude Code or
+Codex, and the bottleneck this week is verification capacity, not agent capacity.
+
+**Why not this week, and it is the same reasoning as MCP:** an agent harness is a standing
+capability, installing one reconfigures things that currently work, and four unattended days is
+the worst window in which to discover either.
+
+**The technical objection is larger than the timing one.** The local models that fit this card
+are 4B. A 4B is genuinely good at *one* thing — constrained classification against an enum,
+where it scored 10/12 — and agentic coding is the opposite shape: multi-step tool use, file
+edits, judgement under ambiguity. A small model does not fail loudly at that; it produces
+**plausible edits**, which is the most expensive failure available in a repository.
+
+The cloud alternative fails a different gate: `gpt-oss:120b` is capable and fast, and it
+**ignores JSON schemas** (measured) and **leaves the machine**. An agent with file access
+backed by it is a code-egress decision, not a model choice.
+
+**If one is chosen later, in order:**
+
+| | | |
+|---|---|---|
+| **1** | `opencode` or `qwen` | Plain coding agents, no self-modification. Qwen's model family is the one already measured here and it honours schemas. |
+| **2** | `cline` | Well-defined scope, but adds an editor dependency this workspace does not otherwise have. |
+| **avoid** | `hermes` | Described as a **self-improving** agent. An agent that modifies its own behaviour while nobody is watching is the single property this entire team structure exists to prevent — every rule here assumes the agent it constrains stays the agent it constrained. |
+
+**And test it on one bounded task with a known answer before it is given anything real** — the
+same way Codex earned its place, by being measured on work whose outcome was already known.

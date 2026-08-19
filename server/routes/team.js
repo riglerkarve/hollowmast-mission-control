@@ -35,6 +35,7 @@
 const express = require('express');
 const db = require('../db');
 const provenance = require('../provenance');
+const { dispatch } = require('../dispatch');
 
 const router = express.Router();
 
@@ -317,6 +318,31 @@ db.migrate('team', [
       )`);
     provenance.addColumn(d, 'team_reviews');
   },
+
+  // 8. WHICH MODEL AND EFFORT A TASK WAS MEANT TO GET, AND WHICH IT ACTUALLY GOT.
+  //
+  // Owner instruction, 19 Aug: "Enforce model and effort use in sessions." Enforcement here
+  // has three honest strengths, and pretending they are one would be the lie:
+  //
+  //   ENFORCED   anything spawned. Codex takes `-m <model>` and `model_reasoning_effort` per
+  //              invocation, and a Claude subagent takes model and effort as parameters. The
+  //              wrapper sets them from the recommendation, so there is nothing to comply with.
+  //   CHECKED    a Claude session already running. It CAN read its own effort -- CLAUDE_EFFORT
+  //              is in the environment -- so it can compare itself and refuse. It CANNOT read
+  //              its own model; nothing in the environment names it. So the model is declared,
+  //              not detected, and a declaration is a claim rather than a measurement.
+  //   RECORDED   everything else. The recommendation and what was actually used both sit on
+  //              the assignment, and a mismatch with no stated reason is a reported gap.
+  //
+  // `override_reason` exists because the recommendation is a rule of thumb over item text and
+  // will sometimes be wrong. Overriding it is fine; overriding it SILENTLY is not, because
+  // then the table cannot tell a considered exception from a session ignoring it. Same shape
+  // as the mandatory verdict and the mandatory `because` on a decision.
+  (d) => {
+    for (const c of ['rec_model', 'rec_effort', 'used_model', 'used_effort', 'override_reason']) {
+      d.exec(`ALTER TABLE team_assignments ADD COLUMN ${c} TEXT`);
+    }
+  },
 ]);
 
 // A shift label both a human and a script can produce without consulting anything.
@@ -499,9 +525,54 @@ router.post('/assign', express.json(), (req, res) => {
     });
   }
 
-  const info = db.prepare('INSERT INTO team_assignments (plan_id, source, ref, session_id, shift, at, note) VALUES (?,?,?,?,?,?,?)')
-    .run(plan.id, source, ref, sid, plan.shift, new Date().toISOString(), note || null);
-  return res.json({ ok: true, id: info.lastInsertRowid });
+  // THE RECOMMENDATION IS ATTACHED AT ASSIGNMENT TIME, not looked up later. Derived from the
+  // item the assignment names, so the delegating session does not choose it and cannot forget
+  // it. If the item cannot be found the recommendation is null rather than guessed — a made-up
+  // "sonnet/medium" would be indistinguishable from a derived one the moment it was stored.
+  let rec = null;
+  try {
+    const item = source === 'todo'
+      ? db.prepare('SELECT id, title, rationale, kind, priority, cluster, owner, project FROM todo_items WHERE id = ?').get(String(ref))
+      : db.prepare('SELECT ref, title, kind, severity AS priority, project FROM board_items WHERE source = ? AND ref = ?').get(source, String(ref));
+    if (item) rec = dispatch(item);
+  } catch { /* recommendation unavailable; recorded as null, which reads as "not derived" */ }
+
+  const info = db.prepare(`INSERT INTO team_assignments
+      (plan_id, source, ref, session_id, shift, at, note, rec_model, rec_effort)
+      VALUES (?,?,?,?,?,?,?,?,?)`)
+    .run(plan.id, source, ref, sid, plan.shift, new Date().toISOString(), note || null,
+      rec ? rec.model : null, rec ? rec.effort : null);
+  return res.json({ ok: true, id: info.lastInsertRowid, recommended: rec });
+});
+
+// A session declares what it actually used. The MODEL is a declaration and the EFFORT can be
+// measured by the session itself (CLAUDE_EFFORT is in its environment), so they are recorded
+// with different confidence and the report says which is which.
+//
+// A mismatch is allowed and needs a reason. Refusing the write would push sessions into not
+// reporting at all, and an unreported mismatch is worse than a stated one.
+router.post('/assign/:id/used', express.json(), (req, res) => {
+  const b = req.body || {};
+  const row = db.prepare('SELECT * FROM team_assignments WHERE id = ?').get(req.params.id);
+  if (!row) return res.status(404).json({ error: 'no such assignment' });
+  const usedModel = String(b.model || '').trim();
+  const usedEffort = String(b.effort || '').trim();
+  if (!usedModel && !usedEffort) return res.status(400).json({ error: 'model or effort is required' });
+
+  const mismatch = (usedModel && row.rec_model && usedModel !== row.rec_model)
+    || (usedEffort && row.rec_effort && usedEffort !== row.rec_effort);
+  const reason = String(b.override_reason || '').trim();
+  if (mismatch && !reason) {
+    return res.status(400).json({
+      error: 'this differs from the recommendation, so override_reason is required',
+      recommended: `${row.rec_model}/${row.rec_effort}`,
+      used: `${usedModel || row.rec_model}/${usedEffort || row.rec_effort}`,
+      detail: 'Overriding is fine. Overriding silently is not -- otherwise a considered exception and a session ignoring the recommendation look identical afterwards.',
+    });
+  }
+  db.prepare('UPDATE team_assignments SET used_model = ?, used_effort = ?, override_reason = ? WHERE id = ?')
+    .run(usedModel || null, usedEffort || null, reason || null, row.id);
+  return res.json({ ok: true, mismatch: !!mismatch });
 });
 
 router.get('/assignments', (req, res) => {

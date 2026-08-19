@@ -108,7 +108,12 @@ if (authorEngine === reviewerEngine) {
   console.log('\n  REFUSED: the author and the reviewer are the same engine.');
   console.log('  This is NOT a pass. A same-engine review that finds nothing is');
   console.log('  indistinguishable from a clean bill of health, and it fails in the direction');
-  console.log('  nobody investigates. Recorded as not reviewed.\n');
+  // A P2 Codex found on independent review, M115: this used to print "Recorded as not
+  // reviewed" unconditionally, but the record() call below is guarded on !DRY -- so in --dry
+  // mode nothing was written and the message claimed an action that did not happen.
+  console.log(DRY
+    ? '  nobody investigates. --dry: NOT recorded -- this is what would happen.\n'
+    : '  nobody investigates. Recorded as not reviewed.\n');
   if (!DRY) record('refused_same_engine', null, null, `author and reviewer both ${authorEngine}`);
   process.exit(1);
 }
@@ -125,7 +130,9 @@ const exe = codexBinary();
 if (!exe) {
   console.log('\n  COULD NOT RUN: no Codex install found with its sandbox helper alongside it.');
   console.log('  Checked %LOCALAPPDATA%\\OpenAI\\Codex\\bin\\*\\codex.exe. This is a failure to');
-  console.log('  look, not a clean review, and it is recorded as such.\n');
+  console.log(DRY
+    ? '  look, not a clean review. --dry: NOT recorded -- this is what would happen.\n'
+    : '  look, not a clean review, and it is recorded as such.\n');
   if (!DRY) record('could_not_run', null, null, 'codex binary with helper not found');
   process.exit(2);
 }

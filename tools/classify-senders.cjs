@@ -146,7 +146,14 @@ function parseResponse(text, chunk) {
 }
 
 (async () => {
-  seedRules();
+  // A REAL SAFETY FAILURE, found by Codex on independent review (M103, usage-contract-audit):
+  // seedRules() ran unconditionally, before the DRY/RULES_ONLY check below, and it INSERTs
+  // into gmail_sender_rules. `--dry`'s own docstring says "decide nothing, report what would
+  // happen" and its own output claimed "nothing written" -- both false while this ran first.
+  // applyRules() already guards its own write on `!DRY`; seedRules() is the one call site that
+  // did not. Idempotent (INSERT OR IGNORE) and low-stakes on its own, but the contract is
+  // "nothing written under --dry", not "nothing IMPORTANT written".
+  if (!DRY) seedRules();
   const r = applyRules();
 
   const byVolume = db.prepare(

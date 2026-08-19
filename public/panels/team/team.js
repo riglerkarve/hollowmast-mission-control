@@ -91,32 +91,89 @@ const FIELDS = [
   ['done', 'Done'],
   ['blocked', 'Blocked'],
   ['candidates', 'Candidates'],
-  ['needs_owner', 'For the owner'],
   ['next', 'Next'],
 ];
+
+function ownerItemsHTML(h) {
+  if (h.owner_items_state === 'not_raised') {
+    return `<div class="tm-field tm-field-owner"><h5>For the owner</h5>
+      <p class="tm-notstated">Nothing raised for the owner. This is neither a resolved item nor a parser result.</p></div>`;
+  }
+  const items = h.owner_items || [];
+  if (!items.length) {
+    return `<div class="tm-field tm-field-owner"><h5>For the owner</h5>
+      <p class="tm-alarm">Could not read this handover's derived owner items. The original handover text remains below; this is a failure to look, not an empty owner queue.</p>
+      <p>${prose(h.needs_owner)}</p></div>`;
+  }
+  const allResolved = items.every((item) => item.resolved_at);
+  return `<div class="tm-field tm-field-owner"><h5>For the owner</h5>
+    ${h.owner_items_state === 'unsplit'
+      ? '<p class="tm-notstated">Could not confidently split this free-text block, so its original text is kept intact as one resolvable item.</p>'
+      : ''}
+    ${allResolved ? `<p class="tm-resolved">All ${items.length} owner item${items.length === 1 ? '' : 's'} resolved.</p>` : ''}
+    ${items.map((item) => `<div class="tm-owner-item">
+      <p>${prose(item.text)}</p>
+      ${item.resolved_at
+        ? `<p class="tm-resolved">Resolved without the owner by ${esc(item.resolved_by)} — ${esc(item.resolved_note)}</p>`
+        : `<form class="tm-owner-resolve" data-handover-id="${h.id}" data-item-id="${item.id}">
+            <input class="tm-input" name="by" aria-label="Resolved by" placeholder="Resolved by">
+            <input class="tm-input" name="note" aria-label="Resolution note" placeholder="How was it resolved?">
+            <button class="tm-send" type="submit">Resolve this item</button>
+            <p class="tm-status" hidden></p>
+          </form>`}
+    </div>`).join('')}
+  </div>`;
+}
 
 function handoverHTML(h, rs) {
   const stated = FIELDS.filter(([k]) => h[k]);
   const missing = ['done', 'blocked', 'next'].filter((k) => !h[k]);
-  return `<details class="tm-ho"${h.needs_owner && !h.owner_resolved_at ? ' open' : ''}>
+  const openOwnerItems = (h.owner_items || []).filter((item) => !item.resolved_at).length;
+  return `<details class="tm-ho"${openOwnerItems ? ' open' : ''}>
     <summary>
       <span class="tm-ho-who">${esc(h.title)}</span>
       <span class="role">${esc(h.role)}</span>
       ${h.project ? `<span class="tm-ho-proj">${esc(h.project)}</span>` : ''}
       <span class="t">${esc(hm(h.at))}</span>
       ${h.read_at ? '' : '<span class="tm-flag">unread</span>'}
-      ${h.needs_owner && !h.owner_resolved_at ? '<span class="tm-flag tm-flag-owner">for you</span>' : ''}
+      ${openOwnerItems ? `<span class="tm-flag tm-flag-owner">${openOwnerItems} for you</span>` : ''}
     </summary>
     <div class="tm-ho-body">
       ${stated.map(([k, label]) => `
-        <div class="tm-field${k === 'needs_owner' ? ' tm-field-owner' : ''}">
+        <div class="tm-field">
           <h5>${label}</h5><p>${prose(h[k])}</p>
-          ${k === 'needs_owner' && h.owner_resolved_at ? `<p class="tm-resolved">Resolved without the owner by ${esc(h.owner_resolved_by)} — ${esc(h.owner_resolved_note)}</p>` : ''}
         </div>`).join('')}
+      ${ownerItemsHTML(h)}
       ${missing.length ? `<p class="tm-notstated">Not stated: ${missing.join(', ')} — which is different from "nothing to report".</p>` : ''}
       ${rs('handover', h.id, `${h.title} — ${h.shift}`)}
     </div>
   </details>`;
+}
+
+function wireOwnerResolutions() {
+  root.querySelectorAll('.tm-owner-resolve').forEach((form) => form.addEventListener('submit', async (event) => {
+    event.preventDefault();
+    const by = form.elements.by.value.trim();
+    const note = form.elements.note.value.trim();
+    const status = form.querySelector('.tm-status');
+    if (!by || !note) {
+      status.hidden = false;
+      status.textContent = 'Both who resolved it and how are required. A blank resolution is a dropped question.';
+      return;
+    }
+    form.querySelectorAll('input, button').forEach((el) => { el.disabled = true; });
+    status.hidden = false;
+    status.textContent = 'Recording…';
+    try {
+      await api(`/handover/${form.dataset.handoverId}/resolve-owner`, {
+        method: 'POST', body: JSON.stringify({ item_id: Number(form.dataset.itemId), by, note }),
+      });
+      await load();
+    } catch (e) {
+      form.querySelectorAll('input, button').forEach((el) => { el.disabled = false; });
+      status.textContent = `Not recorded — ${e.message}. Nothing was resolved; try again.`;
+    }
+  }));
 }
 
 // Grouped once, not filtered per row: with 9 handovers and 12 decisions that is 20-plus
@@ -238,6 +295,7 @@ function render() {
   }
   root.innerHTML = fullHTML(state.data);
   wireSteering();
+  wireOwnerResolutions();
   // Delegated once from the panel root, so a re-render cannot orphan handlers.
   wireResponders(root, load);
   const sel = root.querySelector('.tm-shift');

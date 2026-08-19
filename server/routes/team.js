@@ -54,6 +54,83 @@ const ROLES = ['worker', 'supervisor', 'manager', 'architect'];
 // does not, so they are not checked the same way.
 const CHAIN_ROLES = ['worker', 'supervisor', 'manager'];
 
+// A handover is immutable prose, written by people rather than a form.  We only split a
+// block when its top-level structure says exactly where every item begins: a list from the
+// first non-blank line onwards.  Everything else remains ONE owner item.  That is less
+// clever than trying to infer questions from sentences, but a whole preserved block is
+// recoverable and individually resolvable; a plausible wrong split is neither.
+function ownerItemKey(title, text) {
+  return require('node:crypto').createHash('sha256')
+    .update(`${String(title).trim().toLowerCase()}\0${String(text).replace(/\s+/g, ' ').trim().toLowerCase()}`)
+    .digest('hex');
+}
+
+function ownerItemsFromBlock(text) {
+  const source = String(text == null ? '' : text).replace(/\r\n/g, '\n').trim();
+  if (!source || /^(?:[-*]\s*)?(?:none|nothing)(?:\.)?$/i.test(source)) {
+    return { state: 'not_raised', items: [] };
+  }
+
+  const lines = source.split('\n');
+  const starts = [];
+  for (let i = 0; i < lines.length; i += 1) {
+    // Deliberately top-level only.  Indented bullets are part of the item above them.
+    if (/^(?:[-*]|\d+[.)])\s+\S/.test(lines[i])) starts.push(i);
+  }
+  // An introductory sentence, a malformed list, or unlisted prose is not a safe boundary.
+  if (!starts.length || starts[0] !== 0) return { state: 'unsplit', items: [source] };
+
+  const items = starts.map((at, i) => lines.slice(at, starts[i + 1] || lines.length).join('\n').trim())
+    .filter(Boolean);
+  // Do not manufacture two canonical asks from a duplicated bullet in one source block.
+  const distinct = [...new Map(items.map((item) => [item.replace(/\s+/g, ' ').trim().toLowerCase(), item])).values()];
+  return { state: 'split', items: distinct };
+}
+
+function ownerItemsForHandovers(handovers) {
+  const ids = handovers.map((h) => h.id);
+  if (!ids.length) return [];
+  const q = ids.map(() => '?').join(',');
+  return db.prepare(`SELECT f.handover_id, f.source_text, f.parse_state, o.id, o.title, o.text,
+                            o.resolved_at, o.resolved_by, o.resolved_note, o.last_handover_id,
+                            o.first_seen_at, o.last_seen_at, o.filing_count
+                     FROM team_owner_item_filings f
+                     JOIN team_owner_items o ON o.id = f.item_id
+                     WHERE f.handover_id IN (${q})
+                     ORDER BY f.handover_id, o.id`).all(...ids);
+}
+
+function recordOwnerItems(handover, at) {
+  const parsed = ownerItemsFromBlock(handover.needs_owner);
+  db.prepare('UPDATE team_handovers SET owner_items_state = ? WHERE id = ?')
+    .run(parsed.state, handover.id);
+  for (const text of parsed.items) {
+    const fingerprint = ownerItemKey(handover.title, text);
+    db.prepare(`INSERT INTO team_owner_items
+                  (title, text, fingerprint, first_seen_at, last_seen_at, last_handover_id, filing_count)
+                VALUES (?,?,?,?,?,?,1)
+                ON CONFLICT(fingerprint) DO UPDATE SET
+                  last_seen_at=excluded.last_seen_at,
+                  last_handover_id=excluded.last_handover_id,
+                  filing_count=team_owner_items.filing_count + 1`)
+      .run(handover.title, text, fingerprint, at, at, handover.id);
+    const item = db.prepare('SELECT * FROM team_owner_items WHERE fingerprint = ?').get(fingerprint);
+    db.prepare(`INSERT OR IGNORE INTO team_owner_item_filings
+                  (handover_id, item_id, source_text, parse_state)
+                VALUES (?,?,?,?)`).run(handover.id, item.id, text, parsed.state);
+    // A legacy whole-block resolution was a real recorded fact.  During migration it applies
+    // to each item that block contained; new individual resolutions never mark the whole
+    // handover resolved.
+    if (handover.owner_resolved_at) {
+      db.prepare(`UPDATE team_owner_items
+                  SET resolved_at=?, resolved_by=?, resolved_note=?
+                  WHERE id=? AND resolved_at IS NULL`)
+        .run(handover.owner_resolved_at, handover.owner_resolved_by, handover.owner_resolved_note, item.id);
+    }
+  }
+  return parsed;
+}
+
 db.migrate('team', [
   (d) => {
     // The roster. One row per session that has ever reported in — never deleted, because
@@ -343,6 +420,47 @@ db.migrate('team', [
       d.exec(`ALTER TABLE team_assignments ADD COLUMN ${c} TEXT`);
     }
   },
+
+  // 9. Owner-facing asks are items, not an opaque handover field.
+  //
+  // `needs_owner` stays on the handover forever: it is the exact report a session made, and
+  // both the existing writer and old readers continue to use it.  This pair of tables is the
+  // derived, addressable representation.  A filing links to a canonical item, so a verbatim
+  // re-filing refreshes that item rather than creating another queue entry.  The link keeps
+  // provenance without making each re-filing a second ask.
+  (d) => {
+    d.exec(`
+      CREATE TABLE team_owner_items (
+        id               INTEGER PRIMARY KEY AUTOINCREMENT,
+        title            TEXT NOT NULL,
+        text             TEXT NOT NULL,
+        fingerprint      TEXT NOT NULL UNIQUE,
+        first_seen_at    TEXT NOT NULL,
+        last_seen_at     TEXT NOT NULL,
+        last_handover_id INTEGER REFERENCES team_handovers(id),
+        filing_count     INTEGER NOT NULL DEFAULT 1,
+        resolved_at      TEXT,
+        resolved_by      TEXT,
+        resolved_note    TEXT
+      )`);
+    d.exec(`
+      CREATE TABLE team_owner_item_filings (
+        handover_id INTEGER NOT NULL REFERENCES team_handovers(id),
+        item_id     INTEGER NOT NULL REFERENCES team_owner_items(id),
+        source_text TEXT NOT NULL,
+        parse_state TEXT NOT NULL,  -- split | unsplit
+        PRIMARY KEY (handover_id, item_id)
+      )`);
+    d.exec('CREATE INDEX team_owner_item_filings_item ON team_owner_item_filings (item_id)');
+    d.exec('ALTER TABLE team_handovers ADD COLUMN owner_items_state TEXT');
+
+    const rows = d.prepare('SELECT * FROM team_handovers WHERE needs_owner IS NOT NULL ORDER BY id').all();
+    for (const handover of rows) recordOwnerItems(handover, handover.at);
+    // Handover rows with no owner field did not raise an ask.  This explicit state avoids
+    // rendering an absent field as either a resolved queue or a parser failure.
+    d.prepare(`UPDATE team_handovers SET owner_items_state = 'not_raised'
+               WHERE needs_owner IS NULL AND owner_items_state IS NULL`).run();
+  },
 ]);
 
 // A shift label both a human and a script can produce without consulting anything.
@@ -388,13 +506,20 @@ router.post('/handover', express.json(), (req, res) => {
   const now = new Date().toISOString();
   const shift = b.shift || shiftLabel();
 
-  const info = db.prepare(`
-    INSERT INTO team_handovers (session_id, title, role, project, shift, at, done, blocked,
-                                candidates, needs_owner, next)
-    VALUES (?,?,?,?,?,?,?,?,?,?,?)`)
-    .run(b.session_id || (known && known.id) || b.title, b.title, role,
-      b.project || (known && known.project) || null, shift, now,
-      b.done || null, b.blocked || null, b.candidates || null, b.needs_owner || null, b.next || null);
+  let info;
+  let ownerItems;
+  db.withTransaction(() => {
+    info = db.prepare(`
+      INSERT INTO team_handovers (session_id, title, role, project, shift, at, done, blocked,
+                                  candidates, needs_owner, next)
+      VALUES (?,?,?,?,?,?,?,?,?,?,?)`)
+      .run(b.session_id || (known && known.id) || b.title, b.title, role,
+        b.project || (known && known.project) || null, shift, now,
+        b.done || null, b.blocked || null, b.candidates || null, b.needs_owner || null, b.next || null);
+    // Keep the submitted block verbatim on team_handovers, then derive addressable items.
+    // The transaction means a session never gets a successful handover while losing its asks.
+    ownerItems = recordOwnerItems({ id: info.lastInsertRowid, title: b.title, needs_owner: b.needs_owner }, now);
+  });
 
   const missing = ['done', 'blocked', 'next'].filter((k) => !b[k]);
   return res.json({
@@ -404,6 +529,7 @@ router.post('/handover', express.json(), (req, res) => {
     role,
     inRoster: !!known,
     missing,
+    ownerItems: { state: ownerItems.state, count: ownerItems.items.length },
     note: missing.length
       ? `Recorded. ${missing.join(', ')} left empty — the supervisor will see them as "not stated", which is different from "nothing to report".`
       : 'Recorded in full.',
@@ -419,6 +545,9 @@ function shiftView(sinceShift) {
 
   const roster = db.prepare('SELECT * FROM team_sessions WHERE retired_at IS NULL').all();
   const reported = new Set(handovers.map((h) => h.title));
+  // A current shift can itself contain re-filings.  Read the latest filing for each canonical
+  // item once, otherwise the supervisor's queue would inflate even though reportFor does not.
+  const items = [...new Map(ownerItemsForHandovers(handovers).map((item) => [item.id, item])).values()];
 
   // SILENCE IS REPORTED, and this is the half a list of handovers cannot give you. A session
   // that handed nothing over looks identical to one that had nothing to say, and the second is
@@ -432,28 +561,49 @@ function shiftView(sinceShift) {
     // Resolved items are separated, NOT hidden. The manager needs to know it does not have to
     // ask; the supervisor needs to see that the blocker cleared. Dropping them entirely would
     // make a question that got answered look like one that was never raised.
-    needsOwner: handovers.filter((h) => h.needs_owner && !h.owner_resolved_at)
-      .map((h) => ({ from: h.title, text: h.needs_owner })),
-    needsOwnerResolved: handovers.filter((h) => h.needs_owner && h.owner_resolved_at)
-      .map((h) => ({ from: h.title, text: h.needs_owner, by: h.owner_resolved_by, note: h.owner_resolved_note })),
+    needsOwner: items.filter((i) => !i.resolved_at)
+      .map((i) => ({ id: i.id, from: i.title, text: i.text, handoverId: i.handover_id, state: i.parse_state })),
+    needsOwnerResolved: items.filter((i) => i.resolved_at)
+      .map((i) => ({ id: i.id, from: i.title, text: i.text, handoverId: i.handover_id,
+        by: i.resolved_by, note: i.resolved_note, state: i.parse_state })),
     blocked: handovers.filter((h) => h.blocked).map((h) => ({ from: h.title, text: h.blocked })),
   };
 }
 
 router.get('/shift', (req, res) => res.json(shiftView(req.query.shift)));
 
-// Mark a handover's owner-facing item as answered without the owner. A NOTE IS REQUIRED:
-// "resolved" with no account of how is indistinguishable from someone finding the question
-// inconvenient, and this is the one queue where quietly dropping an item costs the most.
+// Resolve one canonical owner item.  The handover id proves the caller is addressing an item
+// that was actually filed in that report; the item id means a five-ask block can lose just one.
 router.post('/handover/:id/resolve-owner', express.json(), (req, res) => {
   const { by, note } = req.body || {};
   if (!by || !note) return res.status(400).json({ error: 'by and note are both required — a resolution with no account of how is a dropped question' });
   const h = db.prepare('SELECT * FROM team_handovers WHERE id = ?').get(req.params.id);
   if (!h) return res.status(404).json({ error: 'no such handover' });
   if (!h.needs_owner) return res.status(400).json({ error: 'that handover has no owner-facing item' });
-  db.prepare('UPDATE team_handovers SET owner_resolved_at=?, owner_resolved_by=?, owner_resolved_note=? WHERE id=?')
-    .run(new Date().toISOString(), by, note, h.id);
-  return res.json({ ok: true });
+  const items = ownerItemsForHandovers([h]);
+  if (!items.length) return res.status(409).json({ error: 'this handover raised no owner item' });
+  const now = new Date().toISOString();
+  const itemId = (req.body || {}).item_id;
+  if (itemId != null) {
+    const item = items.find((x) => x.id === Number(itemId));
+    if (!item) return res.status(404).json({ error: 'no such owner item on this handover' });
+    if (item.resolved_at) return res.status(409).json({ error: `already resolved by ${item.resolved_by}` });
+    db.prepare('UPDATE team_owner_items SET resolved_at=?, resolved_by=?, resolved_note=? WHERE id=?')
+      .run(now, String(by).trim(), String(note).trim(), item.id);
+    return res.json({ ok: true, itemId: item.id, resolved: 1 });
+  }
+
+  // Compatibility for callers of the old endpoint: without item_id it still resolves the
+  // whole legacy block, but reports exactly how many items that means.  New callers pass
+  // item_id and never mutate the immutable handover row's legacy resolution fields.
+  const open = items.filter((x) => !x.resolved_at);
+  db.withTransaction(() => {
+    const update = db.prepare('UPDATE team_owner_items SET resolved_at=?, resolved_by=?, resolved_note=? WHERE id=?');
+    for (const item of open) update.run(now, String(by).trim(), String(note).trim(), item.id);
+    db.prepare('UPDATE team_handovers SET owner_resolved_at=?, owner_resolved_by=?, owner_resolved_note=? WHERE id=?')
+      .run(now, String(by).trim(), String(note).trim(), h.id);
+  });
+  return res.json({ ok: true, resolved: open.length, legacyWholeBlock: true });
 });
 
 // Marking a handover read is how "the supervisor started their shift" becomes a fact rather
@@ -661,6 +811,14 @@ function reportFor(shift) {
   const decisions = db.prepare('SELECT * FROM team_decisions WHERE shift = ? ORDER BY id').all(s);
   const assignments = db.prepare('SELECT * FROM team_assignments WHERE shift = ? ORDER BY id').all(s);
   const roster = db.prepare('SELECT * FROM team_sessions WHERE retired_at IS NULL').all();
+  const ownerItemFilings = ownerItemsForHandovers(handovers);
+  const ownerItems = [...new Map(ownerItemFilings.map((item) => [item.id, item])).values()];
+  const byHandover = new Map();
+  for (const item of ownerItemFilings) {
+    if (!byHandover.has(item.handover_id)) byHandover.set(item.handover_id, []);
+    byHandover.get(item.handover_id).push(item);
+  }
+  for (const handover of handovers) handover.owner_items = byHandover.get(handover.id) || [];
 
   const unread = handovers.filter((h) => !h.read_at);
   const confirmedNoWork = plans.filter((x) => x.confirmed_at && !assignments.some((a) => a.plan_id === x.id));
@@ -673,22 +831,10 @@ function reportFor(shift) {
   const maybeSuperseded = drafts.filter((x) => plans.some((y) => y.id > x.id));
   const trulyStalled = drafts.filter((x) => !plans.some((y) => y.id > x.id));
 
-  // OWNER ITEMS ARE COUNTED AS DISTINCT ASKS, NOT AS HANDOVERS. A handover can be re-filed but
-  // not amended, so a session with a standing ask re-states it verbatim every shift end.
-  // Measured: the Coding Agent filed three handovers within two minutes whose owner blocks are
-  // 8-for-8 identical lines, and the Website Agent two that are 4-for-4. Counting rows made
-  // "6 untriaged" out of THREE real asks — doubling the one gap the owner said he cared most
-  // about, and inflating a queue the manager is meant to work through.
-  const openOwner = handovers.filter((h) => h.needs_owner && !h.owner_resolved_at);
-  const askKey = (s) => String(s).replace(/\s+/g, ' ').trim().toLowerCase().slice(0, 400);
-  const distinctAsks = new Map();
-  for (const h of openOwner) {
-    const k = `${h.title}|${askKey(h.needs_owner)}`;
-    // Keep the LATEST re-filing, because that is the one whose wording the session stands by.
-    distinctAsks.set(k, h);
-  }
-  const untriaged = [...distinctAsks.values()];
-  const refilings = openOwner.length - untriaged.length;
+  // Canonical owner items, rather than handover rows, own this count.  Filings preserve every
+  // original report, but a verbatim re-filing only refreshes its canonical item.
+  const untriaged = ownerItems.filter((item) => !item.resolved_at);
+  const refilings = ownerItemFilings.filter((item) => !item.resolved_at).length - untriaged.length;
   const openQ = steering.filter((x) => !x.answer);
   const reported = new Set(handovers.map((h) => h.title));
   const silent = roster.filter((r) => !reported.has(r.title));
@@ -717,8 +863,8 @@ function reportFor(shift) {
       confirmedNoWork.map((d) => `#${d.id}`),
       'The chain ran handover to plan to confirm, and stopped. From every other view this looks identical to success.'],
     ['untriaged', untriaged.length, `${untriaged.length} distinct owner-facing ask(s) untriaged`,
-      untriaged.map((h) => h.title),
-      `These are the only route a worker has to the owner. Until the manager triages them they reach nobody.${refilings ? ` Counted as DISTINCT ASKS: ${refilings} further handover(s) re-state one of these verbatim, because a handover can be re-filed but not amended.` : ''}`],
+      untriaged.map((item) => `${item.title} #${item.id}`),
+      `These are the only route a worker has to the owner. Until the manager triages them they reach nobody.${refilings ? ` Counted as DISTINCT ASKS: ${refilings} further filing(s) re-state one of these verbatim, so they update the same item rather than enlarge the queue.` : ''}`],
     ['unanswered', openQ.length, `${openQ.length} steering question(s) waiting on the owner`, [], ''],
     // SILENCE ONLY MEANS SOMETHING ONCE A SHIFT HAS STARTED REPORTING. With zero handovers
     // filed, every session on the roster is "silent" by construction — the evening shift
@@ -748,6 +894,8 @@ function reportFor(shift) {
     decisions,
     assignments,
     roster,
+    ownerItems,
+    ownerItemFilings,
     responses: allResponses,
     gaps,
     counts: {
@@ -851,3 +999,5 @@ module.exports.reportFor = reportFor;
 module.exports.shifts = shifts;
 module.exports.ROLES = ROLES;
 module.exports.CHAIN_ROLES = CHAIN_ROLES;
+module.exports.ownerItemKey = ownerItemKey;
+module.exports.ownerItemsFromBlock = ownerItemsFromBlock;

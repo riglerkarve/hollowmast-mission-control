@@ -73,7 +73,7 @@ for (const s of view.silent) {
 console.log(rule(`FOR THE OWNER — ${view.needsOwner.length}`));
 if (!view.needsOwner.length) console.log('  Nothing this shift.');
 for (const n of view.needsOwner) {
-  console.log(`\n  from ${n.from}:`);
+  console.log(`\n  item #${n.id} from ${n.from}${n.state === 'unsplit' ? ' (whole block; not safely split)' : ''}:`);
   for (const l of String(n.text).split('\n').filter((x) => x.trim()).slice(0, 4)) console.log(`    ${l.trim().slice(0, 96)}`);
 }
 if (view.needsOwner.length) {
@@ -86,7 +86,7 @@ if (view.needsOwner.length) {
 if (view.needsOwnerResolved && view.needsOwnerResolved.length) {
   console.log(rule(`ALREADY RESOLVED — DO NOT ASK — ${view.needsOwnerResolved.length}`));
   for (const n of view.needsOwnerResolved) {
-    console.log(`  from ${n.from}: ${String(n.text).split('\n')[0].slice(0, 76)}`);
+    console.log(`  item #${n.id} from ${n.from}: ${String(n.text).split('\n')[0].slice(0, 76)}`);
     console.log(`    resolved by ${n.by}: ${n.note}`);
   }
 }

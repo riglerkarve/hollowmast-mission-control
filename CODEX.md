@@ -170,6 +170,71 @@ about — check `/api/team/assignments` before picking up anything not on this t
 
 ---
 
+## Also now in scope: the open batches, M116, M117 — and Ollama, both tiers
+
+Owner instruction, 20 August 2026: keep adding to the project. This is not a pause between
+batches — it is authorization to keep going, including two items filed after the batch table
+above was written, so they are not on it.
+
+**Keep going through `PLAN-2026-08-20-to-23.md`'s remaining batches** — H (M107–M110), and
+whatever is still open when you read this. Nothing here changes "what you do not own" above:
+this is continuation of the audit/verification work you are already doing, not authorization for
+a new route, table or panel. If a finding genuinely needs one, the answer is still the same —
+propose it in a handover, do not build it.
+
+**M116 — `todo_items.kind` has no per-row author, filed 20 Aug 00:32.** 21 kinds were written by
+the model during the window `ollama-shift.cjs` had rules-first inverted (fixed in `3aece42`),
+and there is no way to tell which 21 rows they are — `kind` has no source column and no
+timestamp. **Not retroactively fixable with confidence** — guessing which rows were affected and
+correcting them on a guess would be worse than leaving them alone. The fix is forward-only: add
+a small append-only log, a new table `todo_kind_log (todo_item_id, kind, source, model, at)`,
+written by `ollama-shift.cjs` every time it sets a `kind` — both the rules pass and the model
+pass — so this class of contamination cannot happen silently again. Do not touch the 21
+historical rows: `PLAN-OLLAMA-2026-08-20.md`'s "Job 2" (re-score them, report disagreements,
+never overwrite) is the right and sufficient response to the past, and it is already spec'd
+there.
+
+**M117 — the Scribe has zero proven capabilities, filed 20 Aug 00:32.** `tools/model-bakeoff.cjs`
+already exists and runs the four gates (fit, schema, classify, discriminate). It has not been run
+to completion and recorded. Run it, then `POST /api/team/scribe/measure` with the result for
+whichever jobs pass — including `finance-categorisation`, which has strong existing evidence (the
+live oracle check `categorise-model.cjs` runs every time, added tonight) but has never been
+formally registered in `scribe_capabilities`. Report jobs that fail too; a capability table
+holding only passes has the same flattering-filter risk as any other filter here.
+
+**Ollama — you already drive it. This is what that means concretely.**
+
+*Local (`qwen3.5:4b`, the default) is yours for anything that clears the three gates in
+`OLLAMA.md`* — low-stakes, reviewable, structurally constrained. `ollama-shift.cjs`,
+`classify-senders.cjs` and `llm-probe-project.cjs` are already built for this and already yours
+to run during your shifts; nobody else is driving them. Always route through
+`tools/ollama-run.cjs`, never a direct fetch to `11434` — that is the only path where the
+privacy gate and the `think:false` fix (both this session) apply automatically.
+
+*Cloud (`gpt-oss:20b-cloud` / `120b-cloud`) exists but is close to useless for your actual jobs*:
+measured, twice, to ignore a JSON schema entirely — it returns plain text where structured output
+was demanded. Every job you drive needs a constrained enum, so cloud fails the gate that matters
+before speed or size are even a question. There is no unconstrained-prose job in your current
+queue that would suit it, and it is never a channel for anything `server/ollama.js`'s `SENSITIVE`
+regex would catch — that check runs on content, not on your intent, and it is not a guard you get
+to reason around because you believe a particular payload is harmless.
+
+**Finance and wellbeing data are no longer yours to send to any model, full stop — not even
+local.** As of 20 Aug the Scribe holds both under exclusive custody; `server/scribe.js`'s
+`custodyAllows` refuses any caller not identified as `scribe`. This was already true for finance
+under the old rule ("ledger data itself," above) and is now true for wellbeing too. If a job you
+are driving would touch either, it is not your job to drive — it is the Scribe's, and the Scribe
+is not you.
+
+**Second brain: file it where it is actually read, not into `brain_notes`.** That table is the
+owner's channel for annotating the Claude memory store — a place he writes to and Claude reads,
+not one for you to write into. The real second brain for this project is the board and the
+handover chain you already use: file every finding on the board with its reproduction, write
+your handover every shift, and that already is "tracked with second brain" for anything you do.
+Nothing new to build here either.
+
+---
+
 ## How to work here
 
 **Close what you finish.** M71 and M73 are both done and both still show open on the board.

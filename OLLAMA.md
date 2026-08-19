@@ -16,22 +16,61 @@ A task qualifies only if it is **all three**: low-stakes (wrong is cheap and vis
 schema with an `enum`, never bare `format: 'json'`). `tools/offload-router.cjs --policy` is the
 live decision table, not this paragraph — read the tool, not a copy of it.
 
-Currently offloaded: transaction categorisation (suggestion only), mail sender classification
-(suggestion only), backlog `kind` labelling (applied directly — a routing hint, one-UPDATE undo).
+Currently offloaded: transaction categorisation (suggestion only, now identifies as the Scribe —
+see below), mail sender classification (suggestion only), backlog `kind` labelling (applied
+directly — a routing hint, one-UPDATE undo).
 
 ## What it must never touch
 
 - **Any number that appears anywhere.** Arithmetic is SQL's job; a model's total is a plausible
   total, which is worse than no total.
 - **Anything auto-applied without review.** 20/20 on a probe is not 100% on the next 20.
-- **The wellbeing module.** Not the panel, not the prose, not a pattern — fixed policy, not a
-  gate score.
+- **The wellbeing module — except through the Scribe, and even then only partway.** Owner
+  decision, 20 Aug 2026: the *nothing-may-be-model-generated* clause was lifted, but only for the
+  Scribe, and only with a write that does nothing until the owner reviews it (`scribe_proposals`).
+  What did **not** change: nothing there may read as diagnosis, clinical advice or a risk score —
+  a numeric value is refused structurally, unreviewably, because approving a score still enacts a
+  score. No other caller may even read the module. See "The Scribe" below.
 - **Architecture, project memory, or any claim about the code.** A confabulated fact reads as
   verified, which is worse than an absent one.
 - **Sensitive data to a `-cloud` model.** `server/ollama.js`'s `SENSITIVE` regex checks the
   *payload*, not the caller's intent or the URL — cloud and local are both served from
   `127.0.0.1`, and a `-cloud` suffix in a model name is the only signal that data is about to
   leave the machine.
+
+## The Scribe — exclusive custody of finance and wellbeing, added 20 Aug 2026
+
+`server/scribe.js`. Two owner decisions, same night: give one tier exclusive custody of the two
+most sensitive domains, and give the free local tier a real job for when the paid engines
+(Claude, Codex) hit a weekly or session cap and the workspace would otherwise go dark.
+
+**"No other model may even read them."** Not "no other model may write" — *read*.
+`custodyAllows(module, engine, intent)` refuses any `engine !== 'scribe'` outright for `finance`
+or `wellbeing`, in either direction. This is stricter than the general privacy gate above, which
+only stops sensitive data reaching a *cloud* model — the Scribe's custody stops every model
+except itself, local included.
+
+**Every capability starts unproven and stays that way until measured.** `scribeCan(db, job)`
+checks `scribe_capabilities`; a job with no row, a failed row, or a row older than 45 days is
+refused. The table shipped **empty by design** — seeding it with predicted jobs would make it "a
+list of predictions wearing a measurement's clothing." `tools/model-bakeoff.cjs` runs the four
+gates (fits the card, honours a schema, classifies above a floor, discriminates inverted
+evidence) and `POST /api/team/scribe/measure` records the result. As of 20 Aug the table holds
+exactly one row: `team-manager-verdict`, **failed** — 0.5 against a floor of 0.8, because
+qwen3.5:4b returned the same verdict for evidence that supported a claim and evidence that
+contradicted it. Good at "which of four boxes"; not yet trusted with "is this true".
+
+**Caps are declared, never detected.** Nothing here can see an upstream quota, and a detector
+that cannot look and says "not capped" is indistinguishable from a working one until it matters.
+An undeclared cap leaves the Scribe idle — the safe direction to be wrong in.
+
+**`categorise-model.cjs` now identifies as the Scribe** (this session, 20 Aug) — it was built the
+same night as the custody rule, doing exactly the Scribe's job, and had no way to know about it.
+`db.setProcessActor('scribe')`, an explicit `custodyAllows` check, and `scribe.recordRun()` on
+every exit. Not gated behind `scribeCan()` — that job has never been formally registered via
+`POST /api/team/scribe/measure`, but it re-measures accuracy against a live oracle on every
+single run, which is fresher evidence than a cached table row. Registering it formally (M117) is
+still worth doing, so the owner can see it alongside the Scribe's other jobs in one place.
 
 ## The one path everything goes through now — `tools/ollama-run.cjs`, built 19 Aug 2026
 

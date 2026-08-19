@@ -1,0 +1,206 @@
+{
+  "captured_at": "2026-08-19T19:23:46.148Z",
+  "why": "Immutable baseline for M73. Any change to how needs_owner is stored must preserve every one of these, and this file is the control a THIRD party checks against -- not the agent that did the migration. An agent proving its own migration against a snapshot it generated afterwards proves nothing.",
+  "handovers_with_owner_items": 22,
+  "total_bytes": 15261,
+  "rows": [
+    {
+      "id": 1,
+      "title": "Architect",
+      "shift": "2026-08-19-afternoon",
+      "resolved": true,
+      "needs_owner_sha256": "0175f0317ba234134b7b5b0d8c7bfa4e9b77989daa0cde7b0f6419305f56366c",
+      "needs_owner_chars": 320,
+      "needs_owner": "**There is no Team Manager.** The roster has 8 workers and 1 supervisor. With that seat empty\nno plan can be confirmed, nothing can be delegated, and no steering question can reach you —\nthe chain stops at \"plan drafted\". Deciding who fills it is yours, and it is the one thing\nthat makes the rest of this structure run."
+    },
+    {
+      "id": 2,
+      "title": "Website Agent",
+      "shift": "2026-08-19-afternoon",
+      "resolved": false,
+      "needs_owner_sha256": "faea1b1cd0f3ca8bddd487a065379d012fffd72261b66c836519e8ab6b674d61",
+      "needs_owner_chars": 1147,
+      "needs_owner": "- **Chrome extension has been unreachable since ~15:20**, so both itch items above (upload, description) could not be done this shift. They need your logged-in session. The zip will be re-packed from HEAD at upload time.\n- **Ko-fi still cannot take money.** `ko-fi.com/mindvirus` exists but shows \"Want to receive money on Ko-fi? Enable payments\" and its Support button leads nowhere. Press *Enable payments* (PayPal/Stripe — credentials, so yours), then `bash tools/kofi-live.sh --i-checked` puts it on the support page in one command. It refuses without the flag because Ko-fi's bot wall means a script cannot look.\n- **Listen to the thirteen re-cut sounds.** `localhost:5177/tools/audio-ab/index.html` plays each before/after through the real synthesis code, with a burst button. I cannot hear; name the sound that's wrong and I'll cut it again.\n- **A call on the career-block oscillation.** If the feature is meant to stay, the session holding the older copy needs to re-read `65_save.js`/`60_ui.js`/`70_game.js` from HEAD; if it is meant to go, it should go in one commit that also removes the calls. S-1944 says this; nobody has answered it."
+    },
+    {
+      "id": 3,
+      "title": "Team Supervisor",
+      "shift": "2026-08-19-afternoon",
+      "resolved": false,
+      "needs_owner_sha256": "da43d65edd8b734c47e3e75ab9beefa0b18a549ed246f5cc18a947a3e332a031",
+      "needs_owner_chars": 372,
+      "needs_owner": "Nothing new. The career-block decision is already this shift's steering question\nand I am deliberately not duplicating it here — asking the same thing twice\nthrough two routes is the interruption this structure exists to prevent.\n\nSix commits are unpushed in `Survive`. Pushing is the owner's call and he has not\nasked this session; I am recording it rather than doing it."
+    },
+    {
+      "id": 4,
+      "title": "Coding Agent",
+      "shift": "2026-08-19-afternoon",
+      "resolved": false,
+      "needs_owner_sha256": "dd7b5377ea86e0e6a7743d4e45106a1a08eb946a3296fb4e6a6f1720b3e7a51d",
+      "needs_owner_chars": 753,
+      "needs_owner": "- **The push.** `main` is **9 commits ahead of `origin`** and only one is mine. The public is\n  serving `0.1.0+14e681a` with **`careerRows 0`** — a game missing the career feature entirely\n  — while `main` holds `0.1.0+1896db9` with it present. Every commit since has faithfully\n  carried the stale file forward, which is correct behaviour for a generated file nobody meant\n  to touch. **Nothing ships to players until someone with your authority says push.** The\n  supervisor has taken this to you with a recommendation; this is the same ask from the other\n  end of it.\n- **The mouse-default change described under Deviations** is done, not pending — but it alters\n  feel for every existing player, so it is here in case you want it reverted. One word."
+    },
+    {
+      "id": 5,
+      "title": "Coding Agent",
+      "shift": "2026-08-19-afternoon",
+      "resolved": false,
+      "needs_owner_sha256": "dd7b5377ea86e0e6a7743d4e45106a1a08eb946a3296fb4e6a6f1720b3e7a51d",
+      "needs_owner_chars": 753,
+      "needs_owner": "- **The push.** `main` is **9 commits ahead of `origin`** and only one is mine. The public is\n  serving `0.1.0+14e681a` with **`careerRows 0`** — a game missing the career feature entirely\n  — while `main` holds `0.1.0+1896db9` with it present. Every commit since has faithfully\n  carried the stale file forward, which is correct behaviour for a generated file nobody meant\n  to touch. **Nothing ships to players until someone with your authority says push.** The\n  supervisor has taken this to you with a recommendation; this is the same ask from the other\n  end of it.\n- **The mouse-default change described under Deviations** is done, not pending — but it alters\n  feel for every existing player, so it is here in case you want it reverted. One word."
+    },
+    {
+      "id": 6,
+      "title": "Coding Agent",
+      "shift": "2026-08-19-afternoon",
+      "resolved": false,
+      "needs_owner_sha256": "dd7b5377ea86e0e6a7743d4e45106a1a08eb946a3296fb4e6a6f1720b3e7a51d",
+      "needs_owner_chars": 753,
+      "needs_owner": "- **The push.** `main` is **9 commits ahead of `origin`** and only one is mine. The public is\n  serving `0.1.0+14e681a` with **`careerRows 0`** — a game missing the career feature entirely\n  — while `main` holds `0.1.0+1896db9` with it present. Every commit since has faithfully\n  carried the stale file forward, which is correct behaviour for a generated file nobody meant\n  to touch. **Nothing ships to players until someone with your authority says push.** The\n  supervisor has taken this to you with a recommendation; this is the same ask from the other\n  end of it.\n- **The mouse-default change described under Deviations** is done, not pending — but it alters\n  feel for every existing player, so it is here in case you want it reverted. One word."
+    },
+    {
+      "id": 7,
+      "title": "Website Agent",
+      "shift": "2026-08-19-afternoon",
+      "resolved": false,
+      "needs_owner_sha256": "faea1b1cd0f3ca8bddd487a065379d012fffd72261b66c836519e8ab6b674d61",
+      "needs_owner_chars": 1147,
+      "needs_owner": "- **Chrome extension has been unreachable since ~15:20**, so both itch items above (upload, description) could not be done this shift. They need your logged-in session. The zip will be re-packed from HEAD at upload time.\n- **Ko-fi still cannot take money.** `ko-fi.com/mindvirus` exists but shows \"Want to receive money on Ko-fi? Enable payments\" and its Support button leads nowhere. Press *Enable payments* (PayPal/Stripe — credentials, so yours), then `bash tools/kofi-live.sh --i-checked` puts it on the support page in one command. It refuses without the flag because Ko-fi's bot wall means a script cannot look.\n- **Listen to the thirteen re-cut sounds.** `localhost:5177/tools/audio-ab/index.html` plays each before/after through the real synthesis code, with a burst button. I cannot hear; name the sound that's wrong and I'll cut it again.\n- **A call on the career-block oscillation.** If the feature is meant to stay, the session holding the older copy needs to re-read `65_save.js`/`60_ui.js`/`70_game.js` from HEAD; if it is meant to go, it should go in one commit that also removes the calls. S-1944 says this; nobody has answered it."
+    },
+    {
+      "id": 10,
+      "title": "Website Agent",
+      "shift": "2026-08-19-evening",
+      "resolved": false,
+      "needs_owner_sha256": "a974126f957554f767518e76f349c2f1142b8fc87298332d9ff91e50f443f49d",
+      "needs_owner_chars": 1457,
+      "needs_owner": "- **Server-side protection is yours.** Every local hook can be skipped by some porcelain choice; a GitHub branch-protection rule or pre-receive check on the repo is the only shape that cannot. If the whole-file-revert problem persists past the hooks, that is the next lever, and it needs your GitHub account.\n\n- **Chrome extension has been unreachable since ~15:20**, so both itch items above (upload, description) could not be done this shift. They need your logged-in session. The zip will be re-packed from HEAD at upload time.\n- **Ko-fi still cannot take money.** `ko-fi.com/mindvirus` exists but shows \"Want to receive money on Ko-fi? Enable payments\" and its Support button leads nowhere. Press *Enable payments* (PayPal/Stripe — credentials, so yours), then `bash tools/kofi-live.sh --i-checked` puts it on the support page in one command. It refuses without the flag because Ko-fi's bot wall means a script cannot look.\n- **Listen to the thirteen re-cut sounds.** `localhost:5177/tools/audio-ab/index.html` plays each before/after through the real synthesis code, with a burst button. I cannot hear; name the sound that's wrong and I'll cut it again.\n- **A call on the career-block oscillation.** If the feature is meant to stay, the session holding the older copy needs to re-read `65_save.js`/`60_ui.js`/`70_game.js` from HEAD; if it is meant to go, it should go in one commit that also removes the calls. S-1944 says this; nobody has answered it."
+    },
+    {
+      "id": 11,
+      "title": "Website Agent",
+      "shift": "2026-08-19-evening",
+      "resolved": false,
+      "needs_owner_sha256": "b6f89e04cc332f4c637d3a34ff46707bd74d67c8884e2c18d7133e205456be20",
+      "needs_owner_chars": 1504,
+      "needs_owner": "- **Server-side protection is yours.** Every local hook can be skipped by some porcelain choice; a GitHub branch-protection rule or pre-receive check on the repo is the only shape that cannot. If the whole-file-revert problem persists past the hooks, that is the next lever, and it needs your GitHub account.\n\n- **Chrome extension has been unreachable since ~15:20**, so both itch items above (upload, description) could not be done this shift. They need your logged-in session. The zip will be re-packed from HEAD at upload time.\n- **Ko-fi: one owner step, not a defect.** Nothing public is wrong -- `site/support.html` has `kofi: null`, so no link exists. But the account DOES exist: the owner created `ko-fi.com/mindvirus` on 18 Aug ~23:00 and said \"Kofi account created\" then \"try kofi now\"; I opened it in their session and Ko-fi's own banner reads \"Want to receive money on Ko-fi? Enable payments\"; the URL is in the repo at `tools/kofi-live.sh:19`. (A note elsewhere that no such account appears in the repo is incorrect on that line.) The one step is *Enable payments* (PayPal/Stripe credentials, so the owner's); then `bash tools/kofi-live.sh --i-checked` puts the link on the support page. Low urgency; filed once so it is not lost, not to be re-asked each shift.\n- **Listen to the thirteen re-cut sounds.** `localhost:5177/tools/audio-ab/index.html` plays each before/after through the real synthesis code, with a burst button. I cannot hear; name the sound that's wrong and I'll cut it again."
+    },
+    {
+      "id": 12,
+      "title": "Website Agent",
+      "shift": "2026-08-19-evening",
+      "resolved": false,
+      "needs_owner_sha256": "252fbc791f72d5c9621c66c5d5377ca674d9b0e78206b6f0473b30aa308781b7",
+      "needs_owner_chars": 1551,
+      "needs_owner": "- **Server-side protection is yours.** Every local hook can be skipped by some porcelain choice; a GitHub branch-protection rule or pre-receive check on the repo is the only shape that cannot. If the whole-file-revert problem persists past the hooks, that is the next lever, and it needs your GitHub account.\n\n- **Chrome extension has been unreachable since ~15:20**, so both itch items above (upload, description) could not be done this shift. They need your logged-in session. The zip will be re-packed from HEAD at upload time.\n- **Ko-fi: one owner step, not a defect.** Nothing public is wrong -- `site/support.html` has `kofi: null`, so no link exists. But the account DOES exist: the owner created `ko-fi.com/mindvirus` on 18 Aug ~23:00 and said \"Kofi account created\" then \"try kofi now\"; I opened it in their session and Ko-fi's own banner reads \"Want to receive money on Ko-fi? Enable payments\"; the URL is in the repo at `tools/kofi-live.sh:19`. (The Manager's earlier note that no such account appears in the repo was withdrawn by the Manager at ~18:30; both records now agree.) The one step is *Enable payments* (PayPal/Stripe credentials, so the owner's); then `bash tools/kofi-live.sh --i-checked` puts the link on the support page. Low urgency; filed once so it is not lost, not to be re-asked each shift.\n- **Listen to the thirteen re-cut sounds.** `localhost:5177/tools/audio-ab/index.html` plays each before/after through the real synthesis code, with a burst button. I cannot hear; name the sound that's wrong and I'll cut it again."
+    },
+    {
+      "id": 13,
+      "title": "Auto Play Agent",
+      "shift": "2026-08-19-evening",
+      "resolved": false,
+      "needs_owner_sha256": "cb6d4ddae0ee37fbe9c3f9e922fda64764b9eb0db05424bdb3a8271ed73967c9",
+      "needs_owner_chars": 1177,
+      "needs_owner": "**The kit-row question is ANSWERED, and the answer is unchanged — but the record\nshould say why it was asked.** `kitOff` removed the bandage row after four arms\nshowed it bought ~20 deaths and returned nothing on *beats*; the bar changed to\n*towers/won* the same day, and B067 found the tower chain fails because the bot\ndies mid-hunt for electronics. So the question was whether the bar change had\ninverted an already-settled trade. **Measured: it had not.** Structures are\nsignificantly worse (−1.67), deaths not significantly better, towers zero both\nsides. **Recommendation: leave the kit row out. No owner decision needed unless\nhe wants to overrule the evidence.**\n\nLogged as team_decision #8 and held for this measurement — the measurement\narrived. This is materially different from \"nobody asked\", which is the\ndistinction the `refused` counter exists to preserve.\n\n**What does still need him, and is smaller:** the tower bar is gated on survival,\nnot planning, and four arms have now failed to move attrition. If towers are to\nmove this quarter, the constraint is likely game-side (electronics availability\nor bleeding rates), which is outside a bot session's mandate."
+    },
+    {
+      "id": 14,
+      "title": "Team Manager",
+      "shift": "2026-08-19-evening",
+      "resolved": false,
+      "needs_owner_sha256": "14266d3a3a7ebfd3e3a9d3cf38279a7d9de0cd252cc90de8e65bdf871ca79271",
+      "needs_owner_chars": 682,
+      "needs_owner": "- **Ko-fi: one owner step, not a defect.** The account exists\n  (`ko-fi.com/mindvirus`, `tools/kofi-live.sh:19`); it needs *Enable payments*\n  (PayPal/Stripe credentials), then `bash tools/kofi-live.sh --i-checked`. Low\n  urgency — filed once, not to be re-asked each shift.\n- **Thirteen re-cut sounds need a listen** —\n  `localhost:5177/tools/audio-ab/index.html`, before/after through the real\n  synthesis code.\n- **A mouse-default change already shipped**, not proposed — changes feel for\n  every existing player. One word if you want it reverted.\n- Two steering questions queued for whenever the next slot opens: human\n  playtest data (strongest), server-side branch protection."
+    },
+    {
+      "id": 16,
+      "title": "Fable Ultra",
+      "shift": "2026-08-19-evening",
+      "resolved": false,
+      "needs_owner_sha256": "596ec5e97ab33c2f757f2539f28c9dd9da3bbc0b84e6aea52e23291ffb03fdaa",
+      "needs_owner_chars": 381,
+      "needs_owner": "- Nothing blocking. One steering question, low priority: should Mini Games additions stay\n  \"owner-request only\"? Three small games now sit on that shelf (GIVE WAY, PEAL, SHUNT) while the\n  kill criterion reads \"a fourth game starts before HOLLOWMAST ships\". I read mini games as parked\n  adjacent content, not a build in rotation - confirm or correct, no action needed either way."
+    },
+    {
+      "id": 17,
+      "title": "Opus 5 Ultra",
+      "shift": "2026-08-19-evening",
+      "resolved": false,
+      "needs_owner_sha256": "47428ba1f716f05d2d341c3d58773b298636e8e753ead761cf48e1377e705815",
+      "needs_owner_chars": 384,
+      "needs_owner": "1. **Should SHUNT be shared?** It is published but private. Both other games have public\n   artifact links in the README. Sharing is yours to do — I will not.\n2. **Should GIVE WAY and PEAL get the one-line charset fix?** Two committed, published, parked\n   files, currently harmless. Say the word and it is a two-minute change; otherwise it stays\n   recorded here and nothing happens."
+    },
+    {
+      "id": 18,
+      "title": "use chr",
+      "shift": "2026-08-19-evening",
+      "resolved": false,
+      "needs_owner_sha256": "94ea255f1ad9423e6a554cf21a58b5ced5e57792a642e7bf76f1aca36489d937",
+      "needs_owner_chars": 543,
+      "needs_owner": "- Click **VERIFY** in the Search Console dialog (files are live for both Google accounts); then\n  the sitemap can be submitted.\n- Create a read-only Cloudflare API token (My Profile → API Tokens → \"Read analytics and logs\",\n  scoped to the account) and store it: `gh secret set CF_API_TOKEN --repo riglerkarve/profitprint`\n  — the token should not pass through me or the repo.\n- One word on the awesome-3d-printing PR (\"open it\") — fork + PR appear under your GitHub.\n- Etsy shop: the pack is ready; the set-up fee decision at signup is yours."
+    },
+    {
+      "id": 19,
+      "title": "Coding Agent",
+      "shift": "2026-08-19-evening",
+      "resolved": false,
+      "needs_owner_sha256": "68961f5ce4c007966b0ff41a03f6431a848330472689988f6c27215f64f048a7",
+      "needs_owner_chars": 982,
+      "needs_owner": "- **The push.** `main` is **6 ahead of `origin`**, four of them mine\n  (`4e7f50f`, `51f0447`, `60b7fc2`, `1a03fa4`). Nothing of mine needs to ship to players —\n  they are tracker, docs and tooling — but they are unpushed and only you authorise that.\n  Correcting my own earlier report: **the public is fine.** `hollowmast.com/play/` serves\n  `0.1.0+1896db9` with `careerRows 2`. My claim that it lacked the career feature was true\n  when I filed the afternoon handover and I repeated it after having personally disproved\n  it an hour earlier — I read my own handover instead of my own measurement.\n- **S-1952 is still yours** — itch.io serving a build two behind the site, the packed zip\n  one behind.\n- **A human playtest remains the highest-value thing nobody can do for you.** `DESIGN.md`\n  says there is none at all, and A1's null result is exactly the kind of question forty\n  minutes of real play would settle. F9 takes clean screenshots and the pad's Share button\n  does too."
+    },
+    {
+      "id": 20,
+      "title": "Admin Agent",
+      "shift": "2026-08-19-evening",
+      "resolved": false,
+      "needs_owner_sha256": "d2862346f0fbe89f1427d61da70637784a00bc933f7097a3df9a6e70131c8551",
+      "needs_owner_chars": 153,
+      "needs_owner": "Unchanged from #9 — three posts (devlog, Bluesky, r/WebGames), the 3:1 Bluesky\nbanner that does not exist, and the unrun `worker/purge-test-reports.ps1`."
+    },
+    {
+      "id": 21,
+      "title": "Codex Worker",
+      "shift": "2026-08-19-evening",
+      "resolved": false,
+      "needs_owner_sha256": "50bbe0686fa0081a1801c9e7dd5cc5ef24693845bf2fefb15b2c092b18cf791f",
+      "needs_owner_chars": 468,
+      "needs_owner": "- Required pre-commit pull is blocked by filesystem permissions on the shared\n  checkout metadata. Twice, `git pull` returned:\n\n```text\nerror: cannot open '.git/FETCH_HEAD': Permission denied\n```\n\n  I therefore did not violate the shared-tree rule by committing from an\n  unpulled checkout. The source change is ready, but must be committed by a\n  worker with `.git` write access using:\n\n```text\ngit pull\ngit commit --only src/66_auto.js -m \"Fix bot heat response\"\n```"
+    },
+    {
+      "id": 22,
+      "title": "Codex Worker",
+      "shift": "2026-08-19-evening",
+      "resolved": false,
+      "needs_owner_sha256": "8662fb1ef70f425ae973fd1d4f055918c362a01f1498ec14bbdebf56aac21e5f",
+      "needs_owner_chars": 7,
+      "needs_owner": "- None."
+    },
+    {
+      "id": 23,
+      "title": "Codex Worker",
+      "shift": "2026-08-19-evening",
+      "resolved": false,
+      "needs_owner_sha256": "9670c45fb28bfec610c808faeaed730acd71db0864e14aeba4a7366fa67a0ad7",
+      "needs_owner_chars": 10,
+      "needs_owner": "- Nothing."
+    },
+    {
+      "id": 24,
+      "title": "Architect",
+      "shift": "2026-08-19-evening",
+      "resolved": false,
+      "needs_owner_sha256": "83d5e50f4c8db861e38bdd5c5342816687547817a1babb67355abda6504cbf98",
+      "needs_owner_chars": 712,
+      "needs_owner": "- **M76 — a Claude-vs-Codex disagreement is waiting for the Manager**, not for the owner.\n  Codex added `MC_DISABLE_ACCESS_LOG` to `server/db.js`, letting `--dry` silence the ledger\n  access log. Narrow and defensible; I think it is wrong, because a dry briefing genuinely\n  does read the ledger and logging that is the log working. Manager to rule and record the\n  arbitration with its engine.\n- **Nothing else for the owner.** The three setup items on\n  `tools/owner-setup-stats-codex.ps1` (GA read access, the reports admin key, the Safety\n  ceiling) are already his and already recorded; they are not re-filed here, because a\n  standing ask re-stated verbatim is exactly the queue-inflation this shift fixed."
+    },
+    {
+      "id": 25,
+      "title": "Codex Worker",
+      "shift": "2026-08-19-evening",
+      "resolved": false,
+      "needs_owner_sha256": "903ea500e7ccf842c1312b6c2f964e3e98ff146456cecec717e9a0e122bf735f",
+      "needs_owner_chars": 5,
+      "needs_owner": "None."
+    }
+  ]
+}

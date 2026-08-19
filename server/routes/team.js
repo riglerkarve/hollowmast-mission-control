@@ -160,6 +160,41 @@ db.migrate('team', [
     d.exec('ALTER TABLE team_handovers ADD COLUMN owner_resolved_by TEXT');
     d.exec('ALTER TABLE team_handovers ADD COLUMN owner_resolved_note TEXT');
   },
+
+  // 3. Decisions that have no other home.
+  //
+  // Owner instruction, 19 Aug: "ensure every plan and decision is being recorded". Measured
+  // before adding this, three of the four kinds already were — a manager's verdict lives on
+  // team_plans, an owner's answer on team_steering, a supervisor's plan in its own body. The
+  // gap was every OTHER call: the architect's sequencing, a scope change, a deferral, a "no".
+  // Those lived in commit messages and CLAUDE.md, which is durable but not reviewable — you
+  // cannot ask a commit log "what did we decide this week and what would change it".
+  //
+  // THIS TABLE DOES NOT DUPLICATE THE OTHER THREE. A verdict recorded here as well would be
+  // two owners for one fact, disagreeing the first time one was edited. The review report
+  // JOINS all four; each fact keeps exactly one home.
+  //
+  // `revisit_when` is the field that makes it more than a log. The workspace rule is that a
+  // "no" I cannot justify later is just a mood — so a decision states what would change it,
+  // and the report surfaces the ones whose condition has a date attached and has passed.
+  (d) => {
+    d.exec(`
+      CREATE TABLE team_decisions (
+        id           INTEGER PRIMARY KEY AUTOINCREMENT,
+        at           TEXT NOT NULL,
+        shift        TEXT NOT NULL,
+        decided_by   TEXT NOT NULL,     -- a session title, or 'owner'
+        role         TEXT,
+        decision     TEXT NOT NULL,     -- what was decided, in one line
+        because      TEXT NOT NULL,     -- the reasoning. Required: see below.
+        cost_if_wrong TEXT,             -- what it costs if this turns out wrong
+        revisit_when TEXT,              -- the condition that would reopen it
+        recheck_at   TEXT,              -- a date, where the condition has one
+        supersedes   INTEGER REFERENCES team_decisions(id),
+        evidence     TEXT               -- commit sha, file:line, a measurement
+      )`);
+    provenance.addColumn(d, 'team_decisions');
+  },
 ]);
 
 // A shift label both a human and a script can produce without consulting anything.
@@ -387,6 +422,31 @@ router.get('/steering', (req, res) => {
     open: openSteering(),
     answered: db.prepare('SELECT * FROM team_steering WHERE answer IS NOT NULL ORDER BY answered_at DESC LIMIT 20').all(),
   });
+});
+
+// --------------------------------------------------------------------------- decisions
+
+// `because` IS REQUIRED, and that refusal is the whole value of the table. A decision with no
+// reasoning cannot be reviewed, cannot be argued with later, and cannot be told apart from a
+// preference — the workspace rule is that a "no" I cannot justify later is just a mood. The
+// same argument that makes a manager's verdict mandatory makes this one mandatory.
+router.post('/decision', express.json(), (req, res) => {
+  const b = req.body || {};
+  if (!b.decision) return res.status(400).json({ error: 'decision is required' });
+  if (!b.because) return res.status(400).json({ error: 'because is required — a decision with no reasoning cannot be reviewed later, which is the only reason to record it' });
+  if (!b.decided_by) return res.status(400).json({ error: 'decided_by is required' });
+  const info = db.prepare(`
+    INSERT INTO team_decisions (at, shift, decided_by, role, decision, because, cost_if_wrong,
+                                revisit_when, recheck_at, supersedes, evidence, by_whom)
+    VALUES (?,?,?,?,?,?,?,?,?,?,?,?)`)
+    .run(new Date().toISOString(), b.shift || shiftLabel(), b.decided_by, b.role || null,
+      b.decision, b.because, b.cost_if_wrong || null, b.revisit_when || null,
+      b.recheck_at || null, b.supersedes || null, b.evidence || null, req.by || 'unknown');
+  res.json({ ok: true, id: info.lastInsertRowid });
+});
+
+router.get('/decisions', (req, res) => {
+  res.json({ decisions: db.prepare('SELECT * FROM team_decisions ORDER BY id DESC LIMIT 100').all() });
 });
 
 module.exports = router;

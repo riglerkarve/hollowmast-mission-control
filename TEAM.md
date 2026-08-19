@@ -43,6 +43,48 @@ defect that invalidates the work in flight — and P0 has always dropped everyth
 
 ---
 
+## Who may message whom — owner instruction, 19 August 2026
+
+*"Within the team structure — ensure only managers sending you messages."*
+
+**Messages follow the chain. They do not shortcut it.**
+
+```
+   worker ──handover──► supervisor ──plan──► manager ──► architect
+                                                │
+                                                └──one steering quiz a day──► the owner
+```
+
+| From | May message | May **not** message |
+|---|---|---|
+| **worker** | the supervisor | the manager, the architect, the owner |
+| **supervisor** | the manager | the architect, the owner |
+| **manager** | the architect, the owner | — |
+| **architect** | the manager | workers and the supervisor directly |
+
+**Why the architect's inbox is restricted too, and not as a courtesy.** The architect is the
+only role besides the manager that reaches the owner. An unfiltered inbox there rebuilds
+exactly the problem the structure exists to solve, one level down: nine sessions' questions
+arriving unscreened at the one seat that can spend the owner's attention. The manager screens
+them, and the screening is the value — it dropped a false Ko-fi claim on its first day rather
+than letting it reach him.
+
+**This applies to me, and I broke it before it was written.** During the shift that built this
+I messaged the Website Agent twice and the supervisor directly, because it was faster.
+Faster is the whole reason a chain decays. Corrected: anything for a worker now goes to the
+manager, which decides whether it belongs in the next plan.
+
+**Nothing here is enforceable in code.** Session messaging is a harness feature and no schema
+reaches it. What *is* enforceable is that a message arriving out of order gets **recorded as a
+decision** — who wrote to whom, and why it could not wait — so the exception is visible
+afterwards rather than becoming the norm quietly. A rule with no residue is a preference.
+
+**One exception, and it is the same one as always: P0.** Active data loss, a live security
+hole, or a defect that invalidates work in flight goes straight to whoever can stop it. P0 has
+always dropped everything, and a routing table does not change that.
+
+---
+
 ## The shift cycle
 
 ```
@@ -136,9 +178,49 @@ Two things the board taught us on the day it was built, both worth carrying:
 
 ---
 
+---
+
+## The shift report, and the feedback loop
+
+```bash
+node tools/shift-report.cjs --out reports/team/
+```
+
+Owner instruction, 19 August: *"ensure every plan and decision is being recorded and reports
+made for review... to ensure a smooth learning curve and production output as you will be
+learning from feedback."*
+
+**Every decision is recorded, and each kind has exactly one home.** A manager's verdict lives
+on `team_plans`; the owner's answer on `team_steering`; a supervisor's plan in its own body;
+and every other call — an architect's sequencing, a scope change, a deferral, a "no" — on
+`team_decisions`. The report **joins** all four. It never re-records one, because a fact with
+two homes disagrees the first time either is edited.
+
+`POST /api/team/decision` **refuses a decision with no `because`.** A decision with no
+reasoning cannot be reviewed, cannot be argued with later, and cannot be told apart from a
+preference. It also takes `cost_if_wrong` and `revisit_when`, so a call states in advance what
+would reopen it — the workspace rule being that a "no" you cannot justify later is just a mood.
+
+**The half of the report that earns it is "What the process missed".** A record of what
+happened cannot tell you the chain stalled, because a stall leaves no row. Unread handovers,
+plans drafted and never put to the manager, confirmed plans with nothing delegated, owner-facing
+items sitting untriaged, sessions that filed nothing — those are absences, and they are derived,
+so nobody has to remember to file them.
+
+**Feedback comes back through the manager**, and lands in the next plan. That is the loop: the
+report says what was decided and why, the owner says which reasoning to stop using, and the
+manager carries it into the work. A "no" on a decision is more useful than a "no" on an
+outcome, because it names the thinking rather than the result.
+
+---
+
 ## The rules that are not negotiable
 
 - **Only the manager interrupts the owner.** Once a day, with options and a recommendation.
+- **Messages follow the chain.** Workers write to the supervisor, the supervisor to the manager,
+  the manager to the architect and the owner. Only the manager messages the architect. A message
+  sent out of order is recorded as a decision, with why it could not wait.
+- **Every decision carries its reasoning.** The API refuses one without it.
 - **Every session hands over, every shift.** Silence is reported by name, so a missed handover
   is visible rather than invisible.
 - **Nothing is delegated against an unconfirmed plan.** Enforced, not merely expected.

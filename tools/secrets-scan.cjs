@@ -62,9 +62,17 @@ for (const s of SOURCES) {
 // --all additionally includes ignored files, which is how you check whether an ignored file
 // holds a SECOND secret's value (a token pasted into a report, say). It will always "find"
 // each secret in its own source file; those are filtered below.
-const gitArgs = ALL ? ['ls-files', '-coi', '--exclude-standard'] : ['ls-files', '-co', '--exclude-standard'];
-const list = execFileSync('git', gitArgs, { cwd: ROOT, encoding: 'utf8' })
+// `-i` is a filter, not an addition: `git ls-files -coi` returns ignored paths but drops
+// ordinary untracked files. That made --all certify a freshly pasted, non-ignored key as
+// clean. Start with tracked + ordinary untracked, then deliberately union ignored paths.
+const listed = execFileSync('git', ['ls-files', '-co', '--exclude-standard'], { cwd: ROOT, encoding: 'utf8' })
   .split('\n').map((f) => f.trim()).filter(Boolean);
+if (ALL) {
+  const ignored = execFileSync('git', ['ls-files', '-coi', '--exclude-standard'], { cwd: ROOT, encoding: 'utf8' })
+    .split('\n').map((f) => f.trim()).filter(Boolean);
+  listed.push(...ignored);
+}
+const list = [...new Set(listed)];
 
 const ownSource = new Set(SOURCES.map((s) => s.file));
 

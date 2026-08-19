@@ -133,9 +133,12 @@ if (!body.title) {
     console.log('  exist. Add yourself: node tools/team-roster.cjs --set "<title>" worker');
   }
   console.log(`  ${j.note}`);
-  if (body.needs_owner) {
+  if (j.ownerItems && j.ownerItems.count) {
     console.log('\n  This handover carries a NEEDS OWNER item. It does not reach him directly —');
     console.log('  the manager is the only role that may interrupt, and it will pick this up');
     console.log('  in the daily steering quiz. That is the whole point of the routing.');
+  } else if (body.needs_owner && j.ownerItems && j.ownerItems.state === 'not_raised') {
+    console.log('\n  This handover explicitly raised nothing for the owner. That is not a resolved item');
+    console.log('  and not a parser failure; no owner-facing queue entry was created.');
   }
 })();

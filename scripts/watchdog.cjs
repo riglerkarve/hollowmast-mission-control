@@ -13,6 +13,7 @@
 const fs = require('node:fs');
 const path = require('node:path');
 const { execFileSync } = require('node:child_process');
+const { acquireRestartLock } = require('./restart-lock.cjs');
 
 const ROOT = path.join(__dirname, '..');
 const STATE_FILE = path.join(ROOT, 'data', 'watchdog-state.json');
@@ -114,7 +115,13 @@ function taskStatus() {
 function restart() {
   if (DRY) {
     log('WOULD RESTART the server task');
-    return false;
+    return { started: false, dry: true };
+  }
+  const lock = acquireRestartLock();
+  if (!lock.acquired) {
+    const pid = lock.holder && lock.holder.pid ? ` (pid ${lock.holder.pid})` : '';
+    log(`RESTART DEFERRED: another restart is in progress${pid}; watchdog did not stop the task`);
+    return { started: false, busy: true };
   }
   try {
     // /end first: the task can read as Running while the port is dead, and /run on an
@@ -137,14 +144,18 @@ function restart() {
     }
     if (status === 'Running') {
       log('RESTART ABORTED: task still Running 15s after /end; /run would be a silent no-op');
-      return false;
+      lock.release();
+      return { started: false };
     }
 
     execFileSync('schtasks.exe', ['/run', '/tn', TASK], { stdio: 'pipe', timeout: 15000 });
-    return true;
+    // The caller owns this lock until it proves the new process is healthy. Releasing it
+    // immediately after /run would reopen the race during the server's boot window.
+    return { started: true, lock };
   } catch (err) {
     log(`RESTART COMMAND FAILED: ${String(err.stderr || err.message).trim().slice(0, 200)}`);
-    return false;
+    lock.release();
+    return { started: false };
   }
 }
 
@@ -256,15 +267,21 @@ async function main() {
   log(`DOWN — ${why}. ${deathReport()}`);
 
   const downSince = prev.state === 'down' && prev.downSince ? prev.downSince : new Date().toISOString();
-  const restarted = restart();
+  const restartAttempt = restart();
+  const restarted = restartAttempt.started;
 
   let recovered = false;
-  if (restarted) {
-    for (let i = 0; i < 6 && !recovered; i += 1) {   // up to 30s for express to bind
-      await sleep(5000);
-      recovered = (await probe()).ok;
+  try {
+    if (restarted || restartAttempt.busy) {
+      for (let i = 0; i < 6 && !recovered; i += 1) { // up to 30s for express to bind
+        await sleep(5000);
+        recovered = (await probe()).ok;
+      }
+      if (restarted) log(recovered ? 'restart succeeded' : 'restart did NOT bring it back');
+      if (restartAttempt.busy) log(recovered ? 'concurrent restart recovered the service' : 'concurrent restart did NOT bring it back');
     }
-    log(recovered ? 'restart succeeded' : 'restart did NOT bring it back');
+  } finally {
+    if (restartAttempt.lock) restartAttempt.lock.release();
   }
 
   // Alert on the transition, and at most half-hourly while it stays down. An alert you

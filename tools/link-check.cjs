@@ -63,7 +63,8 @@ function makeKnown(files) {
 const fs = require('node:fs');
 const path = require('node:path');
 
-const DIR = path.join(__dirname, '..', 'reference');
+// Fixture runs set LINK_DIR to a disposable directory. Normal runs retain reference/.
+const DIR = process.env.LINK_DIR || path.join(__dirname, '..', 'reference');
 const JSON_OUT = process.argv.includes('--json');
 const filter = process.argv.slice(2).find((a) => !a.startsWith('--'));
 

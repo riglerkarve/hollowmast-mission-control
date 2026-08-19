@@ -80,7 +80,7 @@ class Refused extends Error {}
  * "refused", "could not look" and "answered" apart, and an exception collapses the first two.
  */
 async function ask({
-  model, system, user, schema, timeoutMs = 240000, keepAlive = '15m', temperature = 0,
+  model, system, user, schema, timeoutMs = 240000, keepAlive = '15m', temperature = 0, think = false,
 } = {}) {
   const tier = isCloud(model) ? 'cloud' : 'local';
   const t0 = Date.now();
@@ -122,6 +122,17 @@ async function ask({
         // got an object where an array was wanted; an enum makes an out-of-vocabulary answer
         // structurally impossible rather than merely unlikely.
         ...(schema ? { format: schema } : {}),
+        // LOAD-BEARING DEFAULT, not a convenience worth dropping. Two callers this was
+        // extracted FROM (categorise-model.cjs, classify-senders.cjs) each had this hardcoded,
+        // independently, with the same reasoning: qwen3.5 is a thinking model, and with a
+        // strict schema it spends the whole output budget in `thinking`, returning an EMPTY
+        // `message.content`. This function already DETECTS that below (an empty `content` with
+        // `thinking` populated is reported as `empty: true`, not as a silent failure) — but
+        // detection is not prevention, and this function had never actually set `think: false`
+        // to stop it happening. Verified by removing it: routing those two callers through this
+        // function without it reproduced the exact empty-response failure their own comments
+        // already warned about, on the first live run of the code that now calls this.
+        think,
         options: { temperature },
         messages: [
           ...(system ? [{ role: 'system', content: system }] : []),

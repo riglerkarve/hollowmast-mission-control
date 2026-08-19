@@ -104,6 +104,10 @@
 .tm-field h5 { margin:0 0 4px; font-size:10px; text-transform:uppercase; letter-spacing:.09em; color: var(--muted); }
 .tm-field p { margin:0 0 6px; font-size:13px; line-height:1.55; color: var(--ink); }
 .tm-field-owner { border-left:2px solid var(--tm-warn); padding-left:10px; }
+.tm-owner-item { border-top:1px solid var(--border); margin-top:10px; padding-top:10px; }
+.tm-owner-item > p:first-child { margin-bottom:8px; }
+.tm-owner-resolve { display:flex; flex-wrap:wrap; gap:8px; align-items:flex-start; }
+.tm-owner-resolve .tm-input { flex:1 1 170px; }
 .tm-resolved { color: var(--muted) !important; font-size:12px !important; }
 .tm-notstated { margin:0; font-size:12px; color: var(--muted); }
 

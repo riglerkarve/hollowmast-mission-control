@@ -26,3 +26,6 @@ source; the linked file is authoritative and this summary is not.
    moment to be suspicious rather than relieved -- nobody investigates good news.
 
 <!-- CODEX-READS-THIS: hollowmast-agents-md-v1 -->
+
+**This repo carries a standing brief: `CODEX.md`.** Read it after `../AGENTS.md` and before
+starting work. It says what is yours, what is not, and in what order.

@@ -18,24 +18,11 @@
 'use strict';
 require('./_run-log.cjs').record();
 
-const fs = require('node:fs');
-const path = require('node:path');
+const { inventory } = require('./route-inventory.cjs');
 
-const ROOT = path.join(__dirname, '..');
 const NO_HTTP = process.argv.includes('--no-http');
 const BASE = process.env.MC_BASE || 'http://127.0.0.1:3000';
-
-const index = fs.readFileSync(path.join(ROOT, 'server', 'index.js'), 'utf8');
-const files = fs.readdirSync(path.join(ROOT, 'server', 'routes'))
-  .filter((f) => f.endsWith('.js')).map((f) => f.replace(/\.js$/, ''));
-
-const required = new Set([...index.matchAll(/require\('\.\/routes\/([a-z0-9-]+)'\)/g)].map((m) => m[1]));
-// Capture the VARIABLE each router is bound to, so a mount can be traced back to its file
-// even when the mount path differs from the filename — which two of them deliberately do.
-const varOf = new Map([...index.matchAll(/const\s+(\w+)\s*=\s*require\('\.\/routes\/([a-z0-9-]+)'\)/g)]
-  .map((m) => [m[1], m[2]]));
-const mounts = [...index.matchAll(/app\.use\('([^']+)',\s*(\w+)\)/g)]
-  .map((m) => ({ prefix: m[1], file: varOf.get(m[2]) || null, variable: m[2] }));
+const { files, required, mounts } = inventory();
 
 const mountedFiles = new Set(mounts.map((m) => m.file).filter(Boolean));
 

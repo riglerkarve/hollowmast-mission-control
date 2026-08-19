@@ -27,6 +27,7 @@
 require('./_run-log.cjs').record();
 
 const { execFileSync } = require('node:child_process');
+const { acquireRestartLock } = require('../scripts/restart-lock.cjs');
 const TASK = 'MissionControl-Server';
 const PORT = 3000;
 const URL = `http://127.0.0.1:${PORT}/api/status`;
@@ -53,6 +54,15 @@ async function status() {
 const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
 
 (async () => {
+  const lock = acquireRestartLock();
+  if (!lock.acquired) {
+    const pid = lock.holder && lock.holder.pid ? ` (pid ${lock.holder.pid})` : '';
+    console.error(`  RESTART SKIPPED: another restart is in progress${pid}. Nothing was stopped.`);
+    process.exitCode = 2;
+    return;
+  }
+
+  try {
   const before = pidOnPort();
   console.log(`  pid on :${PORT} before: ${before == null ? '(nothing listening)' : before}`);
 
@@ -62,7 +72,8 @@ const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
     const still = pidOnPort();
     if (still === before) {
       console.error(`  FAILED to stop pid ${before} — it is still holding the port. Nothing was restarted.`);
-      process.exit(1);
+      process.exitCode = 1;
+      return;
     }
   }
 
@@ -83,11 +94,15 @@ const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
   if (!after || st == null || st.code !== 200) {
     console.error(`  DID NOT COME BACK within 45s. pid=${after || 'none'} status=${st ? st.code || st.err : 'never asked'}`);
     console.error('  Check logs/server-<date>.log — the last line will name the migration or port problem.');
-    process.exit(1);
+    process.exitCode = 1;
+    return;
   }
 
   const up = st.body && st.body.startedAt ? ` startedAt ${st.body.startedAt}` : '';
   console.log(`  pid on :${PORT} after:  ${after}${before ? `  (was ${before})` : ''}`);
   console.log(`  ${URL} -> ${st.code}${up}`);
   console.log('  restarted, and both facts checked: the pid moved AND the service answered.');
+  } finally {
+    lock.release();
+  }
 })();

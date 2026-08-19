@@ -3,10 +3,16 @@ const { AsyncLocalStorage } = require('node:async_hooks');
 const path = require('node:path');
 const fs = require('node:fs');
 
-const DATA_DIR = path.join(__dirname, '..', 'data');
+// Tests that prove a migration can start from zero must never open the live ledger. The
+// override is intentionally a complete file path, rather than a looser "test mode": a caller
+// can print and inspect the exact database it created. Normal processes retain the one live
+// path below.
+const LIVE_DB_FILE = path.join(__dirname, '..', 'data', 'dashboard.db');
+const DB_FILE = process.env.MC_DB_PATH ? path.resolve(process.env.MC_DB_PATH) : LIVE_DB_FILE;
+const DATA_DIR = path.dirname(DB_FILE);
 fs.mkdirSync(DATA_DIR, { recursive: true });
 
-const db = new DatabaseSync(path.join(DATA_DIR, 'dashboard.db'));
+const db = new DatabaseSync(DB_FILE);
 
 db.exec(`
   PRAGMA journal_mode = WAL;
@@ -305,3 +311,4 @@ module.exports.runAs = runAs;
 module.exports.setProcessActor = setProcessActor;
 module.exports.accessLog = accessLog;
 module.exports.flushAccessLog = flush;
+module.exports.databasePath = DB_FILE;

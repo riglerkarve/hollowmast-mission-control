@@ -33,7 +33,8 @@ const ollama = require('../server/ollama');
 
 const APPLY = process.argv.includes('--apply');
 const USE_CLOUD = process.argv.includes('--cloud');
-const MODEL = USE_CLOUD ? 'gpt-oss:20b-cloud' : 'qwen3.5:9b';
+const MODEL = process.argv.find((a) => /^--model=/.test(a))?.split('=')[1]
+  || (USE_CLOUD ? 'gpt-oss:20b-cloud' : 'qwen3.5:9b');
 const BATCH = 10;
 const ACCURACY_FLOOR = 0.8;
 
@@ -79,18 +80,19 @@ async function askBatch(items) {
 }
 
 (async () => {
+  // THE ORACLE IS THE ITEMS THAT ALREADY HAVE A KIND, not the ones being filled. The first
+  // version derived both from the same unset rows, so APPLYING the rules destroyed the oracle
+  // for every later run: 12 items settled, written, and then invisible to the next scoring
+  // pass. A test whose passing removes the evidence can only be run once.
   const rows = db.prepare("SELECT id, title, cluster, priority FROM todo_items WHERE status = 'open' AND kind IS NULL ORDER BY id").all();
+  const known = db.prepare("SELECT id, title, kind FROM todo_items WHERE kind IS NOT NULL ORDER BY id").all();
   console.log(`\n  model: ${MODEL}${USE_CLOUD ? '   (OFF THIS MACHINE)' : '   (on this machine)'}`);
   console.log(`  ${rows.length} open items with no kind\n`);
 
   // --------------------------------------------------------------- the rules pass
-  const settled = [];
-  const tail = [];
-  for (const r of rows) {
-    const k = byRule(r);
-    if (k) settled.push({ ...r, kind: k }); else tail.push(r);
-  }
-  console.log(`  rules settled ${settled.length}, leaving ${tail.length} for the model`);
+  const settled = known.filter((r) => byRule(r) === r.kind);
+  const tail = rows;
+  console.log(`  oracle: ${settled.length} items already labelled and reproducible by rule; ${tail.length} unlabelled`);
   console.log(`  -> ${Math.round((settled.length / rows.length) * 100)}% needed no model at all\n`);
 
   if (!settled.length) {

@@ -42,8 +42,17 @@ const LOCAL = 'http://127.0.0.1:11434';
 // cloud answer must be parsed defensively rather than assumed to be JSON. `null` means
 // UNMEASURED, which is not the same as false and must not be read as either.
 const CLOUD_MODELS = ['gpt-oss:120b-cloud', 'gpt-oss:20b-cloud'];
-const SCHEMA_HONOURED = { 'qwen3.5:9b': true, 'gemma4:12b': null, 'gpt-oss:20b-cloud': false, 'gpt-oss:120b-cloud': null };
-const LOCAL_MODELS = ['qwen3.5:9b', 'gemma4:12b'];
+const SCHEMA_HONOURED = { 'qwen3.5:4b': true, 'qwen3.5:9b': true, 'gemma4:12b': null, 'gpt-oss:20b-cloud': false, 'gpt-oss:120b-cloud': null };
+// MEASURED 19 Aug: THE SMALLEST MODEL IS THE BEST ONE HERE, because it is the only one that
+// fits. On an 8151 MiB card with 7841 MiB free when idle:
+//   qwen3.5:4b  3.4 GB  100% ON GPU   12.5s warm   10/12 on the oracle   honours schemas
+//   qwen3.5:9b  6.6 GB   64% on GPU   17.7s warm    1/2, batches timed out
+//   gemma4:12b  7.6 GB   unmeasured, exceeds the card
+// A 9B that spills 36% to the CPU is slower AND less reliable than a 4B that does not, so
+// the default is the 4B. Weights are not the constraint on their own -- weights plus the KV
+// cache at a useful context are, which is why 6.6 GB does not fit in 7.8 GB.
+const LOCAL_MODELS = ['qwen3.5:4b', 'qwen3.5:9b', 'gemma4:12b'];
+const LOCAL_DEFAULT = 'qwen3.5:4b';
 
 const isCloud = (model) => /-cloud$|:cloud$/.test(String(model));
 
@@ -171,5 +180,5 @@ async function available() {
 }
 
 module.exports = {
-  ask, warm, available, isCloud, SENSITIVE, CLOUD_MODELS, LOCAL_MODELS, SCHEMA_HONOURED, Refused,
+  ask, warm, available, isCloud, SENSITIVE, CLOUD_MODELS, LOCAL_MODELS, LOCAL_DEFAULT, SCHEMA_HONOURED, Refused,
 };

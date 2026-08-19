@@ -76,19 +76,49 @@ harnesses against hand-labelled synthetic data, not production write paths — r
 through the wrapper would couple a raw-endpoint measurement to the wrapper's own behaviour,
 which is the opposite of what a benchmark is for. Left on a direct fetch on purpose.
 
+**A second bug found on the first live run, in `server/ollama.js` itself, not `ollama-run.cjs`:**
+`ask()` DETECTED the qwen3.5 empty-`thinking`-response failure (reads `message.thinking` for
+the diagnostic) but never actually sent `think: false` to prevent it — both callers this was
+extracted from had that hardcoded, independently, with the same comment, and routing them
+through `ask()` silently dropped it. First live run of `classify-senders.cjs` reproduced the
+exact failure their comments warned about (`THE MODEL ANSWERED NOTHING on the oracle`). Fixed
+by adding `think = false` as `ask()`'s own default, so every current and future caller gets it
+without having to know to ask.
+
+**A real finding, not a bug, from the run after that fix:** `classify-senders.cjs`'s oracle
+(random sample of rule-classified senders) scored the model at 27% — refused, correctly, and
+wrote nothing. Read the misses before assuming the model is unreliable: 28 of 29 were addresses
+where the RULE's `transactional` label comes from the address **prefix** (`no-reply@`,
+`notifications@`, `support@`...) regardless of what the sender's business actually is, while the
+model — given only the address and no notion that a prefix shape overrides content — reasonably
+inferred a **semantic** category from the domain instead (`do-not-reply@ses.binance.com` scored
+`other`; a human would probably also not guess "transactional" from that address alone). The
+oracle is measuring whether the model can guess an arbitrary structural convention, not whether
+it can do the tail's actual job — and the tail, by construction, is exactly the addresses no
+prefix rule already caught, so this mismatch cannot even occur on the real tail. **Not fixed
+here.** A fair oracle for this script would need to exclude prefix-only rule matches (or the
+model would need the prefix convention explained to it), and `gmail_senders` does not currently
+record which specific rule classified a row, so building that filter is its own small piece of
+work — left for whoever picks this up next, with the evidence attached rather than a floor
+quietly loosened to make a number pass.
+
 ## Model tiers, measured 19 Aug 2026 on this machine (8151 MiB VRAM)
 
-| Model | VRAM | GPU | Warm | Honours a JSON schema |
-|---|---|---|---|---|
-| **qwen3.5:4b** (`LOCAL_DEFAULT`) | 3.4 GB | 100% | 12.5s | yes |
-| qwen3.5:9b | 6.6 GB | 64% (spills to CPU) | 17.7s | yes |
-| gemma4:12b | 7.6 GB | exceeds the card | unmeasured | unknown |
-| gpt-oss:20b-cloud | — (leaves the machine) | — | — | **no** — measured returning plain text against a strict schema, twice |
-| gpt-oss:120b-cloud | — (leaves the machine) | — | — | unmeasured |
+| Model | VRAM | GPU | Warm | Accuracy on the oracle | Honours a JSON schema |
+|---|---|---|---|---|---|
+| **qwen3.5:4b** (`LOCAL_DEFAULT`) | 3.4 GB | 100% | 12.5s | 10/12 (83%) | yes |
+| qwen3.5:9b | 6.6 GB | 64% (spills to CPU) | 17.7s | 1/2, batches timed out | yes |
+| ~~gemma4:12b~~ — **measured, then deleted, 19 Aug** | 7.6 GB | 61% | 35.3s | 10/12 (83%), tied with the 4B | yes |
+| gpt-oss:20b-cloud (`CLOUD_DEFAULT`) | — (leaves the machine) | — | — | — | **no** — measured returning plain text against a strict schema, twice |
+| gpt-oss:120b-cloud | — (leaves the machine) | — | — | — | unmeasured |
 
 The 4B beats the 9B on every axis here because weights-plus-KV-cache is the real constraint, not
 weights alone — a model that spills to CPU is slower **and** less reliable than one that fits.
-Do not reach for a bigger local model without re-measuring; the smaller one already won once.
+gemma4:12b tied the 4B on accuracy and lost on everything else (2.2x the disk, 39% CPU spill,
+2.8x slower warm) — **measured before being deleted**, deliberately: an unmeasured model sitting
+on the shelf looks like a spare option, and deleting it unmeasured would have removed the
+unknown without ever answering it. `LOCAL_MODELS` is now just the two rows above it. Do not
+reach for a bigger local model without re-measuring; the smaller one has won twice now.
 
 ## How to work here
 

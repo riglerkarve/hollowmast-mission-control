@@ -49,9 +49,16 @@ something the project depends on:
   sequences it. Propose one in a handover; do not build it.
 - **Anything owner-facing.** Steering questions, decisions that are his, anything that would
   create an account, post publicly, or enter his identity. Prepare up to that line and stop.
-- **The wellbeing module.** Not the panel, not the prose, not a pattern. Fixed policy: nothing
-  there may be model-generated, and nothing may read as diagnosis, advice or a risk score. Its
-  support card is always rendered and never conditional on the data.
+- **The wellbeing module.** Still not yours, but the reason changed on **20 August 2026**.
+  The owner lifted the *nothing-may-be-model-generated* clause with a condition: *"well being
+  can write BUT gets reviewed before it can enact."* That permission belongs to the **Scribe
+  alone**, which holds finance and wellbeing under exclusive custody — no other model may
+  even read them. A Scribe write lands in `scribe_proposals` and does nothing until the
+  **owner** reviews it; a session cannot approve one.
+  **What did not change:** nothing there may read as diagnosis, clinical advice or a risk
+  score. That was a separate clause and review does not satisfy it — approving a score still
+  enacts a score, so a numeric value is refused unreviewably. The support card is always
+  rendered and never conditional on the data.
 - **Ledger data itself.** You may work on the Money panel; you may not send a bank counterparty,
   a statement row or a health metric to any model that leaves this machine. `server/ollama.js`
   refuses this on the payload, but the rule is yours to keep, not the guard's.

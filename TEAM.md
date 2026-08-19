@@ -287,12 +287,31 @@ transcripts.
 | Module | Read | Write | Why |
 |---|---|---|---|
 | **finance** | yes | **yes** | Local-only was always the rule, never *no model*. Nothing is disclosed by a model that cannot reach the network. |
-| **wellbeing** | yes | **no** | **Fixed policy, unchanged by this decision:** nothing there may be model-generated — no prose, no pattern, no score. |
+| **wellbeing** | yes | **through review only** | Owner decision 20 Aug 2026: *"can write BUT gets reviewed before it can enact."* Nothing lands until the owner releases it. |
 
-Exclusive custody means **no other model may see these**. It does not mean this one may write
-in both. If the wellbeing line is ever relaxed it is relaxed by the owner in writing, in
-`CLAUDE.md` — and not by a capability being measured as accurate. **Accuracy was never the
-objection.**
+Exclusive custody means **no other model may see these**. Wellbeing writes go to
+`scribe_proposals` and have **no effect until the owner releases them** — a session cannot
+approve one, because a worker signing off a statement about his mood is not the review the
+decision asked for.
+
+**The clause that did not change:** nothing in wellbeing may read as diagnosis, clinical
+advice, or a risk score. Review does not satisfy it — approving a score still enacts a score.
+So the content check does two different things and is explicit about which is which:
+
+- **A numeric value is refused, unreviewably.** A number attached to a wellbeing record is a
+  risk score by construction, whoever approves it. It is the only part definable rather than
+  guessable.
+- **Clinical wording is flagged to the reviewer, never blocked.** A word list invented here
+  would be the unauditable filter this workspace refuses elsewhere, failing silently in both
+  directions — dropping honest prose and passing anything phrased around it.
+- **It names its own blind spots** on every read: tone, an implication built across several
+  separately-approved entries, a number written as words, and any field other than the one
+  proposed. The reviewer is the control; this is a prompt for them, never a guarantee to them.
+
+**Staleness is checked at enactment, not at approval.** Between proposing and approving, the
+row can move — another session, an import, the owner. The approval re-reads the row and
+refuses if it no longer matches what was reviewed, because *approved* and *still applicable*
+are different questions. Verified against a real concurrent write.
 
 ### Caps are declared, never detected
 

@@ -1,0 +1,80 @@
+/* board — cross-project open work.
+
+   EVERY TOKEN USED HERE IS DEFINED SOMEWHERE, and I got that wrong once already writing this
+   file. The first draft used --line and --ember, which I had "found" by grepping shell.css
+   for --[a-z-]+ — a pattern that matches USAGES as well as definitions. Neither is defined
+   anywhere in this project; shell.css merely refers to them too. An undefined custom property
+   resolves to nothing, raises no error, and renders as a missing border nobody notices.
+   Grep for `--name:` with the colon, never for the name.
+
+   There is no danger token in the sheet, so one is defined HERE rather than invented as if it
+   came from the palette — and in both schemes, because a colour defined only inside the dark
+   media query is transparent in light mode, which is the failure it exists to prevent. */
+.bd-panel { --bd-warn: #a8442a; }
+@media (prefers-color-scheme: dark) {
+  .bd-panel { --bd-warn: #e08a6a; }
+}
+
+.bd-lede { color: var(--muted); max-width: 62ch; margin: 0 0 18px; }
+
+.bd-heads { display: grid; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); gap: 12px; margin-bottom: 20px; }
+.bd-head { background: var(--card); border: 1px solid var(--border); border-radius: var(--r-card); padding: 14px 16px; }
+.bd-head b { display: block; font-size: 30px; line-height: 1.1; font-variant-numeric: tabular-nums; color: var(--ink); }
+.bd-head span { display: block; margin-top: 4px; font-size: 12px; color: var(--muted); }
+/* "held in total" is deliberately quieter than "open": it is context, and giving it equal
+   weight invites reading 132 as a workload. */
+.bd-head-quiet b { color: var(--muted); font-size: 22px; }
+
+.bd-tabs { display: flex; flex-wrap: wrap; gap: 8px; margin-bottom: 18px; }
+.bd-tab { background: var(--card); border: 1px solid var(--border); border-radius: var(--r-btn);
+  padding: 6px 12px; color: var(--ink); cursor: pointer; font: inherit; font-size: 13px; }
+.bd-tab span { color: var(--muted); font-variant-numeric: tabular-nums; margin-left: 4px; }
+.bd-tab.on { border-color: var(--accent); color: var(--accent-text); background: var(--accent-soft); }
+.bd-tab.on span { color: inherit; }
+
+.bd-panel h2 { font-size: 14px; text-transform: uppercase; letter-spacing: .06em;
+  color: var(--muted); margin: 26px 0 10px; }
+.bd-n { font-variant-numeric: tabular-nums; color: var(--ink); text-transform: none; letter-spacing: 0; }
+
+/* Wide content scrolls inside its own box; the page body must never scroll sideways. */
+.bd-table { width: 100%; border-collapse: collapse; display: block; overflow-x: auto; }
+.bd-table td { border-top: 1px solid var(--border); padding: 9px 10px; vertical-align: top; font-size: 13px; }
+.bd-ref { font-family: var(--mono); color: var(--muted); white-space: nowrap; }
+.bd-proj { color: var(--muted); white-space: nowrap; font-size: 12px; }
+.bd-title { color: var(--ink); }
+.bd-basis { display: block; margin-top: 3px; font-size: 11px; color: var(--muted); }
+
+.bd-sev { display: inline-block; min-width: 26px; text-align: center; font-size: 11px;
+  font-family: var(--mono); padding: 2px 5px; border-radius: 4px; margin-right: 6px;
+  border: 1px solid var(--border-strong); color: var(--muted); }
+/* Severity is the tracker's own word, so it is shown and not restyled into a judgement —
+   only P1/P0 get emphasis, because those are the ones that stop a run. */
+.bd-P1, .bd-P0 { color: var(--bd-warn); border-color: var(--bd-warn); }
+
+.bd-kind { font-size: 11px; color: var(--muted); text-transform: uppercase; letter-spacing: .04em; }
+
+.bd-empty { color: var(--muted); font-size: 13px; padding: 10px 0; }
+
+/* A failure to look must never be mistaken for good news, so it gets colour and full size. */
+.bd-alarm { border: 1px solid var(--bd-warn); background: var(--card); color: var(--ink);
+  border-radius: var(--r-card); padding: 12px 14px; margin: 14px 0; font-size: 13px; }
+
+.bd-srcs { display: grid; grid-template-columns: repeat(auto-fit, minmax(260px, 1fr)); gap: 12px; }
+.bd-src { background: var(--card); border: 1px solid var(--border); border-radius: var(--r-card); padding: 12px 14px; }
+.bd-src b { font-family: var(--mono); font-size: 12px; }
+.bd-src p { margin: 6px 0 0; font-size: 12px; color: var(--muted); }
+.bd-src code { font-family: var(--mono); font-size: 11px; }
+.bd-src-state { float: right; font-size: 11px; text-transform: uppercase; letter-spacing: .05em; color: var(--muted); }
+.bd-src-bad { border-color: var(--bd-warn); }
+.bd-src-bad .bd-src-state { color: var(--bd-warn); }
+.bd-ok { color: var(--muted); }
+.bd-residue { color: var(--ink); }
+
+.bd-refresh { margin-top: 16px; background: var(--card); border: 1px solid var(--border);
+  border-radius: var(--r-btn); padding: 8px 14px; color: var(--ink); cursor: pointer; font: inherit; font-size: 13px; }
+.bd-refresh:hover { border-color: var(--accent); }
+.bd-refresh:disabled { color: var(--muted); cursor: default; }
+
+@media (max-width: 700px) {
+  .bd-heads { grid-template-columns: 1fr 1fr; }
+}

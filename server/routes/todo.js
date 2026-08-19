@@ -339,6 +339,55 @@ db.migrate('todo', [
   (d) => {
     d.exec('ALTER TABLE todo_items ADD COLUMN recheck_at TEXT');
   },
+
+  // 5. PROJECT and KIND — the two dimensions the board needs and this table could not express.
+  //
+  // `cluster` was doing both jobs at once. Measured across the 163 rows, its 19 values mix
+  // PROJECTS (HOLLOWMAST 12, Mission Control 20, Game 5) with DOMAINS (Finance 16, Income 15,
+  // Ops 17, Data 11, Health 6). So "show me everything open on HOLLOWMAST" could not be
+  // answered: a finance item for the game and a game item both live under one column, and
+  // which meaning a row uses depends on who typed it.
+  //
+  // `kind` did not exist at all, which is worse than it sounds. The workspace CLAUDE.md says
+  // "I triage before I build. Every new request gets categorised - bug, feature, question,
+  // chore. Bugs outrank features in the queue." That rule has been in force for two days and
+  // the store had nowhere to write its answer, so the triage survived only as prose in the
+  // rationale field. A rule the schema cannot express is a rule that decays into a habit.
+  //
+  // Both are NULLABLE and NOTHING IS GUESSED. Backfilling `project` from a cluster that
+  // already names a project is a rename, not an inference. Deciding that "Ops" means Mission
+  // Control, or that item 34 is a bug rather than a chore, would be putting my judgement into
+  // the one table whose whole purpose is recording the owner's - the same call already made
+  // for wishlist scopes and the atlas.
+  (d) => {
+    d.exec('ALTER TABLE todo_items ADD COLUMN project TEXT');
+    d.exec('ALTER TABLE todo_items ADD COLUMN kind TEXT');
+
+    // TWO MECHANICAL RULES, AND I GOT THIS WRONG ON THE FIRST DRAFT, which is why the rules
+    // are narrow. I had written `Game -> HOLLOWMAST` and `Income -> PrintProfit`, reasoning
+    // from the workspace file that HOLLOWMAST is the only game in the rotation and the income
+    // track is PrintProfit. Reading the rows instead: the Game cluster contains "Expand the
+    // mini-games collection, tie to YouTube", which is Mini Games; and the Income cluster is
+    // SerpClix, Honeygain, Packetstream, Coinbase and Fiverr, none of which is PrintProfit.
+    // Both mappings were plausible, both were inferences, and both were wrong.
+    //
+    // So: the cluster assigns a project only when the cluster IS a project name, and
+    // otherwise the TITLE assigns it only when the title names one outright. Reading a name
+    // out of a string is not the same as deciding what a row is about.
+    const PROJECTS = ['HOLLOWMAST', 'Mission Control', 'PrintProfit', 'thin-air', 'emberfall',
+      'Oxford AutoWorks', 'Fallow', 'Mini Games', 'SecondBrain', 'dropshipping'];
+
+    const byCluster = d.prepare('UPDATE todo_items SET project = ? WHERE cluster = ? AND project IS NULL');
+    for (const p of PROJECTS) byCluster.run(p, p);
+
+    // Titles are matched case-insensitively and only when EXACTLY ONE project name appears —
+    // a title naming two is ambiguous, and picking the first would be arbitrary.
+    const byTitle = d.prepare('UPDATE todo_items SET project = ? WHERE id = ? AND project IS NULL');
+    for (const row of d.prepare('SELECT id, title FROM todo_items WHERE project IS NULL').all()) {
+      const hits = PROJECTS.filter((p) => row.title.toLowerCase().includes(p.toLowerCase()));
+      if (hits.length === 1) byTitle.run(hits[0], row.id);
+    }
+  },
 ]);
 
 const router = express.Router();
@@ -1004,5 +1053,32 @@ router.get('/clusters', (req, res) => {
   });
 });
 
+// ------------------------------------------------------------------------- for the board
+// The cross-project board shows backlog items beside bugs imported from each project's own
+// tracker. It must NOT read todo_items directly -- rule 1 of the module contract -- so this
+// is the accessor, exported the way finance's and safety's are.
+//
+// It returns rows, never counts. If the board computed "12 open on HOLLOWMAST" from its own
+// query and this file computed it another way, the two would disagree without either
+// erroring, which is the failure the one-owner rule exists to prevent. The board renders what
+// it is given.
+// OPEN MEANS `status = 'open'` AND NOTHING ELSE, because that is what this module means by it
+// everywhere else in this file. The first draft also required priority NOT IN (DONE, DECLINE),
+// which sounds like a safety net and is a second definition: the two columns disagree
+// wholesale — 119 rows are status = 'done' and 110 of those still carry a live P-number,
+// because closing an item through the panel sets the status and leaves the priority as
+// written. Counting off priority reports 151 open where there are 28.
+//
+// A stricter filter here would be a second owner for "is this open", and it would agree with
+// the panel right up until the day it did not.
+function openForBoard() {
+  return db.prepare(`
+    SELECT id, title, project, kind, cluster, priority, owner, status, recheck_at
+      FROM todo_items
+     WHERE status = 'open'
+     ORDER BY ${PRI_RANK}, id`).all();
+}
+
 module.exports = router;
 module.exports.decidedSince = decidedSince;
+module.exports.openForBoard = openForBoard;

@@ -123,22 +123,48 @@ model name is, and that is a suffix in a string.
 
 ---
 
-## Which model, and why not the bigger one
+## Which model — re-measured 20 August, and the answer changed
+
+**A model's file size is not its memory footprint, and that is what decides this.** The KV
+cache lives in VRAM beside the weights, so a model's fit depends on the context it runs at:
 
 ```
-qwen3.5:4b        3.4 GB   100% ON GPU   12.5s warm   honours JSON schemas   ← default
-qwen3.5:9b        6.6 GB    64% on GPU   17.7s warm   batches timed out
-gpt-oss:20b-cloud  cloud     n/a          1.25s       IGNORES JSON schemas
+qwen3.5:4b   3.4 GB file   5.3 GB resident  100% ON GPU   15s    schemas: yes   verdicts: NO
+qwen3:8b     5.2 GB file  11.6 GB resident   54% spills   71s    <- at its DEFAULT 40K ctx
+qwen3:8b     5.2 GB file   6.2 GB resident  100% ON GPU   18s    <- at num_ctx 8192  FITS
+qwen3.5:9b   6.6 GB file        --           64% spills   --     batches timed out
 ```
 
-**Use `qwen3.5:4b` for everything here.** The 9B spills 36% to the CPU and is slower *and* less
-reliable than the 4B that fits entirely. `gemma4:12b` was measured and deleted — it tied on
-accuracy and cost 2.2× the disk and 2.8× the time.
+**Use `qwen3.5:4b` for BOTH jobs in this plan.** They are classification against an enum,
+which is the one shape it is measurably good at, and it is the faster of the two.
 
-**The cloud tier cannot do either job.** Both need a constrained enum, and `gpt-oss` ignores
-schemas — returning `X1: Bug   X2: Feature Request` as plain text where JSON was demanded. It is
-faster and larger and **fails the gate that matters**, which is not a smaller version of passing
-it.
+**But there is now a second local model and it can do something the 4B cannot.** Given the
+same question twice with the evidence inverted, `qwen3:8b` returns REJECT then ACCEPT —
+the verdict tracks the evidence. `qwen3.5:4b` does not, which is why it was refused the Team
+Manager role (decision #21) and why `team-manager-verdict` sits in the capability table as a
+recorded **failure**.
+
+So: **4B for volume, 8B at `num_ctx 8192` for anything that needs a verdict.** Do not switch
+between them inside one job — a reload costs 30–60s.
+
+**The classification numbers CANNOT rank these two and this must not be reported as if they
+can.** The oracle is contaminated (**M116**): up to 21 of ~70 stored labels were written by a
+model and nothing records which, so a high score may be a model agreeing with its own earlier
+pass rather than reading the items. The 4B scored 12/12 and the 8B 8/12 — and all four of the
+8B's misses are the same shape, `Personal goal — X` items it calls `question` where the store
+says `chore`. That is **one systematic disagreement, not eight errors**, and on at least one
+of them (*CBT or driving licence*) the 8B is arguably right and the stored label wrong.
+
+**`gemma4:12b` was measured and deleted** — it tied on accuracy and cost 2.2× the disk and
+2.8× the time. **The cloud tier cannot do either job**: both need a constrained enum and
+`gpt-oss` ignores schemas, returning `X1: Bug   X2: Feature Request` as plain text where JSON
+was demanded. Larger and faster and **failing the gate that matters**, which is not a smaller
+version of passing it.
+
+Re-measure any candidate with `node tools/model-bakeoff.cjs --ctx 8192 <model>` rather than
+trusting this table. The first run of that harness produced two wrong answers of its own —
+it called a model unfit when it had merely not finished loading, and called a missing answer
+a constant verdict. Both were absence rendered as failure.
 
 Three settings that are not optional:
 

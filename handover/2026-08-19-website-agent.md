@@ -8,6 +8,8 @@
 - **Tracker:** B060 and B057 were fixed in code (`8dba4dd`, HEAD's `dash/index.html:1036`) and still read OPEN; headers corrected against HEAD (`5f2084a`). R025 closed by appended event. S-1944 filed.
 - **Memories:** `the-shared-git-hooks-dir-is-the-one-gate-that-reaches-every-session`, `score-a-video-offline-by-faking-the-audio-clock`.
 
+- **S-1945 closed (asked for work; this was it).** `git commit-tree` skips pre-commit and is in live use here (0c7659e has no reflog message -- a plumbing deploy of the very file check 4 guards). `tools/pre-commit.cjs --commit <sha>` + `tools/pre-push.sh` (installed by build.sh) now run the same four checks over every commit being pushed. Proven with a verified control: a commit-tree regression refused at push, remote left with 0 objects. Check 4 rewritten a third time on introduction ORDER after it flagged 0c7659e's restore; over every deploy of the afternoon it now refuses exactly the three real regressions (5b951e9, 171084c, a7d957b -- three, not one). Commit 3a07bb1.
+
 ## Verified
 
 - Trailer audio: `decodeAudioData` on the **muxed file** decodes 42.33 s / 48 kHz / stereo / peak .45, and its RMS-per-4-s envelope `[.007 .004 .010 .012 .005 .022 .019 .041 .021 .015 0]` equals the rendered score's. Live at `hollowmast.com/media/hollowmast-trailer.webm`, 7,969,129 bytes, `video/webm`, ~50 s after push.
@@ -31,6 +33,10 @@
 - `hollowmast-trailer.webm` is now 7.97 MB on the front door (behind `preload=none`, poster 81 KB). A 960×540 cut would halve it if it ever matters.
 - The trailer poster was cut from the silent build; the first frame is unchanged so it should still match, but I did not re-verify it today.
 
+## Deviations (process)
+
+- The Team Manager wrote to this worker directly at ~18:20 to close two needs_owner items (career block: correct, steering #2 KEEP; Ko-fi: partly -- see the corrected item above). Recorded here because TEAM.md says an out-of-order message is recorded as a decision rather than replied to; no reply sent upward.
+
 ## Next
 
 - Re-pack from HEAD and upload to itch; then `bash tools/check-itch.sh --uploaded`. itch is serving `7b49030`; HEAD is past `1896db9`.
@@ -40,7 +46,8 @@
 
 ## Blocked on you
 
+- **Server-side protection is yours.** Every local hook can be skipped by some porcelain choice; a GitHub branch-protection rule or pre-receive check on the repo is the only shape that cannot. If the whole-file-revert problem persists past the hooks, that is the next lever, and it needs your GitHub account.
+
 - **Chrome extension has been unreachable since ~15:20**, so both itch items above (upload, description) could not be done this shift. They need your logged-in session. The zip will be re-packed from HEAD at upload time.
-- **Ko-fi still cannot take money.** `ko-fi.com/mindvirus` exists but shows "Want to receive money on Ko-fi? Enable payments" and its Support button leads nowhere. Press *Enable payments* (PayPal/Stripe — credentials, so yours), then `bash tools/kofi-live.sh --i-checked` puts it on the support page in one command. It refuses without the flag because Ko-fi's bot wall means a script cannot look.
+- **Ko-fi: one owner step, not a defect.** Nothing public is wrong -- `site/support.html` has `kofi: null`, so no link exists. But the account DOES exist: the owner created `ko-fi.com/mindvirus` on 18 Aug ~23:00 and said "Kofi account created" then "try kofi now"; I opened it in their session and Ko-fi's own banner reads "Want to receive money on Ko-fi? Enable payments"; the URL is in the repo at `tools/kofi-live.sh:19`. (The Manager's earlier note that no such account appears in the repo was withdrawn by the Manager at ~18:30; both records now agree.) The one step is *Enable payments* (PayPal/Stripe credentials, so the owner's); then `bash tools/kofi-live.sh --i-checked` puts the link on the support page. Low urgency; filed once so it is not lost, not to be re-asked each shift.
 - **Listen to the thirteen re-cut sounds.** `localhost:5177/tools/audio-ab/index.html` plays each before/after through the real synthesis code, with a burst button. I cannot hear; name the sound that's wrong and I'll cut it again.
-- **A call on the career-block oscillation.** If the feature is meant to stay, the session holding the older copy needs to re-read `65_save.js`/`60_ui.js`/`70_game.js` from HEAD; if it is meant to go, it should go in one commit that also removes the calls. S-1944 says this; nobody has answered it.

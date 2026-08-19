@@ -140,7 +140,7 @@ function fullHTML(d) {
 
   return `<section class="panel tm-panel">
     <div class="tm-head">
-      <h1>The shift</h1>
+      <h1>Handovers</h1>
       <select class="tm-shift" aria-label="Which shift">
         ${state.shifts.map((s) => `<option value="${esc(s.shift)}"${s.shift === d.shift ? ' selected' : ''}>${esc(s.shift)}</option>`).join('')}
       </select>

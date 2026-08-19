@@ -100,14 +100,18 @@ app.use('/api/goals', goalsRouter);
 app.use('/api/schedule', scheduleRouter);
 app.use('/api/projects', projectsRouter);
 app.use('/api/machine', machineRouter);
-// The sampler is not started by requiring the module -- other processes require it for one
-// helper and must not inherit a background timer. The server that serves the panel starts it.
-machineRouter.startSampling();
 app.use('/api/analytics', analyticsRouter);
 app.use('/garage', garageRouter);
 
 app.use(express.static(path.join(__dirname, '..', 'public')));
 
+// Requiring the application for a fault-injection test must not bind a real port or start
+// the heartbeat. The executable server path remains identical; only `node server/index.js`
+// starts it. This makes route failure behaviour testable against a temporary database.
+function startServer() {
+// The sampler is not started by requiring the module -- other processes require it for one
+// helper and must not inherit a background timer. The server that serves the panel starts it.
+machineRouter.startSampling();
 app.listen(PORT, HOST, () => {
   const nets = os.networkInterfaces();
   const lanAddresses = Object.values(nets)
@@ -134,3 +138,8 @@ app.listen(PORT, HOST, () => {
   }
   heartbeat.start();
 });
+}
+
+if (require.main === module) startServer();
+module.exports = app;
+module.exports.startServer = startServer;

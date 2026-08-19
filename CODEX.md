@@ -108,7 +108,7 @@ And for M86 especially: **write the recomputation without reading `reportFor()` 
 checker written from the same reading as the code confirms the code, which is the whole reason
 you are the one doing it and not me.
 
-**UNTIL SUNDAY 23 AUGUST, FOLLOW  INSTEAD OF THE ORDER ABOVE.**
+**UNTIL SUNDAY 23 AUGUST, FOLLOW `PLAN-2026-08-20-to-23.md` INSTEAD OF THE ORDER ABOVE.**
 The owner is away and the architect session has ended, so nobody is watching. That plan is
 written for that condition: Thursday proves the tools you built can fail, Friday runs them,
 Saturday is the Ollama work, Sunday hands back. It also carries the agentic-AI gate (#17) as a

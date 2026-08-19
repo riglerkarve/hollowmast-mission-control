@@ -1297,3 +1297,179 @@ function cashWithdrawn({ from, to } = {}) {
   };
 }
 module.exports.cashWithdrawn = cashWithdrawn;
+
+// ---------------------------------------------------------------------------------------
+// PROFIT & LOSS — added 18 Aug 2026, after the owner asked for one and a mail sweep
+// surfaced payment confirmations that mostly already lived in THIS ledger, under different
+// dates and categorised as personal spend. That is the whole reason this reads the ledger
+// rather than the mail: a receipt states when a card was CHARGED, the bank states when the
+// money SETTLED, and only one of those two can be this figure's owner without a second one
+// appearing for it. See the module contract at the top of this file.
+//
+// A STATEMENT OVER A PERIOD, not a single month against the one before — "Where it went"
+// above already does that comparison, and duplicating it here would be a second owner for
+// the same fact. This sums a trailing run of months for ONE account kind: money in minus
+// money out, split the same way /spending already splits it (by the SIGN of amount_pence,
+// not by category name), so a reader who has learned that view does not have to learn a
+// second one.
+//
+// CASH WITHDRAWN IS EXCLUDED FROM THE NET, exactly as /spending excludes it and for the
+// same reason: once it leaves the account this ledger cannot say what it bought, and
+// folding it into "expenses" would imply it does. Reported alongside instead.
+//
+// UNCATEGORISED ROWS ARE EXCLUDED TOO, matching accountKindSummary/monthlySpend/
+// monthlyIncome — not /spending, which leaves them in under a blank label. Chosen so this
+// figure reconciles with the accessor other modules already call, rather than being a third
+// opinion about the same money. The residue is reported rather than silently dropped: see
+// `uncategorisedPence` below. The ledger holds zero uncategorised rows today, so this
+// choice is currently invisible — it matters the day a fresh import lands some.
+const PNL_DEFAULT_MONTHS = 12;
+
+function accountKindSpan(kind) {
+  return db.prepare(
+    `SELECT MIN(t.date) AS first, MAX(t.date) AS last, COUNT(*) AS n
+       FROM finance_transactions t JOIN finance_accounts a ON a.id = t.account_id
+      WHERE a.kind = ?`
+  ).get(kind);
+}
+
+// Every month between the two given, inclusive, whether or not the ledger has a surviving
+// row in it. GROUP BY only returns months a WHERE clause left something in, so a month
+// whose only transaction was an excluded 'Own transfer' would otherwise vanish from the
+// statement entirely — indistinguishable from a month never imported at all.
+function monthSequence(fromMonth, toMonth) {
+  const out = [];
+  let [y, m] = fromMonth.split('-').map(Number);
+  const [ey, em] = toMonth.split('-').map(Number);
+  while (y < ey || (y === ey && m <= em)) {
+    out.push(`${y}-${String(m).padStart(2, '0')}`);
+    m += 1;
+    if (m > 12) { m = 1; y += 1; }
+  }
+  return out;
+}
+
+function profitAndLoss({ accountKind = 'business', months = PNL_DEFAULT_MONTHS } = {}) {
+  const span = accountKindSpan(accountKind);
+  if (!span.n) {
+    return { state: 'empty', accountKind, message: `No ${accountKind} account has any transactions.` };
+  }
+
+  const lastMonth = span.last.slice(0, 7);
+  const [ly, lm] = lastMonth.split('-').map(Number);
+  let startY = ly;
+  let startM = lm - (months - 1);
+  while (startM < 1) { startM += 12; startY -= 1; }
+  const requestedFrom = `${startY}-${String(startM).padStart(2, '0')}`;
+  const accountFirstMonth = span.first.slice(0, 7);
+  // The window cannot reach further back than the account itself started.
+  const windowTruncated = requestedFrom < accountFirstMonth;
+  const startMonth = windowTruncated ? accountFirstMonth : requestedFrom;
+
+  const rows = db.prepare(`
+    SELECT substr(t.date, 1, 7) AS month,
+           SUM(CASE WHEN t.amount_pence > 0 THEN t.amount_pence ELSE 0 END) AS income_pence,
+           SUM(CASE WHEN t.amount_pence < 0 AND t.category IS NOT 'Cash withdrawn'
+                    THEN -t.amount_pence ELSE 0 END) AS expense_pence,
+           SUM(CASE WHEN t.category = 'Cash withdrawn' THEN -t.amount_pence ELSE 0 END) AS cash_pence
+      FROM finance_transactions t JOIN finance_accounts a ON a.id = t.account_id
+     WHERE a.kind = ? AND t.category IS NOT NULL AND t.category IS NOT 'Own transfer'
+       AND substr(t.date, 1, 7) >= ? AND substr(t.date, 1, 7) <= ?
+     GROUP BY month
+  `).all(accountKind, startMonth, lastMonth);
+  const byMonth = new Map(rows.map((r) => [r.month, r]));
+
+  // The final calendar day this account kind's OWN statements reach. If the ledger ends
+  // mid-month, that month is marked partial rather than shown as if it were complete — the
+  // same distinction /spending draws, for the same reason.
+  const monthEndDate = (ym) => {
+    const [y, m] = ym.split('-').map(Number);
+    return new Date(Date.UTC(y, m, 0)).toISOString().slice(0, 10);
+  };
+
+  const monthly = monthSequence(startMonth, lastMonth).map((month) => {
+    const r = byMonth.get(month) || { income_pence: 0, expense_pence: 0, cash_pence: 0 };
+    return {
+      month,
+      incomePence: r.income_pence,
+      expensePence: r.expense_pence,
+      cashPence: r.cash_pence,
+      netPence: r.income_pence - r.expense_pence,
+      partial: month === lastMonth && span.last < monthEndDate(month),
+    };
+  });
+
+  const expenseByCategory = db.prepare(`
+    SELECT t.category, SUM(-t.amount_pence) AS pence, COUNT(*) AS n
+      FROM finance_transactions t JOIN finance_accounts a ON a.id = t.account_id
+     WHERE a.kind = ? AND t.amount_pence < 0 AND t.category IS NOT NULL
+       AND t.category NOT IN ('Own transfer', 'Cash withdrawn')
+       AND substr(t.date, 1, 7) >= ? AND substr(t.date, 1, 7) <= ?
+     GROUP BY t.category ORDER BY pence DESC
+  `).all(accountKind, startMonth, lastMonth);
+
+  const incomeByCategory = db.prepare(`
+    SELECT t.category, SUM(t.amount_pence) AS pence, COUNT(*) AS n
+      FROM finance_transactions t JOIN finance_accounts a ON a.id = t.account_id
+     WHERE a.kind = ? AND t.amount_pence > 0 AND t.category IS NOT NULL
+       AND t.category IS NOT 'Own transfer'
+       AND substr(t.date, 1, 7) >= ? AND substr(t.date, 1, 7) <= ?
+     GROUP BY t.category ORDER BY pence DESC
+  `).all(accountKind, startMonth, lastMonth);
+
+  // The residue this figure's exclusion of uncategorised rows leaves behind — reported
+  // rather than silently dropped. A filter that hides what it left out looks cleaner than
+  // it is.
+  const uncategorised = db.prepare(`
+    SELECT COUNT(*) AS n, COALESCE(SUM(ABS(t.amount_pence)), 0) AS pence
+      FROM finance_transactions t JOIN finance_accounts a ON a.id = t.account_id
+     WHERE a.kind = ? AND t.category IS NULL
+       AND substr(t.date, 1, 7) >= ? AND substr(t.date, 1, 7) <= ?
+  `).get(accountKind, startMonth, lastMonth);
+
+  const totals = monthly.reduce((s, r) => ({
+    incomePence: s.incomePence + r.incomePence,
+    expensePence: s.expensePence + r.expensePence,
+    cashPence: s.cashPence + r.cashPence,
+  }), { incomePence: 0, expensePence: 0, cashPence: 0 });
+
+  return {
+    state: 'ok',
+    accountKind,
+    months: monthly.length,
+    from: startMonth,
+    to: lastMonth,
+    ledgerEndsOn: span.last,
+    windowTruncated,
+    monthly,
+    totals: {
+      incomePence: totals.incomePence,
+      expensePence: totals.expensePence,
+      cashPence: totals.cashPence,
+      netPence: totals.incomePence - totals.expensePence,
+      expenseByCategory: expenseByCategory.map((c) => ({ category: c.category, pence: c.pence, n: c.n })),
+      incomeByCategory: incomeByCategory.map((c) => ({ category: c.category, pence: c.pence, n: c.n })),
+    },
+    uncategorisedPence: uncategorised.pence,
+    uncategorisedCount: uncategorised.n,
+    excludedNote: 'Transfers between your own accounts are excluded everywhere — each one '
+      + 'appears twice, once per side. Cash withdrawn is reported separately, never as an '
+      + 'expense: once it leaves the account this ledger cannot say what it bought.',
+    caveat: accountKind === 'business'
+      ? 'This is a book-keeping statement read straight off the bank feed, not a self-assessment '
+        + 'return — it has not applied allowable-expense rules, and it has not excluded personal '
+        + 'spending paid from this account or included business spending paid from the other one. '
+        + 'Run tools/tax-year-report.cjs for that; own-transfer-suspects above is the check for '
+        + 'money crossing between the two.'
+      : 'A personal account has no statutory profit and loss. This is income minus spending, '
+        + 'read the same way as the business statement, so the two can sit side by side.',
+  };
+}
+
+router.get('/pnl', (req, res) => {
+  const accountKind = req.query.accountKind === 'personal' ? 'personal' : 'business';
+  const months = Math.min(36, Math.max(1, Number(req.query.months) || PNL_DEFAULT_MONTHS));
+  res.json(profitAndLoss({ accountKind, months }));
+});
+
+module.exports.profitAndLoss = profitAndLoss;

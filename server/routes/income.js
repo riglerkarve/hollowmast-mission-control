@@ -579,6 +579,7 @@ db.migrate('income-attribution', [
 // Transfers are excluded. A withdrawal from PayPal to the bank is the owner's own money moving
 // between his own accounts; counting it as income would double every payout, once when it
 // arrives at PayPal and again when it reaches the bank.
+// @unreached-by-design Waiting on income_stream_payers, which has no rows yet. Wiring it now would report zero income from a table nobody has filled.
 function derivedFromLedger(sinceISO) {
   const since = String(sinceISO || '').slice(0, 10) || '1970-01-01';
   let rows;

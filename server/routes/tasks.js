@@ -87,6 +87,7 @@ router.delete('/:id', (req, res) => {
 });
 
 // Asked for by the briefing rather than read from its tables — same rule as finance.
+// @unreached-by-design Superseded by the todo module. This table returns 0 for every window; the backlog is where work is now recorded.
 function completedSince(sinceIso) {
   return db.prepare(
     "SELECT COUNT(*) c FROM tasks WHERE done = 1 AND completed_at IS NOT NULL AND completed_at >= ?"
@@ -95,6 +96,7 @@ function completedSince(sinceIso) {
 
 // How many finished tasks predate the column, and therefore cannot be counted in any
 // period. A figure that silently excludes them would understate early weeks.
+// @unreached-by-design Superseded by the todo module, same as completedSince. Returns 0.
 function undatedDone() {
   return db.prepare('SELECT COUNT(*) c FROM tasks WHERE done = 1 AND completed_at IS NULL').get().c;
 }

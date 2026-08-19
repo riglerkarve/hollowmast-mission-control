@@ -116,24 +116,68 @@ const scriptSrc = ['scripts', 'tools'].flatMap((d) => {
   return fs.readdirSync(p).filter((f) => /\.(cjs|js)$/.test(f))
     .map((f) => ({ f: `${d}/${f}`, s: fs.readFileSync(path.join(p, f), 'utf8') }));
 });
-const universe = allSrc.concat(scriptSrc);
+// server/*.js was NOT in this set, which is why machine.startSampling read as unreached:
+// index.js calls it as machineRouter.startSampling(), and index.js was never scanned. A
+// detector blind to the file that mounts everything will always over-report.
+const serverSrc = fs.readdirSync(path.join(ROOT, 'server')).filter((f) => f.endsWith('.js'))
+  .map((f) => ({ f: `server/${f}`, s: fs.readFileSync(path.join(ROOT, 'server', f), 'utf8') }));
+const universe = allSrc.concat(scriptSrc, serverSrc);
 let unconnected = 0;
+const byDesign = [];
 for (const { f, s } of allSrc) {
   const mod = f.replace('.js', '');
   const exports = [...s.matchAll(/module\.exports\.(\w+)\s*=/g)].map((m) => m[1])
     .filter((n) => n !== 'PROJECTS' && n === n.replace(/^[A-Z_]+$/, ''));
   for (const e of exports) {
-    // MATCH ON THE METHOD, NOT ON module.method. The first version keyed on `${mod}.${e}(`
-    // and reported machine.startSampling as unreached while server/index.js line 101 calls it
-    // as `machineRouter.startSampling()`. A require is routinely aliased, so a detector that
-    // assumes the variable is named after the file over-reports — and an audit that cries wolf
-    // is one that gets switched off. Any `.method(` outside the defining file counts, which
-    // trades a little precision for not lying.
-    const callers = universe.filter((u) => u.f !== f && new RegExp(`\\.${e}\\s*\\(`).test(u.s));
-    if (!callers.length) { R(mod, e, 'NONE — built and unreached'); unconnected += 1; }
+    // REACHABLE MEANS REACHABLE FROM ANYWHERE, INCLUDING THIS FILE.
+    //
+    // The first version excluded the defining file, so a helper called by its own route
+    // handler -- the normal shape here, function then router.get -- was reported as "built
+    // and unreached" while being live over HTTP and rendered in a panel. finance.netWorth,
+    // profitAndLoss and incomeForecast were all flagged that way, and all three answer 200.
+    // That over-reporting is the same defect this section exists to avoid: a standing list
+    // of a dozen false alarms is a list nobody reads.
+    //
+    // So: a call anywhere counts, and a call from a ROUTE in the same file counts most of
+    // all, because that is what makes a capability reachable by the person using the thing.
+    // Within the DEFINING file, a helper is reachable if anything other than its own
+    // definition calls it -- typically a route handler. The previous regex tried to match
+    // router.get(...) and the call on one line, so it failed on the ordinary shape
+    // `res.json(incomeForecast())` because [^)]* stops at the first bracket. Counting call
+    // sites outside the definition line is simpler and does not have that blind spot.
+    const callRe = new RegExp("[.\\s(=]" + e + "\\s*\\(");
+    const defRe = new RegExp("^\\s*(?:function\\s+|const\\s+|let\\s+)?" + e + "\\s*[(=]");
+    const callers = universe.filter((u) => {
+      if (u.f !== f) return callRe.test(u.s);
+      return u.s.split("\n").some((line) => callRe.test(line) && !defRe.test(line));
+    });
+    if (callers.length) continue;
+    // AN AUDIT THAT CRIES WOLF GETS SWITCHED OFF. Some exports are unreached on purpose --
+    // superseded, panel-only, or waiting on data that does not exist yet. A marker comment
+    // within the six lines above the definition records WHY, so this list stays a list of
+    // oversights rather than a standing dozen a reader learns to scroll past.
+    //
+    // Line-based rather than a regex over the whole file, deliberately: a regex that spans
+    // lines would happily match a marker belonging to a different export further up.
+    const lines = s.split('\n');
+    const defAt = lines.findIndex((l) => new RegExp('^\\s*(function\\s+)?' + e + '\\s*[({=]').test(l));
+    let why = null;
+    if (defAt > 0) {
+      for (let k = Math.max(0, defAt - 8); k < defAt; k += 1) {
+        const hit = lines[k].match(/@unreached-by-design\s*(.*)$/);
+        if (hit) { why = hit[1].trim() || 'no reason given'; break; }
+      }
+    }
+    if (why) { byDesign.push([mod, e, why]); continue; }
+    R(mod, e, 'NONE — built and unreached'); unconnected += 1;
   }
 }
-if (!unconnected) R('(every exported helper has a caller)');
+if (!unconnected) R('(every exported helper has a caller, or is marked deliberate)');
+if (byDesign.length) {
+  BLANK();
+  R('   unreached ON PURPOSE — marked in the source, with the reason', 'module', 'export', 'why');
+  for (const [m, e, why] of byDesign) R('', m, e, why);
+}
 BLANK();
 
 // 3. projects that cannot be measured at all

@@ -65,6 +65,7 @@ const budget = require('../server/routes/budget');
 const safety = require('../server/routes/safety');
 const machine = require('../server/routes/machine');
 const finance = require('../server/routes/finance');
+const stats = require('../server/routes/stats');
 const projects = require('../server/routes/projects');
 const goals = require('../server/routes/goals');
 const alerts = require('../server/routes/alerts');
@@ -234,6 +235,7 @@ function gatherFacts() {
   };
   const pressure = ask(() => machine.pressureNow());
   const cashPos = ask(() => finance.netWorth());
+  const activity = ask(() => stats.derivedActivity());
   const projectsProgress = ask(() => projects.progressSince(sinceStamp));
   const goalSteps = ask(() => goals.nextSteps());
   const alertsRaised = ask(() => alerts.raisedSince(sinceStamp));
@@ -245,6 +247,7 @@ function gatherFacts() {
     moneyGuard,
     pressure,
     cashPos,
+    activity,
     goalSteps,
     alertsRaised,
     sitesDown,
@@ -404,6 +407,28 @@ function render(facts, prose) {
       L.push('');
     }
 
+    // WHEN you were actually at it, not just what got done. stats.derivedActivity() clusters
+    // the rows YOU wrote -- by_whom = 'you', across five tables -- into stretches separated by a
+    // 45-minute gap. It needs no input and no timer: it is derived from work already recorded,
+    // which is why it can report honestly on a day nobody remembered to start anything.
+    //
+    // Printed only when there are stretches. A "0 stretches" line every morning would be a
+    // daily reminder that a measurement exists, which is not the same as information.
+    const act = facts.activity;
+    if (act && !act.error && act.stretches && act.stretches.length) {
+      const total = act.stretches.reduce((a, s) => a + (s.spanMinutes || 0), 0);
+      L.push('## When you were at it\n');
+      L.push(`- ${act.stretches.length} stretch(es) over the last ${act.days} days, ${total} minute(s) in total`);
+      for (const s of act.stretches.slice(-4)) {
+        const from = String(s.start).slice(5, 16).replace('T', ' ');
+        L.push(`  - ${from} — ${s.actions} action(s) over ${s.spanMinutes} min`);
+      }
+      // The basis matters more than the number: this counts writes, so thinking, reading and
+      // anything done outside this dashboard is invisible to it.
+      if (act.basis) L.push(`- ${act.basis}`);
+      L.push('- It sees writes only, so reading, thinking and work done elsewhere leave no trace here.');
+      L.push('');
+    }
       L.push('## Diary\n');
       for (const e of sd.overdue) {
         L.push(`- **OVERDUE** ${e.title}${e.day ? ` — was ${e.day}` : ''}`);

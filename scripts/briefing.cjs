@@ -86,6 +86,17 @@ const gbp = (p) => `£${(Math.abs(p) / 100).toFixed(2)}`;
 // Everything below is SQL. A model is never asked to compute, compare or total anything:
 // a plausible number is worse than no number, because you cannot tell it is wrong.
 function gatherFacts() {
+  // The manager's open steering questions. Wrapped because the team module is newer than this
+  // script, and a briefing that throws is a briefing nobody gets — every other number here
+  // would be lost to one missing table.
+  let steering = [];
+  let steeringError = null;
+  try {
+    steering = require('../server/routes/team').openSteering();
+  } catch (e) {
+    steeringError = String((e && e.message) || e).slice(0, 160);
+  }
+
   const ledger = db.prepare(
     `SELECT MIN(date) a, MAX(date) b, COUNT(*) n FROM finance_transactions`
   ).get();
@@ -242,6 +253,8 @@ function gatherFacts() {
   const sitesDown = ask(() => analytics.notOk());
 
   return {
+    steering,
+    steeringError,
     projects: projectsProgress,
     earned,
     moneyGuard,
@@ -328,6 +341,38 @@ function render(facts, prose) {
 
   if (prose.text) L.push(`${prose.text}\n`);
   else L.push(`_(No opening line: the local model was unavailable — ${prose.why}. Every number below is unaffected; they are computed in SQL.)_\n`);
+
+  // STEERING LEADS, above everything the briefing merely reports. It is the only block here
+  // that asks the owner for something rather than telling him something, and it is the ONLY
+  // channel by which any session may interrupt him at all — the manager collects the
+  // owner-facing items out of each shift's handovers and puts the ones worth asking here.
+  //
+  // In the briefing rather than as a notification, deliberately: a steering quiz happens every
+  // day, so by definition it is not an event, and a daily alert is one you learn to dismiss.
+  // He already reads this file.
+  if (facts.steering && facts.steering.length) {
+    L.push(`## Steering — ${facts.steering.length} question${facts.steering.length === 1 ? '' : 's'} for you\n`);
+    for (const q of facts.steering) {
+      L.push(`**${q.question}**\n`);
+      if (q.options) {
+        for (const o of q.options) {
+          const label = typeof o === 'string' ? o : o.label;
+          const cost = typeof o === 'string' ? null : o.cost;
+          L.push(`- ${label}${cost ? ` — *if this is wrong:* ${cost}` : ''}`);
+        }
+        L.push('');
+      }
+      // The recommendation is never omitted. The API refuses a question without one, because a
+      // question with no recommendation hands the thinking back, which is the opposite of what
+      // the manager role exists to do.
+      L.push(`_Recommended: ${q.recommend}_\n`);
+    }
+    L.push('Answer in the Team panel, or tell the Team Manager session.\n');
+  } else if (facts.steeringError) {
+    // Could-not-look, not nothing-to-ask. An empty steering block on a broken read would say
+    // "no decisions needed today" on a day several were waiting.
+    L.push(`## Steering\n\n_Could not read the steering queue — ${facts.steeringError}. That is not "no questions"._\n`);
+  }
 
   // Work first. The item this section exists for asked for reports that show what was
   // achieved, not just money — so it leads, rather than being appended under the spending.

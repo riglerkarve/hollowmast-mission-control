@@ -33,6 +33,7 @@
 'use strict';
 
 const express = require('express');
+const scribe = require('../scribe.js');
 const db = require('../db');
 const provenance = require('../provenance');
 const { dispatch } = require('../dispatch');
@@ -48,7 +49,7 @@ const router = express.Router();
 // it is a SECOND channel to him alongside the manager's daily quiz, which is precisely what
 // the structure exists to reduce. It holds because he wants it, not because it is tidy. If a
 // second architect ever appears, that is the moment to collapse this back into the chain.
-const ROLES = ['worker', 'supervisor', 'manager', 'architect'];
+const ROLES = ['worker', 'supervisor', 'manager', 'architect', 'scribe'];
 
 // The three that make up the shift cycle. A missing one stops the chain; a missing architect
 // does not, so they are not checked the same way.
@@ -460,6 +461,70 @@ db.migrate('team', [
     // rendering an absent field as either a resolved queue or a parser failure.
     d.prepare(`UPDATE team_handovers SET owner_items_state = 'not_raised'
                WHERE needs_owner IS NULL AND owner_items_state IS NULL`).run();
+  },
+
+  // 9 -- THE SCRIBE. Owner decision, 20 August 2026.
+  //
+  // Two asks in one: the free local tier holds finance and wellbeing exclusively, AND it
+  // does real work when the paid subscriptions hit their weekly or session caps. The
+  // second is what makes this a continuity tier rather than a vanity one -- Claude Code
+  // is capped weekly and Codex runs on a subscription, so without this the workspace
+  // simply stops when they are spent, and the owner is the one who finds out.
+  //
+  // The capabilities table ships EMPTY on purpose. An unmeasured job is refused, not
+  // attempted. Seeding it with the jobs I expect a 4B to manage would make this a record
+  // of my predictions rather than of its measurements, which is the exact failure the
+  // table exists to prevent.
+  (db) => {
+    db.exec(`
+      CREATE TABLE IF NOT EXISTS scribe_capabilities (
+        id          INTEGER PRIMARY KEY AUTOINCREMENT,
+        job         TEXT NOT NULL UNIQUE,
+        status      TEXT NOT NULL DEFAULT 'unproven',  -- unproven | proven | failed
+        score       REAL,
+        floor       REAL NOT NULL DEFAULT 0.8,
+        sample_n    INTEGER,
+        oracle      TEXT,        -- WHERE the truth came from. A job scored against an
+                                 -- oracle the model supplied is not scored at all.
+        misses      TEXT,        -- every individual miss. An accuracy figure with the
+                                 -- misses hidden is decoration.
+        residue     TEXT,        -- what the measurement could NOT look at, and why.
+        model       TEXT,
+        measured_at TEXT,
+        measured_by TEXT,
+        notes       TEXT
+      );
+
+      -- Every attempt, including the refusals. A table holding only successes cannot
+      -- distinguish 'ran and wrote nothing' from 'never ran', and this tier runs
+      -- unattended by design.
+      CREATE TABLE IF NOT EXISTS scribe_runs (
+        id       INTEGER PRIMARY KEY AUTOINCREMENT,
+        job      TEXT NOT NULL,
+        model    TEXT,
+        at       TEXT NOT NULL,
+        items    INTEGER,
+        wrote    INTEGER NOT NULL DEFAULT 0,
+        refused  INTEGER NOT NULL DEFAULT 0,
+        reason   TEXT,
+        detail   TEXT
+      );
+
+      -- A cap is DECLARED, never detected. Nothing in this process can see an upstream
+      -- quota, and a cap-detector that cannot look reports 'not capped' in exactly the
+      -- same words as one that looked and found nothing. Undeclared means idle, which is
+      -- the safe direction to be wrong in.
+      CREATE TABLE IF NOT EXISTS scribe_caps (
+        id          INTEGER PRIMARY KEY AUTOINCREMENT,
+        tier        TEXT NOT NULL,        -- claude | codex | ollama-cloud
+        declared_at TEXT NOT NULL,
+        declared_by TEXT,
+        until       TEXT,                 -- NULL = until explicitly cleared
+        note        TEXT
+      );
+      CREATE INDEX IF NOT EXISTS idx_scribe_runs_at ON scribe_runs(at DESC);
+      CREATE INDEX IF NOT EXISTS idx_scribe_caps_tier ON scribe_caps(tier);
+    `);
   },
 ]);
 
@@ -989,6 +1054,103 @@ router.post('/decision', express.json(), (req, res) => {
 
 router.get('/decisions', (req, res) => {
   res.json({ decisions: db.prepare('SELECT * FROM team_decisions ORDER BY id DESC LIMIT 100').all() });
+});
+
+
+// ---------------------------------------------------------------------------
+// THE SCRIBE -- owner decision, 20 August 2026.
+//
+// "I want the free model to do actual work should all my subscriptions hit the weekly
+// or session caps." Claude Code is capped weekly, Codex runs on a subscription, and a
+// model on this machine has no cap at all. So the Scribe is a CONTINUITY tier: the
+// thing that still turns when the paid ones stop.
+//
+// What keeps it honest is that it can only do jobs somebody MEASURED it doing. The
+// capability table ships empty and an unmeasured job is refused rather than attempted.
+// ---------------------------------------------------------------------------
+
+router.get('/scribe', (req, res) => {
+  const caps = db.prepare('SELECT * FROM scribe_capabilities ORDER BY job').all();
+  const proven = caps.filter(c => scribe.scribeCan(db, c.job).allowed);
+  res.json({
+    capabilities: caps.map(c => ({ ...c, gate: scribe.scribeCan(db, c.job) })),
+    proven_count: proven.length,
+    // Said explicitly, because a UI that renders an empty list without this sentence
+    // reads as 'nothing is wrong' when it means 'nothing has been established'.
+    state: caps.length === 0
+      ? 'NOTHING MEASURED YET. The Scribe can currently do no work at all, and that is the '
+        + 'shipped state rather than a fault. Each job it may take has to be scored against '
+        + 'an oracle first.'
+      : proven.length + ' of ' + caps.length + ' jobs proven.',
+    custody: scribe.CUSTODY,
+    capped: scribe.cappedTiers(db),
+    measurement_ttl_days: scribe.MEASUREMENT_TTL_DAYS,
+    recent_runs: db.prepare('SELECT * FROM scribe_runs ORDER BY at DESC LIMIT 25').all(),
+  });
+});
+
+// Record a measurement. This is the ONLY way a capability becomes usable.
+//
+// oracle and sample_n are required and the request is refused without them: a score with
+// no stated source is the shape of a number somebody assumed, and this table exists
+// specifically so that cannot happen quietly.
+router.post('/scribe/measure', express.json(), (req, res) => {
+  const b = req.body || {};
+  const job = String(b.job || '').trim();
+  if (!job) return res.status(400).json({ error: 'job is required' });
+  if (b.score === undefined || b.score === null) return res.status(400).json({ error: 'score is required' });
+  if (!b.oracle) return res.status(400).json({
+    error: 'oracle is required',
+    why: 'A score with no stated source cannot be audited, and a model scored against an '
+       + 'oracle it supplied itself is not scored at all. Name where the truth came from.',
+  });
+  if (!b.sample_n) return res.status(400).json({
+    error: 'sample_n is required',
+    why: 'An accuracy figure without its denominator hides whether it came from 12 items or 1200.',
+  });
+
+  const score = Number(b.score);
+  const floor = b.floor === undefined ? 0.8 : Number(b.floor);
+  const status = score >= floor ? 'proven' : 'failed';
+
+  db.prepare(
+    'INSERT INTO scribe_capabilities (job, status, score, floor, sample_n, oracle, misses, residue, model, measured_at, measured_by, notes) '
+  + 'VALUES (?,?,?,?,?,?,?,?,?,?,?,?) '
+  + 'ON CONFLICT(job) DO UPDATE SET status=excluded.status, score=excluded.score, floor=excluded.floor, '
+  + 'sample_n=excluded.sample_n, oracle=excluded.oracle, misses=excluded.misses, residue=excluded.residue, '
+  + 'model=excluded.model, measured_at=excluded.measured_at, measured_by=excluded.measured_by, notes=excluded.notes'
+  ).run(job, status, score, floor, Number(b.sample_n), String(b.oracle),
+        b.misses ? JSON.stringify(b.misses) : null,
+        b.residue ? String(b.residue) : null,
+        b.model ? String(b.model) : null,
+        new Date().toISOString(), b.measured_by ? String(b.measured_by) : null,
+        b.notes ? String(b.notes) : null);
+
+  res.json({ ok: true, job, status, score, floor, gate: scribe.scribeCan(db, job) });
+});
+
+// Declare a paid tier spent. Nothing here can SEE a quota, so this is asserted, never
+// detected -- and an undeclared cap leaves the Scribe idle, which is the safe way to be
+// wrong. `until` may be null, meaning 'until somebody clears it'.
+router.post('/scribe/cap', express.json(), (req, res) => {
+  const b = req.body || {};
+  const tier = String(b.tier || '').trim();
+  if (!tier) return res.status(400).json({ error: 'tier is required (claude | codex | ollama-cloud)' });
+  db.prepare('INSERT INTO scribe_caps (tier, declared_at, declared_by, until, note) VALUES (?,?,?,?,?)')
+    .run(tier, new Date().toISOString(), b.declared_by ? String(b.declared_by) : null,
+         b.until ? String(b.until) : null, b.note ? String(b.note) : null);
+  res.json({ ok: true, capped: scribe.cappedTiers(db) });
+});
+
+router.post('/scribe/uncap', express.json(), (req, res) => {
+  const tier = String((req.body || {}).tier || '').trim();
+  if (!tier) return res.status(400).json({ error: 'tier is required' });
+  const now = new Date().toISOString();
+  const r = db.prepare('UPDATE scribe_caps SET until = ? WHERE tier = ? AND (until IS NULL OR until > ?)')
+    .run(now, tier, now);
+  // `changes` counts rows MATCHED, not rows meaningfully altered -- an inert run prints
+  // the same number -- so say what was matched rather than claiming what was fixed.
+  res.json({ ok: true, rows_matched: r.changes, capped: scribe.cappedTiers(db) });
 });
 
 module.exports = router;

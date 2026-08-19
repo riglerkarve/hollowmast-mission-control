@@ -73,11 +73,16 @@ function main() {
   // were sitting in. Loud and wrong, which is the right direction to be wrong in -- but the
   // count of INDEX LINES is now a different number from the count of ENTRIES, and conflating
   // them is what produced the false alarm.
-  const linked = lines.flatMap((l) => {
-    const links = [...l.matchAll(/\]\(([^)]+)\)/g)].map((m) => m[1]);
-    if (links.length) return links;
-    return [...l.matchAll(/([A-Za-z0-9._-]+\.md)\s+—/g)].map((m) => m[1]);
-  }).filter(Boolean);
+  // BOTH FORMS ARE COLLECTED FROM EVERY LINE, never one form or the other. This used to read
+  // `if (links.length) return links;` — an early return, so a line carrying a markdown link
+  // was never searched for bare entries. The index is now MIXED: other sessions still append
+  // in the link form while the packed lines use the bare form, and a freshly written memory
+  // appended onto a link-form line was invisible to this check while sitting in the file in
+  // plain sight. Whichever form is tested first silently decides what the other one gets.
+  const linked = lines.flatMap((l) => [
+    ...[...l.matchAll(/\]\(([^)]+)\)/g)].map((m) => m[1]),
+    ...[...l.matchAll(/([A-Za-z0-9._-]+\.md)\s+—/g)].map((m) => m[1]),
+  ]).filter(Boolean);
   const linkedSet = new Set(linked);
 
   const unindexed = onDisk.filter((f) => !linkedSet.has(f));

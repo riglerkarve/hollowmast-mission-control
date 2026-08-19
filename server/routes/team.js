@@ -20,8 +20,12 @@
 //               anything it needs from him goes in its handover as `needs_owner`.
 //   supervisor  reads every handover at shift start, drafts a plan, delegates once the plan
 //               is confirmed. Does not interrupt the owner either.
-//   manager     scrutinises the plan and confirms or returns it. THE ONLY ROLE THAT MAY
-//               INTERRUPT THE OWNER, and it does so once a day, as a steering quiz.
+//   manager     scrutinises the plan and confirms or returns it. THE ONLY ROLE IN THE CHAIN
+//               THAT MAY INTERRUPT THE OWNER, once a day, as a steering quiz.
+//   architect   OUTSIDE the chain, by the owner's decision on 19 Aug. Takes work directly from
+//               him, owns sequencing and cross-project consistency, keeps a standing right to
+//               put options to him. Still hands over every shift. It is a second channel to
+//               the owner and that cost is stated rather than hidden — see ROLES below.
 //
 // This module records those facts and makes the sequence checkable. It cannot enforce them —
 // no schema stops a session from typing a question into a chat window. What it can do is make
@@ -34,7 +38,20 @@ const provenance = require('../provenance');
 
 const router = express.Router();
 
-const ROLES = ['worker', 'supervisor', 'manager'];
+// `architect` is deliberately LAST and deliberately outside the chain. The other three form
+// the shift cycle: worker hands over, supervisor plans, manager confirms and delegates back.
+// The architect takes work straight from the owner, owns sequencing and cross-project
+// consistency, and keeps a standing right to put options to him.
+//
+// THE OWNER CHOSE THIS KNOWING THE COST, on 19 Aug, and the cost should stay written down:
+// it is a SECOND channel to him alongside the manager's daily quiz, which is precisely what
+// the structure exists to reduce. It holds because he wants it, not because it is tidy. If a
+// second architect ever appears, that is the moment to collapse this back into the chain.
+const ROLES = ['worker', 'supervisor', 'manager', 'architect'];
+
+// The three that make up the shift cycle. A missing one stops the chain; a missing architect
+// does not, so they are not checked the same way.
+const CHAIN_ROLES = ['worker', 'supervisor', 'manager'];
 
 db.migrate('team', [
   (d) => {
@@ -321,3 +338,4 @@ module.exports.shiftView = shiftView;
 module.exports.shiftLabel = shiftLabel;
 module.exports.openSteering = openSteering;
 module.exports.ROLES = ROLES;
+module.exports.CHAIN_ROLES = CHAIN_ROLES;

@@ -23,7 +23,18 @@ Everything else in this document follows from that.
 |---|---|---|
 | **worker** | the work. Writes a handover at the end of every shift. | **No.** Anything it needs from him goes in its handover under *Blocked on you*. |
 | **supervisor** | reads every handover at shift start, drafts the plan, delegates once the plan is confirmed. | **No.** It routes owner-facing items to the manager. |
-| **manager** | scrutinises the plan and confirms or returns it. Quizzes the owner once a day for steering. | **Yes — and it is the only role that may.** |
+| **manager** | scrutinises the plan and confirms or returns it. Quizzes the owner once a day for steering. | **Yes — the only role in the chain that may.** |
+| **architect** | outside the chain. Takes work directly from the owner, owns sequencing and consistency across projects. Still hands over every shift. | Yes — see below. |
+
+**The architect is an exception the owner made deliberately on 19 August, and it should stay
+uncomfortable.** It is a *second* channel to him alongside the manager's daily quiz, which is
+exactly the thing this structure exists to reduce. It holds because he wants it, not because
+it is tidy. Two consequences worth stating:
+
+- The architect does **not** take delegation from the supervisor, and does not appear in the
+  plan. Work reaches it from the owner.
+- **If a second architect ever appears, collapse the role back into the chain.** One exception
+  is a decision; two is the structure quietly not existing.
 
 A worker with an urgent question does not become a manager for the afternoon. It writes the
 question down, and it reaches the owner in the next steering quiz. If that is too slow for a

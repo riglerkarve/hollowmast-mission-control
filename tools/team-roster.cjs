@@ -76,7 +76,7 @@ for (const r of rows) {
 // it is a team in which nothing can be confirmed and nobody may reach the owner, so the whole
 // chain stops at "plan drafted". Reporting the count would hide that; the role is named.
 console.log('');
-for (const role of team.ROLES) {
+for (const role of team.CHAIN_ROLES) {
   const n = rows.filter((r) => r.role === role).length;
   if (n) { console.log(`  ${role}: ${n}`); continue; }
   console.log(`  ${role}: NONE — and that blocks the chain:`);

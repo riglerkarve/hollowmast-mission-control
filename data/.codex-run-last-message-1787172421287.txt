@@ -1,0 +1,10 @@
+Updated Finance state handling in [finance.js](C:\Users\jcwhi\Claude Outputs\mission-control\public\panels\finance\finance.js):
+
+- Failed initial ledger load now renders a distinct shared `failure-hint`; genuine empty ledger has separate copy.
+- Non-OK cash responses now render as failures.
+- Added mount-generation guards to prevent stale loads overwriting a newer panel.
+- Preserved already-correct spending/empty distinctions and existing secondary-card failure copy.
+
+Verified with forced failure, empty, normal-data, cash-503, and stale-remount renderer checks; live finance/cash routes return 200. Syntax check passes.
+
+A live visual reload could not be performed because no browser connection was available; this is recorded as an evidence gap in the handover: [handover](C:\Users\jcwhi\Claude Outputs\mission-control\handover\2026-08-19-codex-run-1787172421287.md).

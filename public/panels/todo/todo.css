@@ -155,6 +155,11 @@
 .td-why-label { margin: 0.35rem 0 0; font-size: 0.72rem; color: var(--muted); }
 .td-why-none { font-size: 0.76rem; margin: 0; }
 
+/* Note count belongs with the reasoning trail, but stays quieter than the item itself.
+   Zero margin avoids the browser's paragraph gap making a one-line audit fact look like a
+   separate card. Colour comes from the accompanying .td-dim class. */
+.td-note-count { margin: 0; font-size: 0.74rem; line-height: 1.45; }
+
 .td-notes { list-style: none; margin: 0.2rem 0 0; padding: 0.4rem 0 0 0.7rem; border-left: 2px solid var(--border); display: flex; flex-direction: column; gap: 0.25rem; font-size: 0.78rem; }
 
 /* --- actions --------------------------------------------------------------------- */

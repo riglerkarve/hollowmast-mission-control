@@ -98,11 +98,17 @@ let root = null;
 let account = 'all';
 let month = null;
 let pnlKind = 'business';
+// shell.js reuses #panelRoot between panels. A root-element check therefore cannot tell an
+// old request from a new Finance mount; the generation is the mount's actual identity.
+let generation = 0;
+const current = (gen) => !!root && gen === generation;
 
 const esc = (s) => String(s ?? '').replace(/[&<>"]/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
 const gbp = (p) => `£${(Math.abs(p) / 100).toLocaleString('en-GB', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
 
-async function api(p) {
+const failureHint = (message, detail) => `<p class="empty-hint failure-hint">${esc(message)}${detail ? `<br><small>${esc(detail)}</small>` : ''}</p>`;
+
+async function api(p, opts = {}) {
   // The header goes on READS too, not just writes. Provenance was built to answer "who
   // wrote this row", so panels send x-mc-by only on POST/PATCH — measured 18 Aug: 13 panels
   // define their own api() wrapper and NOT ONE sends it on a GET. That was harmless while
@@ -114,7 +120,20 @@ async function api(p) {
   // Fixed here only. The other twelve panels still under-attribute their reads, and that
   // stays true until either a shared fetch helper exists or the watched-table list grows
   // past finance_. Recorded rather than silently half-fixed.
-  const res = await fetch(`/api/finance${p}`, { headers: { 'x-mc-by': 'you' } });
+  const res = await fetch(`/api/finance${p}`, {
+    ...opts,
+    headers: { 'x-mc-by': 'you', ...(opts.headers || {}) },
+  });
+  const body = await res.json().catch(() => null);
+  if (!res.ok) throw new Error((body && body.error) || `HTTP ${res.status}`);
+  return body;
+}
+
+async function cashApi(p, opts = {}) {
+  const res = await fetch(`/api/cash${p}`, {
+    ...opts,
+    headers: { 'x-mc-by': 'you', ...(opts.headers || {}) },
+  });
   const body = await res.json().catch(() => null);
   if (!res.ok) throw new Error((body && body.error) || `HTTP ${res.status}`);
   return body;
@@ -220,15 +239,18 @@ function renderCash(d) {
 // figure: the one place this money is counted, so a receipt or a screenshot can be checked
 // against it but never gets its own copy of it.
 async function loadPnl() {
-  if (!root) return;   // may be CALLED after teardown, not only resumed after it
+  const gen = generation;
+  if (!current(gen)) return;   // may be CALLED after teardown, not only resumed after it
   const box = root.querySelector('#finPnl');
   let d;
   try {
     d = await api(`/pnl?accountKind=${pnlKind}&months=12`);
+    if (!current(gen)) return;   // this mount was superseded mid-await
     if (!root) return;   // the panel was torn down mid-await; root is null now
   } catch (err) {
+    if (!current(gen)) return;   // this mount was superseded mid-await
     if (!root) return;   // the panel was torn down mid-await; root is null now
-    box.innerHTML = `<p class="fin-error">Could not compute the P&amp;L: ${esc(err.message)}
+    box.innerHTML = `<p class="fin-error empty-hint failure-hint">Could not compute the P&amp;L: ${esc(err.message)}
       — a failure to compute, not a statement of zero profit.</p>`;
     return;
   }
@@ -299,15 +321,18 @@ async function loadPnl() {
 // comments on what anything is for. What it can honestly answer is which services are
 // still taking money and which quietly stopped.
 async function loadRecurring() {
-  if (!root) return;   // may be CALLED after teardown, not only resumed after it
+  const gen = generation;
+  if (!current(gen)) return;   // may be CALLED after teardown, not only resumed after it
   const box = root.querySelector('#finRecurring');
   let d;
   try {
     d = await api('/recurring');
+    if (!current(gen)) return;   // this mount was superseded mid-await
     if (!root) return;   // the panel was torn down mid-await; root is null now
   } catch (err) {
+    if (!current(gen)) return;   // this mount was superseded mid-await
     if (!root) return;   // the panel was torn down mid-await; root is null now
-    box.innerHTML = `<p class="fin-error">Could not read the services audit: ${esc(err.message)}</p>`;
+    box.innerHTML = `<p class="fin-error empty-hint failure-hint">Could not read the services audit: ${esc(err.message)}</p>`;
     return;
   }
   if (d.state !== 'ok') { box.innerHTML = '<p class="empty-hint">No ledger to read yet.</p>'; return; }
@@ -365,15 +390,18 @@ async function loadRecurring() {
 // projection shown large with its residual in small print is the failure mode — it invites
 // reading the projection as income, which is exactly what it is not.
 async function loadForecast() {
-  if (!root) return;   // may be CALLED after teardown, not only resumed after it
+  const gen = generation;
+  if (!current(gen)) return;   // may be CALLED after teardown, not only resumed after it
   const box = root.querySelector('#finForecast');
   let d;
   try {
     d = await api('/forecast');
+    if (!current(gen)) return;   // this mount was superseded mid-await
     if (!root) return;   // the panel was torn down mid-await; root is null now
   } catch (err) {
+    if (!current(gen)) return;   // this mount was superseded mid-await
     if (!root) return;   // the panel was torn down mid-await; root is null now
-    box.innerHTML = `<p class="fin-error">Could not compute the forecast: ${esc(err.message)}
+    box.innerHTML = `<p class="fin-error empty-hint failure-hint">Could not compute the forecast: ${esc(err.message)}
       — a failure to compute, not a report that nothing comes in.</p>`;
     return;
   }
@@ -428,15 +456,18 @@ async function loadForecast() {
 // the ledger, and holdings you typed. The staleness of each is shown, because a total
 // assembled from figures dated across three months is not a figure about today.
 async function loadWorth() {
-  if (!root) return;   // may be CALLED after teardown, not only resumed after it
+  const gen = generation;
+  if (!current(gen)) return;   // may be CALLED after teardown, not only resumed after it
   const box = root.querySelector('#finWorth');
   let d;
   try {
     d = await api('/net-worth');
+    if (!current(gen)) return;   // this mount was superseded mid-await
     if (!root) return;   // the panel was torn down mid-await; root is null now
   } catch (err) {
+    if (!current(gen)) return;   // this mount was superseded mid-await
     if (!root) return;   // the panel was torn down mid-await; root is null now
-    box.innerHTML = `<p class="fin-error">Could not read holdings: ${esc(err.message)}
+    box.innerHTML = `<p class="fin-error empty-hint failure-hint">Could not read holdings: ${esc(err.message)}
       — a failure to look, not a report that you have nothing.</p>`;
     return;
   }
@@ -497,16 +528,19 @@ async function loadWorth() {
 // exposure has been misled, so the floor caveat is rendered at full size next to the
 // numbers rather than tucked under them.
 async function loadAccessLog() {
-  if (!root) return;   // may be CALLED after teardown, not only resumed after it
+  const gen = generation;
+  if (!current(gen)) return;   // may be CALLED after teardown, not only resumed after it
   const box = root.querySelector('#finAccess');
   let d;
   try {
     d = await api('/access-log');
+    if (!current(gen)) return;   // this mount was superseded mid-await
     if (!root) return;   // the panel was torn down mid-await; root is null now
   } catch (err) {
+    if (!current(gen)) return;   // this mount was superseded mid-await
     if (!root) return;   // the panel was torn down mid-await; root is null now
     // Could-not-look must not read like nothing-happened.
-    box.innerHTML = `<p class="fin-error">Could not read the access log: ${esc(err.message)}
+    box.innerHTML = `<p class="fin-error empty-hint failure-hint">Could not read the access log: ${esc(err.message)}
       — that is a failure to look, not a report that nothing read the ledger.</p>`;
     return;
   }
@@ -546,22 +580,25 @@ async function loadAccessLog() {
 // test. This names credits whose counterparty resembles a name the ledger already calls
 // the owner, and it CHANGES NOTHING — there is no write path in the route or here.
 async function loadSuspects() {
-  if (!root) return;   // may be CALLED after teardown, not only resumed after it
+  const gen = generation;
+  if (!current(gen)) return;   // may be CALLED after teardown, not only resumed after it
   const box = root.querySelector('#finSuspects');
   let d;
   try {
     d = await api('/own-transfer-suspects');
+    if (!current(gen)) return;   // this mount was superseded mid-await
     if (!root) return;   // the panel was torn down mid-await; root is null now
   } catch (err) {
+    if (!current(gen)) return;   // this mount was superseded mid-await
     if (!root) return;   // the panel was torn down mid-await; root is null now
-    box.innerHTML = `<p class="fin-error">Could not run the check: ${esc(err.message)}
+    box.innerHTML = `<p class="fin-error empty-hint failure-hint">Could not run the check: ${esc(err.message)}
       — that is a failure to look, not a report that nothing is mislabelled.</p>`;
     return;
   }
 
   // ok:false is "could not look" and must never render as an all-clear.
   if (!d.ok) {
-    box.innerHTML = `<p class="fin-error">${esc(d.message)}</p>`;
+    box.innerHTML = `<p class="fin-error empty-hint failure-hint">${esc(d.message)}</p>`;
     return;
   }
 
@@ -625,15 +662,18 @@ async function loadSuspects() {
 // fifteenth tab for one input box would be the surface-you-must-feed the workspace gate
 // rejects. The capture is one field and the derivation returns in the same response.
 async function loadCash() {
-  if (!root) return;   // may be CALLED after teardown, not only resumed after it
+  const gen = generation;
+  if (!current(gen)) return;   // may be CALLED after teardown, not only resumed after it
   const box = root.querySelector('#finCash2');
   let d;
   try {
-    d = await (await fetch('/api/cash', { headers: { 'x-mc-by': 'you' } })).json();
+    d = await cashApi('/');
+    if (!current(gen)) return;   // this mount was superseded mid-await
     if (!root) return;   // the panel was torn down mid-await; root is null now
   } catch (err) {
+    if (!current(gen)) return;   // this mount was superseded mid-await
     if (!root) return;   // the panel was torn down mid-await; root is null now
-    box.innerHTML = `<p class="fin-error">Could not read the cash state: ${esc(err.message)}
+    box.innerHTML = `<p class="fin-error empty-hint failure-hint">Could not read the cash state: ${esc(err.message)}
       — that is a failure to look, not a report that no cash was spent.</p>`;
     return;
   }
@@ -654,7 +694,7 @@ async function loadCash() {
   if (d.state === 'never counted' || d.state === 'baseline only') {
     body = `<p class="fin-note">${esc(d.why)}</p>`;
   } else if (d.state === 'error') {
-    body = `<p class="fin-error">${esc(d.why)}</p>`;
+    body = `<p class="fin-error empty-hint failure-hint">${esc(d.why)}</p>`;
   } else {
     const negative = d.spentInWindow < 0;
     body = `
@@ -713,16 +753,19 @@ async function loadCash() {
 }
 
 async function load() {
-  if (!root) return;   // may be CALLED after teardown, not only resumed after it
+  const gen = generation;
+  if (!current(gen)) return;   // may be CALLED after teardown, not only resumed after it
   const notice = root.querySelector('#finNotice');
   let d;
   try {
     d = await api(`/spending?account=${encodeURIComponent(account)}${month ? `&month=${month}` : ''}`);
+    if (!current(gen)) return;   // this mount was superseded mid-await
     if (!root) return;   // the panel was torn down mid-await; root is null now
   } catch (err) {
+    if (!current(gen)) return;   // this mount was superseded mid-await
     if (!root) return;   // the panel was torn down mid-await; root is null now
     root.querySelector('#finCats').innerHTML =
-      `<p class="fin-error">Could not load spending: ${esc(err.message)}</p>`;
+      `<p class="fin-error empty-hint failure-hint">Could not load spending: ${esc(err.message)}<br><small>That is a failure to look, not a report that nothing was spent.</small></p>`;
     root.querySelector('#finTotals').innerHTML = '';
     root.querySelector('#finCash').innerHTML = '';
     return;
@@ -759,14 +802,24 @@ async function load() {
 export default {
   async mount(el) {
     root = el;
+    const gen = ++generation;
     el.innerHTML = TEMPLATE;
 
-    let months = [];
-    try { months = await api('/months'); } catch { /* handled below */ }
+    let months;
+    let monthsError;
+    try { months = await api('/months'); } catch (err) { monthsError = err; }
+    if (!current(gen)) return;
+
+    if (monthsError) {
+      el.querySelector('#finCats').innerHTML =
+        failureHint(`Could not read the ledger: ${monthsError.message}`,
+          'That is a failure to look, not a report that the ledger is empty.');
+      return;
+    }
 
     if (!months.length) {
       el.querySelector('#finCats').innerHTML =
-        '<p class="fin-error">The ledger is empty, or it could not be read. Run tools/import-starling.cjs.</p>';
+        '<p class="empty-hint">There are no imported ledger months yet. Run tools/import-starling.cjs after an export is available.</p>';
       return;
     }
 
@@ -823,6 +876,7 @@ export default {
   },
 
   unmount() {
+    generation += 1;
     root = null;
     account = 'all';
     month = null;

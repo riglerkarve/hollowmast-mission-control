@@ -24,6 +24,13 @@
 //
 // NO DOMAIN CONTEXT IN THE PROMPT, deliberately: naming the owner's business in the
 // transaction probe broke four answers that were already right.
+//
+// ROUTES THROUGH tools/ollama-run.cjs, not a direct fetch to 11434 — this used to call the
+// Ollama HTTP API straight, which skips server/ollama.js's cloud-privacy gate entirely. This
+// script hands the model mail sender addresses, which is exactly the kind of payload that
+// gate exists to keep off a `-cloud` model. Also adds the accuracy-floor gate ollama-shift.cjs
+// already had and this script did not: rule-classified senders already on file are the
+// oracle, scored fresh every run rather than trusted from llm-probe-mail.cjs's one-time number.
 // ---------------------------------------------------------------------------------------
 'use strict';
 require('./_run-log.cjs').record();
@@ -33,12 +40,14 @@ const db = require('../server/db');
 // access log records 'unknown', which is honest but useless. See server/provenance.js.
 db.setProcessActor('claude');
 require('../server/routes/mail');
+const { checkAvailable, scoreOracle, askBatched } = require('./ollama-run');
 
 const args = process.argv.slice(2);
 const DRY = args.includes('--dry');
 const RULES_ONLY = args.includes('--rules');
 const MODEL = 'qwen3.5:9b';
 const BATCH = 25;
+const ACCURACY_FLOOR = 0.8;
 
 const CLASSES = ['marketing', 'transactional', 'social', 'survey', 'adult', 'jobs', 'finance', 'personal', 'other'];
 

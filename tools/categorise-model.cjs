@@ -10,6 +10,15 @@
 // DO NOT ADD BUSINESS CONTEXT TO THE PROMPT. Measured and reproduced twice: naming the
 // 3D-printing business dropped the unambiguous set from 20/20 to 16/20 by over-applying
 // one category to unrelated merchants. Merchant knowledge belongs in finance_rules.
+//
+// ROUTES THROUGH tools/ollama-run.cjs, not a direct fetch to 11434 — this used to call the
+// Ollama HTTP API straight, which skips server/ollama.js's cloud-privacy gate entirely. This
+// script hands the model counterparty/reference text off finance_transactions, which is
+// exactly the payload that gate exists to keep off a `-cloud` model. Nothing exploited that
+// while MODEL was hardcoded local, but nothing was stopping a later edit from doing so either.
+// Also adds the accuracy-floor gate ollama-shift.cjs already had and this script did not: the
+// rule-categorised rows already in the ledger are the oracle, scored fresh every run rather
+// than trusted from last week's probe number.
 'use strict';
 require('./_run-log.cjs').record();
 
@@ -18,10 +27,11 @@ const db = require('../server/db');
 // access log records 'unknown', which is honest but useless. See server/provenance.js.
 db.setProcessActor('claude');
 require('../server/routes/finance');
+const { checkAvailable, scoreOracle, askBatched } = require('./ollama-run');
 
 const MODEL = process.env.PROBE_MODEL || 'qwen3.5:9b';
-const HOST = 'http://127.0.0.1:11434';
 const BATCH = 25;            // measured: 25 in one call is ~11s; 25 calls would be minutes
+const ACCURACY_FLOOR = 0.8;  // same floor ollama-shift.cjs uses; not re-derived, just reused
 
 // The model may only answer from the vocabulary the ledger actually has. Read from the
 // rules table so the two can never drift apart.
@@ -50,48 +60,37 @@ const SCHEMA = {
   required: ['results'],
 };
 
-async function ask(rows) {
+function buildPrompt(rows) {
   const list = rows.map((r, i) => {
     const dir = r.amount_pence >= 0 ? 'money in' : 'money out';
     const desc = [r.counterparty, r.reference].filter(Boolean).join(' / ');
     return `${i}. [${dir}, ${r.type}] ${desc}`;
   }).join('\n');
+  return `Categorise these ${rows.length} transactions:\n${list}`;
+}
 
-  const res = await fetch(`${HOST}/api/generate`, {
-    method: 'POST',
-    headers: { 'content-type': 'application/json' },
-    body: JSON.stringify({
-      model: MODEL,
-      system: SYSTEM,
-      prompt: `Categorise these ${rows.length} transactions:\n${list}`,
-      stream: false,
-      think: false,
-      format: SCHEMA,
-      options: { temperature: 0 },   // same import twice must give the same suggestions
-    }),
-  });
-
-  const body = await res.json();
-  if (body.error) throw new Error(body.error);
-  const parsed = JSON.parse(body.response).results;
+// Positional index in the prompt (needed so the model does not have to echo a long id back
+// correctly) resolved to the row's real id here, so every caller of askBatched keys answers
+// the same way regardless of what its own schema calls the index.
+function parseResponse(text, chunk) {
+  const parsed = JSON.parse(text).results;
   if (!Array.isArray(parsed)) throw new Error('results was not an array');
-  return parsed;
+  const byIdx = new Map(parsed.map((o) => [Number(o.i), String(o.c || '').trim()]));
+  const got = new Map();
+  const badKeys = [];
+  chunk.forEach((row, i) => {
+    const c = byIdx.get(i);
+    if (!c || !CATEGORIES.includes(c)) { badKeys.push(row.id); return; }
+    got.set(String(row.id), c);
+  });
+  return { got, badKeys };
 }
 
 async function main() {
   const APPLY = process.argv.includes('--apply');
 
-  // Ollama is a desktop app that will sometimes not be running. That must degrade to
-  // "not categorised, do it yourself", never to a crash or a silent partial write.
-  try {
-    const r = await fetch(`${HOST}/api/tags`, { signal: AbortSignal.timeout(4000) });
-    if (!r.ok) throw new Error(`HTTP ${r.status}`);
-  } catch (err) {
-    console.error(`Ollama is not reachable at ${HOST} (${err.message}).`);
-    console.error('Nothing was changed. The ledger keeps its rule-based categories and the');
-    console.error('remaining rows stay uncategorised, which is the honest state.');
-    process.exit(2);
-  }
+  const avail = await checkAvailable();
+  if (!avail.up) process.exit(2);
 
   const rows = db.prepare(
     `SELECT id, counterparty, reference, type, amount_pence
@@ -106,27 +105,40 @@ async function main() {
   console.log(`vocabulary   ${CATEGORIES.length} categories, read from finance_rules`);
   console.log(`to do        ${rows.length} rows the rules could not reach\n`);
 
-  const suggestions = [];
-  const failed = [];
-  const t0 = Date.now();
+  // THE GATE. Rows the RULES already categorised are the oracle — reproducible, not hand
+  // labelled, and re-scored every run so a stale probe number never stands in for a live one.
+  const oracle = db.prepare(
+    `SELECT id, counterparty, reference, type, amount_pence, category AS truth
+     FROM finance_transactions
+     WHERE category IS NOT NULL AND category_source = 'rule'
+     ORDER BY RANDOM() LIMIT 40`
+  ).all();
 
-  for (let b = 0; b < rows.length; b += BATCH) {
-    const chunk = rows.slice(b, b + BATCH);
-    try {
-      const out = await ask(chunk);
-      const byIdx = new Map(out.map((o) => [Number(o.i), String(o.c)]));
-      chunk.forEach((row, i) => {
-        const c = byIdx.get(i);
-        // A row the model skipped is a MISSING answer, not a wrong one, and must not be
-        // silently dropped into "Other" — that would hide a broken batch as a result.
-        if (!c) { failed.push({ id: row.id, why: 'no answer for this index' }); return; }
-        if (!CATEGORIES.includes(c)) { failed.push({ id: row.id, why: `out-of-vocabulary "${c}"` }); return; }
-        suggestions.push({ id: row.id, category: c, cp: row.counterparty });
-      });
-      process.stdout.write(`  ${Math.min(b + BATCH, rows.length)}/${rows.length}\r`);
-    } catch (err) {
-      chunk.forEach((row) => failed.push({ id: row.id, why: err.message }));
-    }
+  console.log(`scoring against ${oracle.length} rule-categorised rows before touching anything uncategorised...`);
+  const score = await scoreOracle({
+    model: MODEL, system: SYSTEM, schema: SCHEMA, oracle, buildPrompt, parseResponse,
+    keyOf: (o) => o.id, floor: ACCURACY_FLOOR, batchSize: BATCH,
+  });
+  if (score.accuracy != null) {
+    console.log(`agreement with the rules: ${score.matched}/${score.seen}  ${Math.round(score.accuracy * 100)}%`);
+    for (const m of score.misses.slice(0, 5)) console.log(`  id ${m.id}  rule ${m.truth}  model ${m.got}`);
+  }
+  if (!score.ok) {
+    console.log(`\n${score.why}\n`);
+    process.exit(1);
+  }
+
+  const t0 = Date.now();
+  const { answers, failed: batchFailed } = await askBatched({
+    model: MODEL, system: SYSTEM, schema: SCHEMA, items: rows, buildPrompt, parseResponse, batchSize: BATCH,
+    onBatch: (p) => process.stdout.write(`  ${p.done}/${p.total}\r`),
+  });
+
+  const suggestions = [];
+  const failed = batchFailed.map((f) => ({ id: f.item && f.item.id ? f.item.id : f.item, why: f.why }));
+  for (const row of rows) {
+    const c = answers.get(String(row.id));
+    if (c) suggestions.push({ id: row.id, category: c, cp: row.counterparty });
   }
 
   const secs = (Date.now() - t0) / 1000;

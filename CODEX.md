@@ -90,7 +90,22 @@ outage today and the watchdog missed it because the gap was under its five-minut
 fix direction is a lock so concurrent restarts serialise. Do **not** make the watchdog poll
 faster: that treats the symptom and moves the blind spot to a shorter interval.
 
-**4. Standing from then on:** review every Claude commit to this repo, keep the panel sweep
+**4. THE VERIFICATION BATCHES — M79 to M86, and this is now the main work.** M77 and M78 are
+done and the 18-panel sweep is complete, so the queue moves from fixing the dashboard to
+proving it. Take them in batches; each is bounded and independently verifiable.
+
+| | Batch | Why it is first |
+|---|---|---|
+| **A** | M79 migrate-from-zero · M80 restore a backup · M81 endpoint shape snapshot | Nobody has ever done A1 or A2. A migration that only works as an increment, or a backup that has never been restored, fails on the one occasion it matters. |
+| **B** | M82 prove every checker can fail · M83 one-owner-per-figure · M84 tool audit | The checkers are the trust layer. A checker that silently stopped checking reports clean forever, and that is the most expensive failure shape here. |
+| **C** | M85 access log is still a floor · M86 recompute the shift report gaps | Both are claims the dashboard makes about itself that nobody has re-tested since the code around them grew. |
+
+**Two rules across all of them.** Never write to  from a test — use a temp
+path and say so in the output. And for M86 especially: **write the recomputation without
+reading  first.** A checker written from the same reading as the code confirms
+the code, which is the whole reason you are the one doing it.
+
+**5. Standing from then on:** review every Claude commit to this repo, keep the panel sweep
 current as routes change, and own the stylesheets.
 
 ---

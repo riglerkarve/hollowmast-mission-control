@@ -39,8 +39,21 @@ const path = require('path');
 const OLLAMA = 'http://127.0.0.1:11434';
 const KEEP = '15m';
 
+// Context length is part of the configuration under test, not a detail.
+// qwen3:8b is 5.2 GB on disk and 11.6 GB resident at its default 40K context, because the
+// KV cache lives in VRAM beside the weights -- it fails the fit gate on cache alone. At
+// num_ctx 8192 the same model sits at 6.2 GB and 100% on the card. So "does model X fit"
+// is not a question about model X; every result here is only valid for the ctx it ran at,
+// and that is why it is printed on every line rather than assumed.
+const CTX = (() => {
+  const i = process.argv.indexOf('--ctx');
+  return i > -1 && process.argv[i + 1] ? Number(process.argv[i + 1]) : null;
+})();
+
 async function chat(model, messages, format) {
-  const body = { model, stream: false, keep_alive: KEEP, options: { temperature: 0 }, messages };
+  const opts = { temperature: 0 };
+  if (CTX) opts.num_ctx = CTX;
+  const body = { model, stream: false, keep_alive: KEEP, options: opts, messages };
   if (format) body.format = format;
   const t0 = Date.now();
   // A hang must surface as "could not look", not as an uncaught fetch failure that takes
@@ -266,8 +279,9 @@ async function testDiscriminate(model) {
 
 // ---- run -------------------------------------------------------------------
 (async () => {
-  const models = process.argv.slice(2);
-  if (!models.length) { console.error('usage: node tools/model-bakeoff.cjs <model> [<model>...]'); process.exit(2); }
+  const models = process.argv.slice(2).filter((a, i, arr) => a !== '--ctx' && arr[i - 1] !== '--ctx');
+  if (!models.length) { console.error('usage: node tools/model-bakeoff.cjs [--ctx N] <model> [<model>...]'); process.exit(2); }
+  console.log('context: ' + (CTX ? 'num_ctx ' + CTX : "the model's default -- results below are only valid for that"));
 
   const results = {};
   for (const m of models) {

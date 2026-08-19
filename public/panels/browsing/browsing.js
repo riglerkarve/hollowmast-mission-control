@@ -7,6 +7,7 @@
 // not be one: that would be a weighting I invented, presented back as a measurement.
 
 let root = null;
+let loadToken = 0;
 
 const esc = (s) => String(s == null ? '' : s).replace(/[&<>"']/g, (c) => (
   { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]
@@ -26,16 +27,17 @@ const TEMPLATE = `
 
 async function load() {
   if (!root) return;   // may be CALLED after teardown, not only resumed after it
+  const token = ++loadToken;
   let d;
   try {
     const r = await fetch('/api/browsing');
-    if (!root) return;   // the panel was torn down mid-await; root is null now
+    if (!root || token !== loadToken) return;
     d = await r.json();
-    if (!root) return;   // the panel was torn down mid-await; root is null now
+    if (!root || token !== loadToken) return;
     if (!r.ok) throw new Error(d.error || `HTTP ${r.status}`);
   } catch (err) {
-    if (!root) return;   // the panel was torn down mid-await; root is null now
-    root.querySelector('#brTop').innerHTML = `<p class="empty-hint">Could not read browsing: ${esc(err.message)}</p>`;
+    if (!root || token !== loadToken) return;
+    root.querySelector('#brTop').innerHTML = `<p class="empty-hint failure-hint">Could not read browsing: ${esc(err.message)}<br><small>That is a failure to look, not an empty browsing record.</small></p>`;
     return;
   }
 
@@ -78,5 +80,5 @@ async function load() {
 
 export default {
   mount(el) { root = el; el.innerHTML = TEMPLATE; load(); },
-  unmount() { root = null; },
+  unmount() { loadToken++; root = null; },
 };

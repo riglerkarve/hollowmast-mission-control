@@ -98,7 +98,7 @@
    this file or shared.css; var(--line)/var(--ember) render as nothing, silently, with no
    error. This project's equivalents are --border (not --line), --card (not --panel),
    --accent-text or --accent-fill (not --ember, which is two roles here -- see the tokens
-   above for which one). Found the hard way, writing a panel against this exact comment. */
+   above for which one). Found the hard way, writing a panel against this exact comment.
 
    Every pairing below was computed against these exact hexes before being written, not
    eyeballed: text ddE4ec on card 0b1017 is 14.88:1 and on bg 03050a 15.91:1; muted 8d98a6

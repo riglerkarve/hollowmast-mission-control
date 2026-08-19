@@ -9,6 +9,7 @@
 // bad. The per-week row is a bare count of days with anything recorded — a count cannot say
 // you fell short, whereas a percentage always implies a denominator someone chose.
 let root = null;
+let loadToken = 0;
 
 const esc = (s) => String(s == null ? '' : s).replace(/[&<>"]/g,
   (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
@@ -74,19 +75,20 @@ function weeksHtml(d) {
 
 async function load() {
   if (!root) return;
+  const token = ++loadToken;
   let d;
   try {
     const r = await fetch('/api/exercise', { headers: { 'X-MC-By': 'you' } });
     d = await r.json();
     if (!r.ok) throw new Error(d.error || `HTTP ${r.status}`);
   } catch (err) {
-    if (!root) return;
+    if (!root || token !== loadToken) return;
     root.querySelector('#exKindsCard').innerHTML =
-      `<p class="empty-hint">Could not read this: ${esc(err.message)}<br>`
+      `<p class="empty-hint failure-hint">Could not read this: ${esc(err.message)}<br>`
       + '<small>That is a failure to look, not a report that you have done nothing.</small></p>';
     return;
   }
-  if (!root) return;
+  if (!root || token !== loadToken) return;
 
   if (d.state === 'empty') {
     root.querySelector('#exKindsCard').innerHTML =
@@ -164,5 +166,5 @@ export default {
     el.addEventListener('keydown', onKey);
     load();
   },
-  unmount() { root = null; },
+  unmount() { loadToken++; root = null; },
 };

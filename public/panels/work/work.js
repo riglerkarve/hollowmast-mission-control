@@ -10,6 +10,7 @@
 // without someone noticing it was added.
 let root = null;
 let timer = null;
+let loadToken = 0;
 
 const esc = (s) => String(s == null ? '' : s).replace(/[&<>"]/g,
   (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
@@ -91,19 +92,20 @@ function itemHtml(i) {
 
 async function load() {
   if (!root) return;
+  const token = ++loadToken;
   let d;
   try {
     const r = await fetch('/api/work/items', { headers: { 'X-MC-By': 'you' } });
     d = await r.json();
     if (!r.ok) throw new Error(d.error || `HTTP ${r.status}`);
   } catch (err) {
-    if (!root) return;
+    if (!root || token !== loadToken) return;
     root.querySelector('#wkList').innerHTML =
-      `<p class="empty-hint">Could not read the queue: ${esc(err.message)}<br>`
+      `<p class="empty-hint failure-hint">Could not read the queue: ${esc(err.message)}<br>`
       + '<small>That is a failure to look, not an empty queue.</small></p>';
     return;
   }
-  if (!root) return;
+  if (!root || token !== loadToken) return;
 
   const list = root.querySelector('#wkList');
   if (!d.items.length) {
@@ -182,6 +184,7 @@ export default {
     timer = setInterval(load, 8000);
   },
   unmount() {
+    loadToken++;
     if (timer) clearInterval(timer);
     timer = null;
     root = null;

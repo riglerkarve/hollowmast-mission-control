@@ -17,6 +17,7 @@
 let root = null;
 let timer = null;
 let signal = null;   // from the shell, aborted when this panel is torn down
+let loadToken = 0;
 
 const esc = (s) => String(s == null ? '' : s).replace(/[&<>"]/g,
   (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
@@ -160,14 +161,15 @@ function renderTrend(h) {
 
 async function load() {
   if (!root) return;
+  const token = ++loadToken;
   try {
     const [a, b] = await Promise.all([
       fetch('/api/machine', { headers: { 'x-mc-by': 'you' }, signal }).then((r) => r.json()),
       fetch('/api/machine/history', { headers: { 'x-mc-by': 'you' }, signal }).then((r) => r.json()),
     ]);
-    if (!root) return;                       // unmounted while the fetch was in flight
+    if (!root || token !== loadToken) return;
     if (a.error) {
-      root.querySelector('#mcGrid').innerHTML = `<p class="mc-note">${esc(a.error)}</p>`;
+      root.querySelector('#mcGrid').innerHTML = `<p class="mc-note failure-hint">Could not read machine data: ${esc(a.error)}<br><small>That is a failure to look, not a quiet machine.</small></p>`;
       return;
     }
     render(a);
@@ -175,8 +177,8 @@ async function load() {
   } catch (e) {
     // An abort is what a panel switch looks like from in here, not a fault.
     if (e && e.name === 'AbortError') return;
-    if (!root) return;
-    root.querySelector('#mcGrid').innerHTML = `<p class="mc-note">Could not reach /api/machine: ${esc(e.message)}</p>`;
+    if (!root || token !== loadToken) return;
+    root.querySelector('#mcGrid').innerHTML = `<p class="mc-note failure-hint">Could not reach /api/machine: ${esc(e.message)}<br><small>That is a failure to look, not a quiet machine.</small></p>`;
   }
 }
 
@@ -191,6 +193,7 @@ export default {
     timer = setInterval(load, 5000);
   },
   unmount() {
+    loadToken++;
     signal = null;
     if (timer) clearInterval(timer);
     timer = null;

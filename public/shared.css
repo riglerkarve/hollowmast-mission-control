@@ -275,6 +275,22 @@
   margin: 12px 0 0;
 }
 
+/* An empty result and a failed lookup must not merely use different words in the same
+   grey paragraph. Panels retain `.empty-hint` for genuine absence; this shared treatment
+   gives a failed lookup an edge, ground, and left-aligned diagnostic so it is recognisably
+   an operational state at a scan. --ink on --accent-soft is 12.26:1 in light and 12.81:1
+   in dark; the accent edge is supplementary, never the only signal. */
+.failure-hint {
+  margin: 0;
+  padding: 12px 14px;
+  text-align: left;
+  color: var(--ink);
+  background: var(--accent-soft);
+  border-left: 3px solid var(--accent-text);
+  border-radius: 0 var(--r-btn) var(--r-btn) 0;
+}
+.failure-hint small { color: inherit; }
+
 .bar-chart {
   display: flex;
   align-items: flex-end;

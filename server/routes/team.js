@@ -526,6 +526,50 @@ db.migrate('team', [
       CREATE INDEX IF NOT EXISTS idx_scribe_caps_tier ON scribe_caps(tier);
     `);
   },
+
+  // 10 -- THE REVIEW QUEUE. Owner decision, 20 August 2026:
+  //   "well being can write BUT gets reviewed before it can enact"
+  //
+  // This changes a fixed policy and it is worth being exact about which half. The rule
+  // had two clauses. 'Nothing in wellbeing may be model-generated' is the one the owner
+  // just changed. 'Nothing may read as diagnosis, clinical advice, or a risk score' is a
+  // separate clause he did NOT change, and review does not satisfy it -- a reviewer who
+  // approves a risk score has still enacted a risk score. It stays enforced on content.
+  //
+  // WHY A QUEUE RATHER THAN A FLAG. 'Reviewed before it can enact' is only real if the
+  // write physically cannot land first. A boolean the writer checks is a rule the writer
+  // can forget; a row that has no effect until somebody moves it is a mechanism.
+  //
+  // current_value IS CAPTURED AT PROPOSE TIME, and this is the load-bearing column.
+  // Between proposing and approving, the underlying row can change -- another session,
+  // the owner, an import. Enacting a proposal built against a value that has since moved
+  // silently overwrites whatever replaced it. So enactment re-reads the row and refuses
+  // if it no longer matches: approved and still-applicable are different questions.
+  (db) => {
+    db.exec(`
+      CREATE TABLE IF NOT EXISTS scribe_proposals (
+        id             INTEGER PRIMARY KEY AUTOINCREMENT,
+        job            TEXT,
+        module         TEXT NOT NULL,
+        target_table   TEXT NOT NULL,
+        target_id      TEXT,
+        field          TEXT NOT NULL,
+        proposed_value TEXT,
+        current_value  TEXT,      -- as read AT PROPOSE TIME. If it has moved by approval,
+                                  -- the proposal is stale and must not enact.
+        reason         TEXT,
+        model          TEXT,
+        created_at     TEXT NOT NULL,
+        status         TEXT NOT NULL DEFAULT 'pending',  -- pending|approved|rejected|enacted|stale
+        reviewed_by    TEXT,
+        reviewed_at    TEXT,
+        review_note    TEXT,
+        enacted_at     TEXT
+      );
+      CREATE INDEX IF NOT EXISTS idx_scribe_prop_status ON scribe_proposals(status, created_at DESC);
+      CREATE INDEX IF NOT EXISTS idx_scribe_prop_module ON scribe_proposals(module);
+    `);
+  },
 ]);
 
 // A shift label both a human and a script can produce without consulting anything.
@@ -1151,6 +1195,154 @@ router.post('/scribe/uncap', express.json(), (req, res) => {
   // `changes` counts rows MATCHED, not rows meaningfully altered -- an inert run prints
   // the same number -- so say what was matched rather than claiming what was fixed.
   res.json({ ok: true, rows_matched: r.changes, capped: scribe.cappedTiers(db) });
+});
+
+
+// --- THE REVIEW QUEUE ------------------------------------------------------
+// Owner decision, 20 Aug 2026: "well being can write BUT gets reviewed before it can
+// enact." A proposal is inert by construction -- it is a row in its own table and no
+// reader of the wellbeing module can see it -- so 'cannot enact before review' is a
+// property of the mechanism rather than a rule a writer has to remember.
+
+router.post('/scribe/propose', express.json(), (req, res) => {
+  const b = req.body || {};
+  const module_ = String(b.module || '').trim();
+  const field = String(b.field || '').trim();
+  const targetTable = String(b.target_table || '').trim();
+  // target_table is required, and the column is NOT NULL to match. A proposal that does
+  // not say where it would land cannot be reviewed -- the reviewer would be approving a
+  // value with no destination. The first version of this route let it through and the
+  // insert failed with a raw constraint error, which is the wrong place to find out.
+  if (!module_ || !field || !targetTable) {
+    return res.status(400).json({
+      error: 'module, field and target_table are required',
+      why: 'A proposal with no destination cannot be reviewed: there is no diff to show.',
+    });
+  }
+
+  const custody = scribe.custodyAllows(module_, 'scribe', 'write');
+  if (!custody.allowed && !custody.requires_review) {
+    return res.status(403).json({ error: 'refused', why: custody.why });
+  }
+
+  // The clause the owner did not change. Enforced on CONTENT, so review cannot clear it.
+  let check = null;
+  if (module_ === 'wellbeing') {
+    check = scribe.wellbeingContentCheck(field, b.proposed_value);
+    if (check.blocked) {
+      scribe.recordRun(db, { job: b.job, model: b.model, items: 1, wrote: 0, refused: 1,
+        reason: 'content-blocked', detail: { field, why: check.why } });
+      return res.status(403).json({ error: 'refused on content', why: check.why });
+    }
+  }
+
+  // Read what this would replace, NOW, so the reviewer sees the change and so enactment
+  // can tell whether the ground moved underneath the proposal.
+  let current = null;
+  if (b.target_id) {
+    try {
+      const row = db.prepare('SELECT * FROM ' + targetTable.replace(/[^a-z_]/gi, '') +
+                             ' WHERE id = ?').get(b.target_id);
+      current = row ? String(row[field] == null ? '' : row[field]) : null;
+    } catch (e) { current = null; }
+  }
+
+  const info = db.prepare(
+    'INSERT INTO scribe_proposals (job, module, target_table, target_id, field, proposed_value, '
+  + 'current_value, reason, model, created_at, status) VALUES (?,?,?,?,?,?,?,?,?,?,?)'
+  ).run(b.job || null, module_, targetTable, b.target_id || null, field,
+        b.proposed_value == null ? null : String(b.proposed_value), current,
+        b.reason || null, b.model || null, new Date().toISOString(), 'pending');
+
+  scribe.recordRun(db, { job: b.job, model: b.model, items: 1, wrote: 0, refused: 0,
+    reason: 'proposed, awaiting review', detail: { proposal: info.lastInsertRowid } });
+
+  res.json({ ok: true, proposal_id: info.lastInsertRowid, status: 'pending',
+             content_check: check, enacted: false,
+             note: 'Recorded as a proposal. It has NO effect until reviewed.' });
+});
+
+router.get('/scribe/proposals', (req, res) => {
+  const status = req.query.status || 'pending';
+  const rows = db.prepare('SELECT * FROM scribe_proposals WHERE status = ? ORDER BY created_at DESC').all(status);
+  res.json({
+    status, count: rows.length,
+    proposals: rows.map(r => ({
+      ...r,
+      // Recomputed at READ time, not stored -- a flag stored at propose time would go on
+      // describing text that has since been edited.
+      content_check: r.module === 'wellbeing' ? scribe.wellbeingContentCheck(r.field, r.proposed_value) : null,
+    })),
+    // Said out loud because an empty pending list and a broken query render identically.
+    state: rows.length === 0 ? 'No proposals with status ' + status + '. This is a real count, not a failed read.' : null,
+  });
+});
+
+// Approve or reject. Approval ENACTS in the same call, because a queue with an approved
+// state that nothing acts on is a queue that silently does nothing.
+router.post('/scribe/proposals/:id/review', express.json(), (req, res) => {
+  const b = req.body || {};
+  const p = db.prepare('SELECT * FROM scribe_proposals WHERE id = ?').get(req.params.id);
+  if (!p) return res.status(404).json({ error: 'no such proposal' });
+  if (p.status !== 'pending') return res.status(409).json({ error: 'already ' + p.status });
+
+  const by = String(b.reviewed_by || '').trim();
+  if (!by) return res.status(400).json({ error: 'reviewed_by is required' });
+
+  // WELLBEING IS REVIEWED BY THE OWNER, not by a session. This is his own health data,
+  // and a worker approving a statement about his mood is not the review he asked for.
+  // Flagged for him rather than assumed: if he wants it delegated he can say so.
+  if (p.module === 'wellbeing' && by !== 'you') {
+    return res.status(403).json({
+      error: 'wellbeing is reviewed by the owner',
+      why: 'This is the owner\'s own health data. A session approving a statement about his mood '
+         + 'is not the review the decision asked for. Send reviewed_by="you" from the dashboard, '
+         + 'or have the owner relax this explicitly.',
+    });
+  }
+
+  const now = new Date().toISOString();
+  const approve = b.decision === 'approve';
+
+  if (!approve) {
+    db.prepare('UPDATE scribe_proposals SET status=?, reviewed_by=?, reviewed_at=?, review_note=? WHERE id=?')
+      .run('rejected', by, now, b.note || null, p.id);
+    return res.json({ ok: true, status: 'rejected' });
+  }
+
+  // STALENESS. Between proposing and approving, the row can move -- another session, an
+  // import, the owner. Enacting against a value that has changed silently overwrites
+  // whatever replaced it, and the reviewer approved a diff that no longer exists.
+  if (p.target_table && p.target_id) {
+    let live = null;
+    try {
+      const row = db.prepare('SELECT * FROM ' + String(p.target_table).replace(/[^a-z_]/gi, '') +
+                             ' WHERE id = ?').get(p.target_id);
+      live = row ? String(row[p.field] == null ? '' : row[p.field]) : null;
+    } catch (e) { live = null; }
+
+    if (String(live) !== String(p.current_value)) {
+      db.prepare('UPDATE scribe_proposals SET status=?, reviewed_by=?, reviewed_at=?, review_note=? WHERE id=?')
+        .run('stale', by, now, 'Value moved between proposal and approval.', p.id);
+      return res.status(409).json({
+        error: 'stale', enacted: false,
+        why: 'The value changed after this was proposed, so the diff reviewed is not the diff that '
+           + 'would be applied. Re-propose against the current value.',
+        was: p.current_value, now: live,
+      });
+    }
+
+    db.prepare('UPDATE ' + String(p.target_table).replace(/[^a-z_]/gi, '') +
+               ' SET ' + String(p.field).replace(/[^a-z_]/gi, '') + ' = ? WHERE id = ?')
+      .run(p.proposed_value, p.target_id);
+  }
+
+  db.prepare('UPDATE scribe_proposals SET status=?, reviewed_by=?, reviewed_at=?, review_note=?, enacted_at=? WHERE id=?')
+    .run('enacted', by, now, b.note || null, now, p.id);
+  scribe.recordRun(db, { job: p.job, model: p.model, items: 1, wrote: 1, refused: 0,
+    reason: 'enacted after review by ' + by, detail: { proposal: p.id } });
+
+  res.json({ ok: true, status: 'enacted', enacted_at: now });
 });
 
 module.exports = router;

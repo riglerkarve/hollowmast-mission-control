@@ -65,10 +65,21 @@ async function chat(model, messages, format) {
 
 // ---- 1 FIT -----------------------------------------------------------------
 async function testFit(model) {
+  // A 5.2 GB model does not become resident the instant the first call returns, and the
+  // first version of this checked once and reported FAIL for a model that then passed
+  // every later test. "Not resident yet" and "does not fit" are different answers and
+  // only one of them is a failure -- so poll, and if it never appears say COULD NOT LOOK
+  // rather than FAIL.
   await chat(model, [{ role: 'user', content: 'hi' }]);      // force a load
-  const ps = await (await fetch(OLLAMA + '/api/ps')).json();
-  const m = (ps.models || []).find(x => x.name === model || x.model === model);
-  if (!m) return { pass: false, note: 'not resident after a call -- could not look, not a score of zero' };
+  let m = null;
+  for (let i = 0; i < 10 && !m; i++) {
+    const ps = await (await fetch(OLLAMA + '/api/ps')).json();
+    // Ollama reports 'qwen3:8b' in one field and may tag the other; match either, loosely.
+    m = (ps.models || []).find(x => x.name === model || x.model === model
+                                 || String(x.name || '').startsWith(model));
+    if (!m) await new Promise(r => setTimeout(r, 3000));
+  }
+  if (!m) return { pass: null, note: 'COULD NOT LOOK: never appeared in /api/ps after 30s of polling' };
   const pct = Math.round(100 * m.size_vram / m.size);
   return {
     pass: pct >= 100,
@@ -226,15 +237,30 @@ async function testDiscriminate(model) {
     }
     runs.push({ label, want, got: v, because: why, ms: r.ms, error: r.error });
   }
-  const moved = runs[0].got && runs[1].got && runs[0].got !== runs[1].got;
+  // THREE OUTCOMES, NOT TWO, and the first version of this collapsed two of them.
+  // A run that produced NO verdict is "could not look" -- qwen3.5:4b returned an empty
+  // answer on the second case and the script reported "verdict did not move", which is a
+  // claim about reasoning made from a missing answer. Absence and failure must not print
+  // the same sentence.
+  const silent = runs.filter(r => !r.got);
+  if (silent.length) {
+    return {
+      pass: null, runs,
+      note: 'COULD NOT LOOK: ' + silent.length + ' of 2 runs returned no verdict at all '
+          + '(empty answer or error). That is not evidence about its judgement either way -- '
+          + 'it is a missing measurement, and scoring it as a wrong answer would invent a finding.',
+    };
+  }
+  const moved = runs[0].got !== runs[1].got;
   const correct = runs[0].got === 'REJECT' && runs[1].got === 'ACCEPT';
   return {
     pass: !!correct,
-    moved: !!moved,
+    moved,
     runs,
     note: correct ? 'verdict tracked the evidence in both directions'
         : moved ? 'verdict MOVED but landed wrong at least once'
-        : 'VERDICT DID NOT MOVE -- it carries no information about the evidence',
+        : 'VERDICT DID NOT MOVE -- identical answer to inverted evidence, so it carries no '
+          + 'information about the evidence',
   };
 }
 
@@ -268,15 +294,21 @@ async function testDiscriminate(model) {
   }
 
   console.log('\n=== VERDICT ===');
+  // Y / N / ? are three states on purpose. '?' is could-not-look and must never render as
+  // a failure: a model nobody managed to measure and a model measured as bad are different
+  // situations, and only the second is a reason not to use it.
+  const mark = v => v === null || v === undefined ? '?' : v ? 'Y' : 'N';
   for (const [m, r] of Object.entries(results)) {
-    const gates = [r.fit.pass, r.schema.pass, r.classify.pass, r.discriminate.pass];
-    const hard = r.fit.pass && r.schema.pass;
+    const unknown = [r.fit.pass, r.schema.pass, r.classify.pass, r.discriminate.pass]
+      .filter(v => v === null || v === undefined).length;
+    const failedHard = r.fit.pass === false || r.schema.pass === false;
     console.log('  ' + m.padEnd(16)
-      + ' fit=' + (r.fit.pass ? 'Y' : 'N')
-      + ' schema=' + (r.schema.pass ? 'Y' : 'N')
-      + ' classify=' + (r.classify.pass === null ? '?' : r.classify.pass ? 'Y' : 'N')
-      + ' discriminate=' + (r.discriminate.pass ? 'Y' : 'N')
-      + (hard ? '' : '   <- fails a hard gate, nothing downstream can rescue it'));
+      + ' fit=' + mark(r.fit.pass)
+      + ' schema=' + mark(r.schema.pass)
+      + ' classify=' + mark(r.classify.pass)
+      + ' discriminate=' + mark(r.discriminate.pass)
+      + (failedHard ? '   <- fails a hard gate, nothing downstream can rescue it' : '')
+      + (unknown ? '   <- ' + unknown + ' gate(s) COULD NOT BE MEASURED, which is not a pass' : ''));
   }
   console.log('\nNothing here is written to the capability table automatically. A score becomes a');
   console.log('capability only through POST /api/team/scribe/measure, with its oracle named.');

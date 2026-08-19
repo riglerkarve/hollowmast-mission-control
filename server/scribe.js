@@ -43,18 +43,77 @@ const MEASUREMENT_TTL_DAYS = 45;
 //                "no model", because nothing is disclosed by a model that cannot reach
 //                the network. The Scribe is the only tier permitted there at all.
 //
-//   wellbeing -- may READ and COUNT and never WRITE. Fixed policy, unchanged by this
-//                decision: nothing in that module may be model-generated -- no prose, no
-//                pattern, no score -- and nothing may read as diagnosis or advice.
-//                Exclusive custody means no OTHER model may see it. It does not mean
-//                this one may write there.
+//   wellbeing -- may READ, and may WRITE ONLY THROUGH REVIEW. Owner decision, 20 Aug 2026:
+//                "well being can write BUT gets reviewed before it can enact."
 //
-// If that is ever relaxed it is relaxed by the owner in writing, in CLAUDE.md, and not by
-// a capability being measured as accurate. Accuracy was never the objection.
+// THE WELLBEING RULE HAD TWO CLAUSES AND ONLY ONE OF THEM CHANGED.
+//
+//   changed  -- "nothing there may be model-generated". The owner lifted this, with the
+//               condition that a model write cannot take effect until reviewed.
+//   UNCHANGED -- "nothing may read as diagnosis, clinical advice, or a risk score", and
+//               the support card is always rendered, never conditional on the data.
+//
+// Review does not satisfy the second clause, which is why it is still enforced below: a
+// reviewer who approves a risk score has still enacted a risk score. Keeping it is not
+// overriding the owner -- it is not changing the half he did not change.
 const CUSTODY = {
-  finance:   { read: true, write: true,  why: 'Local-only was always the rule; nothing is disclosed by a model that cannot reach the network.' },
-  wellbeing: { read: true, write: false, why: 'FIXED POLICY: nothing in wellbeing may be model-generated. Custody keeps other models out; it does not let this one in.' },
+  finance:   { read: true, write: true,     why: 'Local-only was always the rule; nothing is disclosed by a model that cannot reach the network.' },
+  wellbeing: { read: true, write: 'review', why: 'Owner decision 20 Aug 2026: may write, but nothing enacts until reviewed. The diagnosis/advice/risk-score prohibition is a separate clause and still applies to the content.' },
 };
+
+// The content check that survives review.
+//
+// WHAT IT BLOCKS, AND WHY ONLY THIS. A numeric value attached to a wellbeing record IS a
+// risk score by construction, whoever approves it, so that is refused structurally and
+// cannot be reviewed through. That is the only thing here I can define rather than guess.
+//
+// WHAT IT ONLY FLAGS. Diagnostic and advisory phrasing is matched against a word list and
+// surfaced ON THE REVIEW CARD rather than blocked, because a blocklist I invented would be
+// exactly the unauditable filter this workspace refuses -- it would fail in both
+// directions, silently dropping honest prose and passing anything phrased around it.
+//
+// WHAT IT DOES NOT KEY ON, stated because a filter that hides its blind spots makes the
+// surviving content look cleaner than it is: it reads the proposed value only. It cannot
+// see tone, cannot see an implication built across several approved entries, and cannot
+// see a number expressed in words. A reviewer is the control here; this is a prompt for
+// the reviewer, never a guarantee to them.
+const CLINICAL_HINTS = [
+  'diagnos', 'symptom', 'disorder', 'syndrome', 'condition', 'clinical',
+  'you should take', 'treatment', 'therapy', 'medication', 'prescrib',
+  'at risk', 'risk of', 'severity', 'score', 'rating', 'index',
+];
+
+function wellbeingContentCheck(field, value) {
+  const v = value == null ? '' : String(value);
+  const numeric = v !== '' && Number.isFinite(Number(v));
+
+  if (numeric) {
+    return {
+      blocked: true,
+      why: 'A numeric value in wellbeing is a risk score by construction. That clause was not '
+         + 'changed by the 20 Aug decision and review cannot clear it -- approving a score still '
+         + 'enacts a score.',
+      flags: [], not_keyed_on: [],
+    };
+  }
+  const lower = v.toLowerCase();
+  const flags = CLINICAL_HINTS.filter(h => lower.includes(h));
+  return {
+    blocked: false,
+    flags,
+    why: flags.length
+      ? 'Contains wording associated with diagnosis, advice or scoring. NOT blocked -- shown to '
+      + 'the reviewer to decide, because a word list is a guess and blocking on it would fail '
+      + 'silently in both directions.'
+      : 'No flagged wording found.',
+    not_keyed_on: [
+      'tone',
+      'an implication built across several separately-approved entries',
+      'a number written as words',
+      'anything in a field other than the one proposed',
+    ],
+  };
+}
 
 function daysSince(iso) {
   if (!iso) return Infinity;
@@ -120,6 +179,16 @@ function custodyAllows(module, engine, intent /* 'read' | 'write' */) {
          + engine + ' may not ' + intent + ' it. ' + c.why,
     };
   }
+  if (intent === 'write' && c.write === 'review') {
+    // NOT an allow and NOT a refusal. A caller that collapses this to a boolean gets the
+    // wrong answer whichever way it rounds: treated as allowed it writes directly, and
+    // treated as refused the capability the owner asked for silently does not exist.
+    return {
+      allowed: false, requires_review: true,
+      why: 'The Scribe may write to ' + module + ', but nothing enacts until reviewed. '
+         + 'Use POST /api/team/scribe/propose. ' + c.why,
+    };
+  }
   if (intent === 'write' && !c.write) {
     return { allowed: false, why: 'The Scribe holds custody of ' + module + ' but has no pen there. ' + c.why };
   }
@@ -150,13 +219,18 @@ function recordRun(db, { job, model, items, wrote, refused, reason, detail }) {
   return db.prepare(
     'INSERT INTO scribe_runs (job, model, at, items, wrote, refused, reason, detail) '
   + 'VALUES (?,?,?,?,?,?,?,?)'
-  ).run(job, model || null, new Date().toISOString(),
+    // job is NOT NULL, and an undefined here throws inside the binder -- which surfaced
+    // as a 500 on the refusal path, i.e. the guard worked and then the LOGGING of the
+    // refusal is what broke. A run record that cannot be written turns a correct refusal
+    // into an unexplained error, so an unnamed job is recorded as such rather than fatal.
+  ).run(job || '(unnamed)', model || null, new Date().toISOString(),
         items == null ? null : items, wrote || 0, refused ? 1 : 0, reason || null,
         detail ? JSON.stringify(detail) : null);
 }
 
 module.exports = {
   scribeCan, custodyAllows, cappedTiers, anythingCapped, recordRun,
-  CUSTODY, MEASUREMENT_TTL_DAYS,
+  wellbeingContentCheck,
+  CUSTODY, MEASUREMENT_TTL_DAYS, CLINICAL_HINTS,
   REFUSED_UNPROVEN, REFUSED_FAILED, REFUSED_STALE,
 };

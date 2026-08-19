@@ -27,7 +27,7 @@ const db = require('../server/db');
 // access log records 'unknown', which is honest but useless. See server/provenance.js.
 db.setProcessActor('claude');
 require('../server/routes/finance');
-const { checkAvailable, scoreOracle, askBatched } = require('./ollama-run');
+const { checkAvailable, scoreOracle, askBatched } = require('./ollama-run.cjs');
 
 const MODEL = process.env.PROBE_MODEL || 'qwen3.5:9b';
 const BATCH = 25;            // measured: 25 in one call is ~11s; 25 calls would be minutes

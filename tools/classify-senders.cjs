@@ -40,7 +40,7 @@ const db = require('../server/db');
 // access log records 'unknown', which is honest but useless. See server/provenance.js.
 db.setProcessActor('claude');
 require('../server/routes/mail');
-const { checkAvailable, scoreOracle, askBatched } = require('./ollama-run');
+const { checkAvailable, scoreOracle, askBatched } = require('./ollama-run.cjs');
 
 const args = process.argv.slice(2);
 const DRY = args.includes('--dry');
@@ -107,43 +107,42 @@ function applyRules() {
   return { total: addrs.length, hit, skippedManual, unmatched };
 }
 
-async function askModel(addrs) {
-  const res = await fetch('http://127.0.0.1:11434/api/generate', {
-    method: 'POST',
-    headers: { 'content-type': 'application/json' },
-    body: JSON.stringify({
-      model: MODEL,
-      stream: false,
-      prompt: 'Classify each email sender address by what kind of mail it sends.\n'
-        + `Allowed categories: ${CLASSES.join(', ')}.\n`
-        + 'Answer for every address, in the same order.\n\n'
-        + addrs.map((a, i) => `${i + 1}. ${a}`).join('\n'),
-      format: {
+const SCHEMA = {
+  type: 'object',
+  required: ['results'],
+  properties: {
+    results: {
+      type: 'array',
+      items: {
         type: 'object',
-        required: ['results'],
-        properties: {
-          results: {
-            type: 'array',
-            items: {
-              type: 'object',
-              required: ['n', 'c'],
-              properties: { n: { type: 'integer' }, c: { type: 'string', enum: CLASSES } },
-            },
-          },
-        },
+        required: ['n', 'c'],
+        properties: { n: { type: 'integer' }, c: { type: 'string', enum: CLASSES } },
       },
-      // Load-bearing: qwen3.5 is a thinking model and with a strict schema it spends the
-      // whole output budget in `thinking`, returning an EMPTY response with done_reason
-      // "stop". That reads as a failure to connect when it is in fact an answer with no
-      // content. Measured; see tools/llm-probe-mail.cjs.
-      think: false,
-      options: { temperature: 0 },
-    }),
-  });
-  if (!res.ok) throw new Error(`ollama ${res.status}`);
-  const b = await res.json();
-  if (!b.response) throw new Error('ollama answered with an empty response');
-  return JSON.parse(b.response).results || [];
+    },
+  },
+};
+
+function buildPrompt(chunk) {
+  return 'Classify each email sender address by what kind of mail it sends.\n'
+    + `Allowed categories: ${CLASSES.join(', ')}.\n`
+    + 'Answer for every address, in the same order.\n\n'
+    + chunk.map((item, i) => `${i + 1}. ${item.addr}`).join('\n');
+}
+
+// n is 1-based position in THIS chunk (the model does not have to echo the address back
+// correctly). Resolved here to the address itself, so askBatched's answers Map is keyed the
+// same way every other caller keys it.
+function parseResponse(text, chunk) {
+  const parsed = JSON.parse(text).results;
+  if (!Array.isArray(parsed)) throw new Error('results was not an array');
+  const got = new Map();
+  const badKeys = [];
+  for (const x of parsed) {
+    const item = chunk[x.n - 1];
+    if (!item || !CLASSES.includes(x.c)) { if (item) badKeys.push(item.id); continue; }
+    got.set(String(item.id), String(x.c));
+  }
+  return { got, badKeys };
 }
 
 (async () => {
@@ -168,6 +167,30 @@ async function askModel(addrs) {
   }
   if (!r.unmatched.length) return;
 
+  const avail = await checkAvailable();
+  if (!avail.up) { console.log('  Rule-based classifications are already saved; the tail stays NULL.'); return; }
+
+  // THE GATE. Senders already classified BY RULE are the oracle — reproducible, not hand
+  // labelled — and re-scored every run rather than trusted from llm-probe-mail.cjs's one-time
+  // number, which cannot know if the model or the prompt has since moved.
+  const oracleRows = db.prepare(
+    `SELECT addr, class AS truth FROM gmail_senders WHERE class_source = 'rule' ORDER BY RANDOM() LIMIT 40`
+  ).all().map((o) => ({ id: o.addr, addr: o.addr, truth: o.truth }));
+
+  console.log(`  scoring against ${oracleRows.length} rule-classified senders before touching the tail...`);
+  const score = await scoreOracle({
+    model: MODEL, schema: SCHEMA, oracle: oracleRows, buildPrompt, parseResponse,
+    keyOf: (o) => o.id, floor: ACCURACY_FLOOR, batchSize: BATCH,
+  });
+  if (score.accuracy != null) {
+    console.log(`  agreement with the rules: ${score.matched}/${score.seen}  ${Math.round(score.accuracy * 100)}%`);
+  }
+  if (!score.ok) {
+    console.log(`\n  ${score.why}`);
+    console.log('  Rule-based classifications are already saved; the tail stays NULL.\n');
+    return;
+  }
+
   const up = db.prepare(
     `INSERT INTO gmail_senders (addr, class, class_source, classified_at)
      VALUES (?,?, 'model', datetime('now','localtime'))
@@ -175,34 +198,22 @@ async function askModel(addrs) {
        classified_at = excluded.classified_at`
   );
 
-  let done = 0, failedBatches = 0;
-  for (let i = 0; i < r.unmatched.length; i += BATCH) {
-    const slice = r.unmatched.slice(i, i + BATCH);
-    let out;
-    try { out = await askModel(slice); }
-    catch (err) {
-      failedBatches++;
-      // DEGRADES, and says how far it got. The alternative — carrying on silently — would
-      // leave a partial classification that reads as a complete one.
-      console.error(`\n  ollama failed on batch ${1 + i / BATCH}: ${err.message}`);
-      console.error('  Stopping. Rules-based classifications are already saved; the rest stay NULL.');
-      break;
-    }
-    db.withTransaction(() => {
-      for (const x of out) {
-        const addr = slice[x.n - 1];
-        if (addr && CLASSES.includes(x.c)) { up.run(addr, x.c); done++; }
-      }
-    });
-    process.stdout.write(`\r  MODEL: ${done}/${r.unmatched.length} suggested`);
-  }
+  const items = r.unmatched.map((addr) => ({ id: addr, addr }));
+  const { answers, failed } = await askBatched({
+    model: MODEL, schema: SCHEMA, items, buildPrompt, parseResponse, batchSize: BATCH,
+    onBatch: (p) => process.stdout.write(`\r  MODEL: ${p.done}/${p.total}`),
+  });
   process.stdout.write('\n');
+
+  let done = 0;
+  db.withTransaction(() => {
+    for (const [addr, c] of answers) { up.run(addr, c); done++; }
+  });
 
   const left = db.prepare('SELECT COUNT(*) AS n FROM gmail_senders WHERE class IS NULL').get().n;
   console.log(`  ${done} senders SUGGESTED by the model (class_source='model').`);
-  console.log('  Suggested is not decided: the probe scored 10/10 on unambiguous senders and');
-  console.log('  2/5 on judgement calls, so these are for review, and a rule or your own');
+  console.log('  Suggested is not decided: senders are for review, and a rule or your own');
   console.log('  correction overrides them.');
-  if (failedBatches) console.log(`  ${failedBatches} batch(es) failed — that many senders are still unclassified.`);
+  if (failed.length) console.log(`  ${failed.length} sender(s) failed — that many stay unclassified.`);
   if (left) console.log(`  ${left} sender(s) remain NULL.`);
 })();

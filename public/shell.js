@@ -14,6 +14,7 @@ const PANELS = {
   browsing: () => import('/panels/browsing/browsing.js'),
   atlas: () => import('/panels/atlas/atlas.js'),
   board: () => import('/panels/board/board.js'),
+  team: () => import('/panels/team/team.js'),
   goals: () => import('/panels/goals/goals.js'),
   schedule: () => import('/panels/schedule/schedule.js'),
   projects: () => import('/panels/projects/projects.js'),

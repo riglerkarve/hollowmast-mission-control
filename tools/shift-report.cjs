@@ -29,24 +29,23 @@ const db = require('../server/db');
 db.setProcessActor('claude');
 
 const team = require('../server/routes/team');
-require('../server/routes/board');
-const todo = require('../server/routes/todo');
 
 const argv = process.argv.slice(2);
 const arg = (n) => { const i = argv.indexOf(`--${n}`); return i >= 0 ? argv[i + 1] : null; };
 const SHIFT = arg('shift') || team.shiftLabel();
 const OUT = arg('out');
 
-const all = (s, ...a) => db.prepare(s).all(...a);
 const L = [];
 const p = (s = '') => L.push(s);
 
-const handovers = all('SELECT * FROM team_handovers WHERE shift = ? ORDER BY at', SHIFT);
-const plans = all('SELECT * FROM team_plans WHERE shift = ? ORDER BY id', SHIFT);
-const steering = all('SELECT * FROM team_steering WHERE shift = ? ORDER BY id', SHIFT);
-const decisions = all('SELECT * FROM team_decisions WHERE shift = ? ORDER BY id', SHIFT);
-const assignments = all('SELECT * FROM team_assignments WHERE shift = ? ORDER BY id', SHIFT);
-const roster = all('SELECT * FROM team_sessions WHERE retired_at IS NULL');
+// THE DERIVATION IS NOT DONE HERE. This tool computed the gaps itself when it was the only
+// reader; the panel became a second reader, and two readers deriving the same absences from
+// the same tables agree right up until one is edited. `team.reportFor` is the one owner, and
+// this file only renders it.
+const R = team.reportFor(SHIFT);
+const {
+  handovers, plans, steering, decisions, assignments, roster,
+} = R;
 
 p(`# Shift report — ${SHIFT}`);
 p();
@@ -114,47 +113,7 @@ for (const pl of plans.filter((x) => x.verdict)) {
 // question somebody should answer next shift.
 p('## What the process missed');
 p();
-const gaps = [];
-
-const unread = handovers.filter((h) => !h.read_at);
-if (unread.length) {
-  gaps.push(`**${unread.length} of ${handovers.length} handovers were never read** — ${unread.map((h) => h.title).join(', ')}. `
-    + 'A handover nobody reads is a shift that reported into nothing, and the session that wrote it has no way to know.');
-}
-
-const drafts = plans.filter((x) => !x.confirmed_at && !x.returned_at);
-if (drafts.length) {
-  gaps.push(`**${drafts.length} plan(s) were drafted and never put to the manager** (#${drafts.map((d) => d.id).join(', #')}). `
-    + 'Neither confirmed nor returned, so nothing can be delegated against them and nothing marks them as abandoned.');
-}
-
-const confirmedNoWork = plans.filter((x) => x.confirmed_at && !assignments.some((a) => a.plan_id === x.id));
-if (confirmedNoWork.length) {
-  gaps.push(`**${confirmedNoWork.length} confirmed plan(s) had no work delegated against them** (#${confirmedNoWork.map((d) => d.id).join(', #')}). `
-    + 'The chain ran handover → plan → confirm and stopped. From every other view this looks identical to success.');
-}
-
-const untriaged = handovers.filter((h) => h.needs_owner && !h.owner_resolved_at);
-if (untriaged.length) {
-  gaps.push(`**${untriaged.length} owner-facing item(s) are sitting untriaged** — from ${untriaged.map((h) => h.title).join(', ')}. `
-    + 'These are the only route a worker has to the owner. Until the manager triages them they reach nobody.');
-}
-
-const openQ = steering.filter((s) => !s.answer);
-if (openQ.length) gaps.push(`**${openQ.length} steering question(s) are still waiting on the owner.**`);
-
-const reported = new Set(handovers.map((h) => h.title));
-const silent = roster.filter((r) => !reported.has(r.title));
-if (silent.length) {
-  gaps.push(`**${silent.length} session(s) on the roster filed nothing** — ${silent.map((s) => s.title).join(', ')}. `
-    + 'Silence and having nothing to say look identical from here, and the second is rare.');
-}
-
-const badAttrib = steering.filter((s) => s.answer && (!s.by_whom || s.by_whom === 'unknown'));
-if (badAttrib.length) {
-  gaps.push(`**${badAttrib.length} answered steering question(s) are attributed to \`unknown\`.** `
-    + 'This is the one table holding the owner\'s own judgement; an unattributed row there cannot be told from a session answering for him.');
-}
+const gaps = R.gaps.map((g) => `**${g.head}**${g.names.length ? ` — ${g.names.join(", ")}` : ""}. ${g.why}`);
 
 if (!gaps.length) p('Nothing. Every handover was read, every plan resolved, every owner-facing item triaged.');
 else for (const g of gaps) p(`- ${g}\n`);
@@ -189,26 +148,7 @@ if (HTML) {
 
   // Each gap is labelled by the KIND of absence, not numbered. They are not a sequence, and
   // a number would imply an order the data does not have.
-  const gapRows = [
-    ['unread', unread.length, `${unread.length} of ${handovers.length} handovers never read`,
-      unread.map((h) => h.title).join(', '),
-      'A handover nobody reads is a shift that reported into nothing, and the session that wrote it has no way to know.'],
-    ['hanging', drafts.length, `${drafts.length} plan(s) drafted, never put to the manager`,
-      drafts.map((d) => `#${d.id}`).join(', '),
-      'Neither confirmed nor returned, so nothing can be delegated against them and nothing marks them abandoned.'],
-    ['undelegated', confirmedNoWork.length, `${confirmedNoWork.length} confirmed plan(s) with no work delegated`,
-      confirmedNoWork.map((d) => `#${d.id}`).join(', '),
-      'The chain ran handover to plan to confirm, and stopped. From every other view this looks identical to success.'],
-    ['untriaged', untriaged.length, `${untriaged.length} owner-facing item(s) untriaged`,
-      untriaged.map((h) => h.title).join(', '),
-      'These are the only route a worker has to you. Until the manager triages them they reach nobody.'],
-    ['unanswered', openQ.length, `${openQ.length} steering question(s) waiting on you`, '', ''],
-    ['silent', silent.length, `${silent.length} session(s) on the roster filed nothing`,
-      silent.map((s) => s.title).join(', '),
-      'Silence and having nothing to say look identical from here, and the second is rare.'],
-    ['unattributed', badAttrib.length, `${badAttrib.length} answered question(s) attributed to unknown`, '',
-      'This is the one table holding your own judgement; an unattributed row cannot be told from a session answering for you.'],
-  ].filter((g) => g[1] > 0);
+  const gapRows = R.gaps.map((g) => [g.kind, g.n, g.head, g.names.join(", "), g.why]);
 
   const decBlocks = decisions.map((d) => `
     <article class="rec">

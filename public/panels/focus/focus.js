@@ -339,7 +339,10 @@ function createPanel() {
       panelStyles('todo');
       panelStyles('team');
 
-      steeringCard.mount(el.focusSteering);
+      // { card: 'steering' } keeps this to the decisions-waiting card. The same module is the
+      // full shift view when the nav mounts it, so without this Focus would render the whole
+      // panel inside itself -- one implementation, two modes, and the mode has to be asked for.
+      steeringCard.mount(el.focusSteering, { card: 'steering' });
       backlogPanel.mount(el.focusBacklog, { embedded: true });
 
       renderTimer();

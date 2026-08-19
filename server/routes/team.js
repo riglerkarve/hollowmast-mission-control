@@ -424,6 +424,90 @@ router.get('/steering', (req, res) => {
   });
 });
 
+// ------------------------------------------------------------------------------ report
+
+// ONE OWNER FOR "WHAT THE SHIFT DID AND WHAT IT MISSED. `tools/shift-report.cjs` computed
+// this itself when it was the only reader. The panel is a second reader, and two readers
+// deriving the same gaps from the same tables is the failure this project keeps meeting: they
+// agree until one is edited, and then they disagree without either erroring. So the
+// derivation lives here, the tool renders markdown from it, and the panel renders HTML.
+function shifts() {
+  return db.prepare(`SELECT shift, MAX(at) last FROM (
+      SELECT shift, at FROM team_handovers
+      UNION ALL SELECT shift, drafted_at at FROM team_plans
+      UNION ALL SELECT shift, asked_at at FROM team_steering
+      UNION ALL SELECT shift, at FROM team_decisions
+    ) GROUP BY shift ORDER BY shift DESC`).all();
+}
+
+function reportFor(shift) {
+  const s = shift || shiftLabel();
+  const handovers = db.prepare('SELECT * FROM team_handovers WHERE shift = ? ORDER BY at').all(s);
+  const plans = db.prepare('SELECT * FROM team_plans WHERE shift = ? ORDER BY id').all(s);
+  const steering = db.prepare('SELECT * FROM team_steering WHERE shift = ? ORDER BY id').all(s)
+    .map((r) => ({ ...r, options: r.options ? JSON.parse(r.options) : null }));
+  const decisions = db.prepare('SELECT * FROM team_decisions WHERE shift = ? ORDER BY id').all(s);
+  const assignments = db.prepare('SELECT * FROM team_assignments WHERE shift = ? ORDER BY id').all(s);
+  const roster = db.prepare('SELECT * FROM team_sessions WHERE retired_at IS NULL').all();
+
+  const unread = handovers.filter((h) => !h.read_at);
+  const drafts = plans.filter((x) => !x.confirmed_at && !x.returned_at);
+  const confirmedNoWork = plans.filter((x) => x.confirmed_at && !assignments.some((a) => a.plan_id === x.id));
+  const untriaged = handovers.filter((h) => h.needs_owner && !h.owner_resolved_at);
+  const openQ = steering.filter((x) => !x.answer);
+  const reported = new Set(handovers.map((h) => h.title));
+  const silent = roster.filter((r) => !reported.has(r.title));
+  const badAttrib = steering.filter((x) => x.answer && (!x.by_whom || x.by_whom === 'unknown'));
+
+  // THE OWNER KEPT ALL SIX ON 19 AUG, having been offered the chance to delete any he did not
+  // care about. So each is here because he decided it earns its line, not because it was easy
+  // to compute — and the `kind` is the label the panel shows, because these are not a sequence
+  // and numbering them would imply an order the data does not have.
+  const gaps = [
+    ['unread', unread.length, `${unread.length} of ${handovers.length} handovers never read`,
+      unread.map((h) => h.title),
+      'A handover nobody reads is a shift that reported into nothing, and the session that wrote it has no way to know.'],
+    ['hanging', drafts.length, `${drafts.length} plan(s) drafted, never put to the manager`,
+      drafts.map((d) => `#${d.id}`),
+      'Neither confirmed nor returned, so nothing can be delegated against them and nothing marks them abandoned.'],
+    ['undelegated', confirmedNoWork.length, `${confirmedNoWork.length} confirmed plan(s) with no work delegated`,
+      confirmedNoWork.map((d) => `#${d.id}`),
+      'The chain ran handover to plan to confirm, and stopped. From every other view this looks identical to success.'],
+    ['untriaged', untriaged.length, `${untriaged.length} owner-facing item(s) untriaged`,
+      untriaged.map((h) => h.title),
+      'These are the only route a worker has to the owner. Until the manager triages them they reach nobody.'],
+    ['unanswered', openQ.length, `${openQ.length} steering question(s) waiting on the owner`, [], ''],
+    ['silent', silent.length, `${silent.length} session(s) on the roster filed nothing`,
+      silent.map((x) => x.title),
+      'Silence and having nothing to say look identical from here, and the second is rare.'],
+    ['unattributed', badAttrib.length, `${badAttrib.length} answered question(s) attributed to unknown`, [],
+      'This is the one table holding the owner\'s own judgement; an unattributed row cannot be told from a session answering for him.'],
+  ].filter((g) => g[1] > 0).map(([kind, n, head, names, why]) => ({ kind, n, head, names, why }));
+
+  return {
+    shift: s,
+    handovers,
+    plans,
+    steering,
+    decisions,
+    assignments,
+    roster,
+    gaps,
+    counts: {
+      handovers: handovers.length,
+      roster: roster.length,
+      plans: plans.length,
+      confirmed: plans.filter((x) => x.confirmed_at).length,
+      assignments: assignments.length,
+      decisions: decisions.length + steering.filter((x) => x.answer).length + plans.filter((x) => x.verdict).length,
+      steering: steering.length,
+    },
+  };
+}
+
+router.get('/shifts', (req, res) => res.json({ shifts: shifts() }));
+router.get('/report', (req, res) => res.json(reportFor(req.query.shift)));
+
 // --------------------------------------------------------------------------- decisions
 
 // `because` IS REQUIRED, and that refusal is the whole value of the table. A decision with no
@@ -453,5 +537,7 @@ module.exports = router;
 module.exports.shiftView = shiftView;
 module.exports.shiftLabel = shiftLabel;
 module.exports.openSteering = openSteering;
+module.exports.reportFor = reportFor;
+module.exports.shifts = shifts;
 module.exports.ROLES = ROLES;
 module.exports.CHAIN_ROLES = CHAIN_ROLES;

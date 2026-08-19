@@ -34,7 +34,7 @@ const ollama = require('../server/ollama');
 const APPLY = process.argv.includes('--apply');
 const USE_CLOUD = process.argv.includes('--cloud');
 const MODEL = process.argv.find((a) => /^--model=/.test(a))?.split('=')[1]
-  || (USE_CLOUD ? 'gpt-oss:20b-cloud' : 'qwen3.5:9b');
+  || (USE_CLOUD ? 'gpt-oss:20b-cloud' : ollama.LOCAL_DEFAULT);
 const BATCH = 10;
 const ACCURACY_FLOOR = 0.8;
 
@@ -146,20 +146,33 @@ async function askBatch(items) {
   let applied = 0;
   if (APPLY) {
     const up = db.prepare('UPDATE todo_items SET kind = ? WHERE id = ? AND kind IS NULL');
-    db.withTransaction(() => { for (const s of settled) applied += up.run(s.kind, s.id).changes; });
+
+    // THE RULES PASS APPLIES TO THE UNLABELLED ROWS, NOT TO THE ORACLE. It iterated the
+    // oracle -- rows that by definition already have a kind -- against an UPDATE guarded on
+    // kind being null. So it could never write, printed "wrote 0 from the RULES", and handed
+    // every unlabelled row to the model with the deterministic pass silently skipped.
+    // Rules-first was the whole design, and one variable name inverted it.
+    //
+    // Found by Codex on independent review. I had SEEN the "wrote 0" line and read it as
+    // "nothing left to do", because a manual pass minutes earlier had covered those twelve.
+    // Measured afterwards: 12 of 12 rule-settleable items hold the matching kind, so no data
+    // was harmed -- by luck rather than by design, which is not a defence.
+    const ruled = tail.map((r) => ({ ...r, kind: byRule(r) })).filter((r) => r.kind);
+    const modelTail = tail.filter((r) => !byRule(r));
+    db.withTransaction(() => { for (const s of ruled) applied += up.run(s.kind, s.id).changes; });
     console.log(`\n  wrote ${applied} kinds from the RULES (exact, auditable, free).`);
 
-    if (acc >= ACCURACY_FLOOR && tail.length) {
+    if (acc >= ACCURACY_FLOOR && modelTail.length) {
       let m = 0;
-      for (let i = 0; i < tail.length; i += BATCH) {
-        const res = await askBatch(tail.slice(i, i + BATCH));
+      for (let i = 0; i < modelTail.length; i += BATCH) {
+        const res = await askBatch(modelTail.slice(i, i + BATCH));
         if (res.fail) { console.log(`    tail batch ${i / BATCH + 1}: ${res.fail.why}`); continue; }
         db.withTransaction(() => {
           for (const a of res.answers) if (KINDS.includes(a.kind)) m += up.run(a.kind, a.id).changes;
         });
       }
       console.log(`  wrote ${m} more from the MODEL, on the tail the rules could not settle.`);
-    } else if (tail.length) {
+    } else if (modelTail.length) {
       console.log(`  wrote 0 from the model: ${acc < ACCURACY_FLOOR ? 'it did not clear the floor' : 'nothing left in the tail'}.`);
     }
   } else {

@@ -37,6 +37,7 @@ const scribe = require('../scribe.js');
 const db = require('../db');
 const provenance = require('../provenance');
 const { dispatch } = require('../dispatch');
+const alerts = require('./alerts');
 
 const router = express.Router();
 
@@ -643,6 +644,20 @@ router.post('/handover', express.json(), (req, res) => {
     // The transaction means a session never gets a successful handover while losing its asks.
     ownerItems = recordOwnerItems({ id: info.lastInsertRowid, title: b.title, needs_owner: b.needs_owner }, now);
   });
+
+  // AN UNREGISTERED SESSION IS A FINDING ON ITS OWN, independent of what its own needs_owner
+  // field says. Before this, "not on the roster" was a line handover.cjs printed to a console
+  // that may not be watched — a session could file every handover honestly and still go
+  // unnoticed for hours, because nothing durable recorded the absence itself. Hermes Agent ran
+  // ~2 hours unregistered on 20 Aug before anyone but the owner knew it existed; its own
+  // needs_owner field said "None" every time, because self-reporting can't surface "nobody
+  // knows I'm here" — only the roster check can. Routed through alerts.js (the module that
+  // already owns "should this get raised", including self-muting) rather than a second alerting
+  // mechanism invented here.
+  if (!known) {
+    alerts.record('unregistered-session', `Unregistered session filed a handover: "${b.title}"`,
+      `Not on the team roster. Add it: POST /api/team/roster, or node tools/team-roster.cjs --set "${b.title}" <role>.`);
+  }
 
   const missing = ['done', 'blocked', 'next'].filter((k) => !b[k]);
   return res.json({

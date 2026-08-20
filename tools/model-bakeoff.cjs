@@ -278,7 +278,13 @@ async function testDiscriminate(model) {
 }
 
 // ---- run -------------------------------------------------------------------
-(async () => {
+// A missing measurement is not a failed measurement. Keep the display label central so the
+// four gate lines cannot accidentally turn "could not look" into a red failure verdict.
+function gateLabel(pass) {
+  return pass === null || pass === undefined ? '----' : pass ? 'PASS' : 'FAIL';
+}
+
+if (require.main === module) (async () => {
   const models = process.argv.slice(2).filter((a, i, arr) => a !== '--ctx' && arr[i - 1] !== '--ctx');
   if (!models.length) { console.error('usage: node tools/model-bakeoff.cjs [--ctx N] <model> [<model>...]'); process.exit(2); }
   console.log('context: ' + (CTX ? 'num_ctx ' + CTX : "the model's default -- results below are only valid for that"));
@@ -287,10 +293,10 @@ async function testDiscriminate(model) {
   for (const m of models) {
     console.log('\n=== ' + m + ' ===');
     const fit = await testFit(m);
-    console.log('  1 FIT          ' + (fit.pass ? 'PASS' : 'FAIL') + '  ' + (fit.gb || '?') + ' GB, ' + (fit.pct ?? '?') + '% on GPU -- ' + fit.note);
+    console.log('  1 FIT          ' + gateLabel(fit.pass) + '  ' + (fit.gb || '?') + ' GB, ' + (fit.pct ?? '?') + '% on GPU -- ' + fit.note);
 
     const sch = await testSchema(m);
-    console.log('  2 SCHEMA       ' + (sch.pass ? 'PASS' : 'FAIL') + '  ' + (sch.ms || '?') + 'ms -- ' + sch.note);
+    console.log('  2 SCHEMA       ' + gateLabel(sch.pass) + '  ' + (sch.ms || '?') + 'ms -- ' + sch.note);
 
     const cls = await testClassify(m);
     if (cls.pass === null) console.log('  3 CLASSIFY     ----  ' + cls.note);
@@ -301,7 +307,7 @@ async function testDiscriminate(model) {
     }
 
     const dis = await testDiscriminate(m);
-    console.log('  4 DISCRIMINATE ' + (dis.pass ? 'PASS' : 'FAIL') + '  -- ' + dis.note);
+    console.log('  4 DISCRIMINATE ' + gateLabel(dis.pass) + '  -- ' + dis.note);
     for (const r of dis.runs) console.log('                 ' + r.label.padEnd(20) + ' want ' + r.want.padEnd(6) + ' got ' + String(r.got).padEnd(6) + ' | ' + String(r.because).slice(0, 90));
 
     results[m] = { fit, schema: sch, classify: cls, discriminate: dis };
@@ -327,3 +333,5 @@ async function testDiscriminate(model) {
   console.log('\nNothing here is written to the capability table automatically. A score becomes a');
   console.log('capability only through POST /api/team/scribe/measure, with its oracle named.');
 })().catch(e => { console.error('FAILED: ' + e.message); process.exit(1); });
+
+module.exports.gateLabel = gateLabel;

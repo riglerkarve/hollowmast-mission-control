@@ -60,6 +60,17 @@ it is tidy. Two consequences worth stating:
 - **If a second architect ever appears, collapse the role back into the chain.** One exception
   is a decision; two is the structure quietly not existing.
 
+**A second architect appeared on 20 August, and the rule above was deliberately not applied.**
+Hermes Agent had been operating on direct owner instruction for roughly two hours — a ten-question
+quiz with the owner, approved installs, no supervisor/manager review — before the owner asked for
+this explicitly, in those terms: make it a personal assistant. That is what "architect" already
+means in this hierarchy, so it was named as that rather than invented as a third thing. **This is
+a recorded reversal of the rule directly above it, not an oversight** — the owner chose to keep
+two architects rather than collapse one, on the reasoning that Hermes' actual working pattern
+already matched the role. Watch for what the rule's own reasoning warned about: two direct
+channels to the owner is exactly the interruption-surface this structure exists to reduce, and a
+third architect should not follow from this one without the same explicit, recorded choice.
+
 A worker with an urgent question does not become a manager for the afternoon. It writes the
 question down, and it reaches the owner in the next steering quiz. If that is too slow for a
 genuine emergency, the emergency is a **P0** — active data loss, a live security hole, or a

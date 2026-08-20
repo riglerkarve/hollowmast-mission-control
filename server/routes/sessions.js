@@ -230,6 +230,9 @@ router.put('/active', (req, res) => {
   db.prepare(`INSERT INTO focus_active_sessions (actor, todo_id, started_at, last_seen_at)
               VALUES (?, ?, datetime('now','localtime'), datetime('now','localtime'))
               ON CONFLICT(actor) DO UPDATE SET todo_id = excluded.todo_id,
+                  started_at = CASE
+                    WHEN datetime(focus_active_sessions.last_seen_at) < datetime('now','localtime','-90 seconds')
+                    THEN excluded.started_at ELSE focus_active_sessions.started_at END,
                   last_seen_at = excluded.last_seen_at`)
     .run(req.by, todoId);
   res.json({ actor: req.by, todoId });
@@ -245,7 +248,10 @@ router.get('/ledger/targets', (req, res) => {
   const targets = db.prepare(`SELECT project, weekly_target_minutes AS weeklyTargetMinutes,
                                      set_by_whom AS setByWhom, set_at AS setAt
                                 FROM focus_project_targets ORDER BY project COLLATE NOCASE`).all();
-  res.json({ targets, recordedNothing: !targets.length ? 'No project time targets have been set.' : undefined });
+  const knownProjects = db.prepare(`SELECT DISTINCT TRIM(project) AS project FROM todo_items
+                                     WHERE project IS NOT NULL AND TRIM(project) <> ''
+                                     ORDER BY project COLLATE NOCASE`).all().map((row) => row.project);
+  res.json({ targets, knownProjects, recordedNothing: !targets.length ? 'No project time targets have been set.' : undefined });
 });
 
 router.put('/ledger/targets/:project', (req, res) => {
@@ -409,6 +415,9 @@ router.get('/ledger', (req, res) => {
   const targets = db.prepare(`SELECT project, weekly_target_minutes AS weeklyTargetMinutes,
                                      set_by_whom AS setByWhom, set_at AS setAt
                                 FROM focus_project_targets ORDER BY project COLLATE NOCASE`).all();
+  const knownProjects = db.prepare(`SELECT DISTINCT TRIM(project) AS project FROM todo_items
+                                     WHERE project IS NOT NULL AND TRIM(project) <> ''
+                                     ORDER BY project COLLATE NOCASE`).all().map((row) => row.project);
 
   res.json({
     days,
@@ -421,6 +430,7 @@ router.get('/ledger', (req, res) => {
     missing,
     quality,
     targets,
+    knownProjects,
     note: 'Work sessions only. Contributor labels are stored provenance values (for example you, Claude, Codex, Ollama, Scribe, or unknown). A specific model is shown only where telemetry recorded exactly one; mixed or missing model data is not guessed. USD cost is shown only where telemetry recorded it. Project allocation comes only from a linked backlog item; a later user-selected repair is marked manual.',
     recordedNothing: !actors.length
       ? 'No work sessions were recorded in this window. That is absence from this ledger, not evidence that nobody worked.'

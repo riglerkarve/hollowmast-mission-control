@@ -258,7 +258,7 @@
   flex-wrap: wrap;
 }
 
-.focus-target-control span { width: 100%; color: var(--muted); font-size: .75rem; }
+.focus-target-control span { color: var(--muted); font-size: .75rem; white-space: nowrap; }
 
 .focus-target-control input,
 .focus-link-control select {
@@ -287,6 +287,45 @@
 
 .focus-target-control button:hover:not(:disabled),
 .focus-link-control button:hover:not(:disabled) { border-color: var(--accent); }
+
+.focus-ledger-targets {
+  margin-top: 1.1rem;
+  overflow-x: auto;
+}
+
+.focus-ledger-targets > p {
+  color: var(--muted);
+  font-size: .82rem;
+}
+
+.focus-ledger-targets table {
+  width: 100%;
+  min-width: 620px;
+  border-collapse: collapse;
+  font-size: .85rem;
+}
+
+.focus-ledger-targets th,
+.focus-ledger-targets td {
+  padding: .45rem;
+  border-bottom: 1px solid var(--border);
+  text-align: left;
+}
+
+.focus-ledger-targets td:last-child { white-space: nowrap; }
+
+.focus-ledger-targets td > button {
+  padding: .2rem .4rem;
+  border: 1px solid var(--border);
+  border-radius: 4px;
+  color: var(--ink);
+  background: transparent;
+  font: inherit;
+  font-size: .75rem;
+  cursor: pointer;
+}
+
+.focus-target-summary { color: var(--muted); font-size: .78rem; }
 
 .focus-ledger-drilldown {
   margin-top: 1.1rem;

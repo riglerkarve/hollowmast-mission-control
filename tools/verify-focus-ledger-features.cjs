@@ -58,11 +58,18 @@ async function main() {
 
     const target = await call('/ledger/targets/Mission%20Control', { method: 'PUT', body: JSON.stringify({ weeklyTargetMinutes: 120 }) });
     assert(target.response.status === 200 && target.body.weeklyTargetMinutes === 120, 'weekly target was not stored');
+    const targetList = await call('/ledger/targets');
+    assert(targetList.body.knownProjects.includes('Mission Control'), 'known backlog projects were not offered for planning');
 
     const presence = await call('/active', { method: 'PUT', body: JSON.stringify({ todoId: 'focus-test-item' }) });
     assert(presence.response.status === 200 && presence.body.actor === 'codex', 'active presence was not recorded');
     const active = await call('/active');
     assert(active.response.status === 200 && active.body.active[0].todoId === 'focus-test-item', 'active presence did not retain its direct task link');
+    db.prepare("UPDATE focus_active_sessions SET started_at = '2000-01-01 00:00:00', last_seen_at = '2000-01-01 00:00:00' WHERE actor = 'codex'").run();
+    const renewed = await call('/active', { method: 'PUT', body: JSON.stringify({ todoId: 'focus-test-item' }) });
+    assert(renewed.response.status === 200, 'stale active presence did not renew');
+    const renewedRead = await call('/active');
+    assert(renewedRead.body.active[0].startedAt !== '2000-01-01 00:00:00', 'stale presence retained an old start time');
     const cleared = await call('/active', { method: 'DELETE' });
     assert(cleared.response.status === 204, 'active presence did not clear');
 

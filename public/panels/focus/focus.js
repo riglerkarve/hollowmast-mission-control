@@ -57,6 +57,13 @@ const TEMPLATE = `
           <option value="scribe">Scribe</option>
         </select>
       </label>
+      <label class="focus-contributor">Focus interval
+        <select id="focusWorkLength">
+          <option value="25" selected>25 minutes</option>
+          <option value="50">50 minutes</option>
+          <option value="90">90 minutes</option>
+        </select>
+      </label>
       <p class="focus-contributor-note">This is an explicit contributor declaration, not a model label. Exact models and cost come only from telemetry.</p>
 
       <div class="session-count">
@@ -151,6 +158,8 @@ function createPanel() {
   let activeTaskId = null;
   let activeTaskTitle = '';
   let runningTodoId = null;
+  let workDurationSeconds = DURATIONS.work;
+  let runningDurationSeconds = DURATIONS.work;
   let container = null;
   let presenceHandle = null;
   let activePollHandle = null;
@@ -167,8 +176,12 @@ function createPanel() {
     return `${m}:${sec}`;
   }
 
+  function durationForMode(kind) {
+    return kind === 'work' ? workDurationSeconds : DURATIONS[kind];
+  }
+
   function updateRing() {
-    const total = DURATIONS[mode];
+    const total = running && mode === 'work' ? runningDurationSeconds : durationForMode(mode);
     const fraction = secondsLeft / total;
     el.ring.style.strokeDashoffset = String(RING_CIRCUMFERENCE * (1 - fraction));
   }
@@ -180,6 +193,7 @@ function createPanel() {
     const modeColors = { work: '#d9663d', short: '#4d8b6f', long: '#3f6fa6' };
     el.ring.style.stroke = modeColors[mode];
     if (el.focusSessionActor) el.focusSessionActor.disabled = running;
+    if (el.focusWorkLength) el.focusWorkLength.disabled = running || mode !== 'work';
     document.title = running ? `${formatTime(secondsLeft)} · Focus Flow` : 'Mission Control';
   }
 
@@ -342,6 +356,7 @@ function createPanel() {
     const missing = data.missing || {};
     const quality = data.quality || {};
     const targetByProject = new Map((data.targets || []).map((target) => [target.project, target]));
+    const projectByName = new Map(projects.map((project) => [project.project, project]));
     const actorRows = actors.length
       ? `<ul class="focus-ledger-actors">${actors.map((row) => `<li>
           <b>${escapeHtml(actorLabel(row.actor, row.model))}</b><strong>${formatMinutes(row.minutes)}</strong>
@@ -349,19 +364,31 @@ function createPanel() {
         </li>`).join('')}</ul>`
       : `<p class="focus-ledger-empty">${escapeHtml(data.recordedNothing || 'No work sessions in this window.')}</p>`;
     const projectRows = projects.length
-      ? `<div class="focus-ledger-projects"><h3>By project</h3><table><thead><tr><th>Project</th><th>Time</th><th>Sessions</th><th>Contributors</th><th>Weekly target</th></tr></thead><tbody>
+      ? `<div class="focus-ledger-projects"><h3>By project</h3><table><thead><tr><th>Project</th><th>Time</th><th>Sessions</th><th>Contributors</th><th>Plan</th></tr></thead><tbody>
           ${projects.map((row) => {
             const name = row.project === 'unassigned' ? 'Linked item without project' : row.project;
             const target = targetByProject.get(row.project);
-            const targetMinutes = target ? target.weeklyTargetMinutes : '';
-            const targetText = target ? `${formatMinutes(targetMinutes)} / week` : 'Not set';
+            const targetWindow = target ? Math.round((target.weeklyTargetMinutes * data.days) / 7) : 0;
+            const targetText = target
+              ? `${formatMinutes(target.weeklyTargetMinutes)} / week · ${formatMinutes(targetWindow)} planned in this window`
+              : 'Not set';
             const targetControl = row.project === 'unassigned'
               ? 'Needs a project label'
-              : `<label class="focus-target-control"><span>${escapeHtml(targetText)}</span><input type="number" min="1" max="10080" step="1" value="${targetMinutes}" placeholder="Minutes" data-target-project="${escapeHtml(row.project)}" aria-label="Weekly minutes target for ${escapeHtml(name)}"><button type="button" data-save-target="${escapeHtml(row.project)}">Save</button>${target ? `<button type="button" data-clear-target="${escapeHtml(row.project)}">Clear</button>` : ''}</label>`;
+              : `<span class="focus-target-summary">${escapeHtml(targetText)}</span>`;
             return `<tr><td>${escapeHtml(name)}</td><td>${formatMinutes(row.minutes)} · ${formatUsd(row.costMicrousd)}</td><td>${row.sessions}</td><td>${row.contributors}</td><td>${targetControl}</td></tr>`;
           }).join('')}
         </tbody></table></div>`
       : '<p class="focus-ledger-empty">No work session is linked to a project in this window.</p>';
+    const targetProjects = [...new Set([...(data.knownProjects || []), ...(data.targets || []).map((target) => target.project)])];
+    const targetManager = targetProjects.length
+      ? `<div class="focus-ledger-targets"><h3>Project time targets</h3><p>Weekly targets are plans, not estimates. The selected-window comparison is simple calendar scaling.</p><table><thead><tr><th>Project</th><th>Weekly target</th><th>${data.days}-day actual / plan</th><th></th></tr></thead><tbody>${targetProjects.map((project) => {
+        const target = targetByProject.get(project);
+        const actual = projectByName.get(project);
+        const windowTarget = target ? Math.round((target.weeklyTargetMinutes * data.days) / 7) : null;
+        const comparison = target ? `${formatMinutes(actual ? actual.minutes : 0)} / ${formatMinutes(windowTarget)}` : 'Set a target to compare';
+        return `<tr><td>${escapeHtml(project)}</td><td><label class="focus-target-control"><input type="number" min="1" max="10080" step="1" value="${target ? target.weeklyTargetMinutes : ''}" placeholder="Minutes" data-target-project="${escapeHtml(project)}" aria-label="Weekly minutes target for ${escapeHtml(project)}"><span>minutes / week</span></label></td><td>${escapeHtml(comparison)}</td><td><button type="button" data-save-target="${escapeHtml(project)}">Save</button>${target ? `<button type="button" data-clear-target="${escapeHtml(project)}">Clear</button>` : ''}</td></tr>`;
+      }).join('')}</tbody></table></div>`
+      : '<p class="focus-ledger-empty">No canonical project labels are available for time targets yet.</p>';
     const timeline = actors.length
       ? `<div class="focus-ledger-timeline"><h3>Contributor timeline</h3><p>Choose a day to inspect its recorded sessions.</p>${[...new Set(actorDays.map((r) => r.actor))].map((actor) => `<div class="focus-ledger-lane"><b>${escapeHtml(actorLabel(actor))}</b>${bars(actorDays.filter((r) => r.actor === actor), data.days, { actor })}</div>`).join('')}</div>`
       : '';
@@ -387,7 +414,7 @@ function createPanel() {
     ].filter(Boolean);
     el.focusLedger.innerHTML = `
       <div class="focus-ledger-quality"><h3>Evidence coverage</h3><ul>${qualityRows.map(([label, value]) => `<li><b>${label}</b><span>${value}</span></li>`).join('')}</ul></div>
-      <h3>People and models</h3>${actorRows}${timeline}${projectRows}${projectTrends}${modelRows}${queueRows}<div id="focusLedgerDrilldown"></div>
+      <h3>People and models</h3>${actorRows}${timeline}${projectRows}${targetManager}${projectTrends}${modelRows}${queueRows}<div id="focusLedgerDrilldown"></div>
       <p class="focus-ledger-note">${gaps.length ? `Not allocated by evidence: ${escapeHtml(gaps.join('; '))}.` : 'Every recorded work session in this window has a contributor and a linked project.'}</p>
       <p class="focus-ledger-basis">${escapeHtml(data.note || '')}</p>`;
     populateLinkTargets();
@@ -415,7 +442,7 @@ function createPanel() {
         select.innerHTML = '<option value="">Backlog choices unavailable</option>';
         select.disabled = true;
       } else {
-        select.innerHTML = `<option value="">Choose backlog item…</option>${openBacklogItems.map((item) => `<option value="${escapeHtml(item.id)}">${escapeHtml(item.project ? `${item.project} — ${item.title}` : item.title)}</option>`).join('')}`;
+        select.innerHTML = `<option value="">Choose backlog item…</option>${openBacklogItems.map((item) => `<option value="${escapeHtml(item.id)}">${escapeHtml(`${item.status === 'open' ? '' : `[${item.status}] `}${item.project ? `${item.project} — ` : ''}${item.title}`)}</option>`).join('')}`;
         select.disabled = !openBacklogItems.length;
       }
     }
@@ -424,7 +451,9 @@ function createPanel() {
   async function loadLinkTargets() {
     linkTargetsState = 'loading';
     try {
-      const body = await api('/todo/items?status=open');
+      // A historical session can honestly belong to a completed or declined item, so
+      // restricting this repair list to open work would manufacture a new evidence gap.
+      const body = await api('/todo/items');
       openBacklogItems = body.items || [];
       linkTargetsState = 'ready';
     } catch {
@@ -553,7 +582,7 @@ function createPanel() {
 
   function setMode(newMode) {
     mode = newMode;
-    secondsLeft = DURATIONS[mode];
+    secondsLeft = durationForMode(mode);
     running = false;
     clearInterval(tickHandle);
     clearInterval(presenceHandle);
@@ -589,7 +618,7 @@ function createPanel() {
           // todoId, not taskId. activeTaskId now holds a backlog id ('49', 'M3'), and the
           // old field expects an INTEGER tasks.id -- sending it there would silently store
           // null and the session would record no subject at all.
-          body: JSON.stringify({ todoId: runningTodoId, kind: 'work', durationMinutes: DURATIONS.work / 60 }),
+          body: JSON.stringify({ todoId: runningTodoId, kind: 'work', durationMinutes: runningDurationSeconds / 60 }),
           headers: { 'X-MC-By': sessionActor },
         });
         sessionRecorded = true;
@@ -645,6 +674,7 @@ function createPanel() {
     running = !running;
     if (running) {
       runningTodoId = activeTaskId;
+      runningDurationSeconds = durationForMode(mode);
       tickHandle = setInterval(tick, 1000);
       sendPresence();
       presenceHandle = setInterval(sendPresence, 60000);
@@ -678,6 +708,7 @@ function createPanel() {
         focusLedgerRange: container.querySelector('#focusLedgerRange'),
         focusLedgerExport: container.querySelector('#focusLedgerExport'),
         focusSessionActor: container.querySelector('#focusSessionActor'),
+        focusWorkLength: container.querySelector('#focusWorkLength'),
         focusStatsState: container.querySelector('#focusStatsState'),
         focusStatsRetry: container.querySelector('#focusStatsRetry'),
         celebrateOverlay: container.querySelector('#celebrateOverlay'),
@@ -695,6 +726,13 @@ function createPanel() {
         sessionActor = el.focusSessionActor.value;
         renderFocusNow();
       });
+      el.focusWorkLength.addEventListener('change', () => {
+        workDurationSeconds = Number(el.focusWorkLength.value) * 60;
+        if (mode === 'work' && !running) {
+          secondsLeft = workDurationSeconds;
+          renderTimer();
+        }
+      });
       el.focusStatsRetry.addEventListener('click', () => loadStats().catch(showStatsUnavailable));
       el.focusLedger.addEventListener('click', onLedgerClick);
       el.focusLedgerRange.addEventListener('change', () => {
@@ -707,7 +745,7 @@ function createPanel() {
         clearInterval(presenceHandle);
         presenceHandle = null;
         clearPresence();
-        secondsLeft = DURATIONS[mode];
+        secondsLeft = durationForMode(mode);
         renderTimer();
       });
       el.skipBtn.addEventListener('click', () => {
@@ -716,8 +754,9 @@ function createPanel() {
         clearInterval(presenceHandle);
         presenceHandle = null;
         clearPresence();
-        secondsLeft = 1;
-        tick();
+        // Skipping means this interval was abandoned, not completed. Recording its full
+        // planned duration would fabricate time in the ledger.
+        setMode(mode === 'work' ? 'short' : 'work');
       });
       // The backlog panel announces; this panel decides. It is mounted AFTER el is built,
       // so container.querySelectorAll('.mode-tab') above captured only the timer's three

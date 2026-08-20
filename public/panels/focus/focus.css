@@ -48,6 +48,18 @@
   color: var(--muted);
 }
 
+.focus-stats-state {
+  min-height: 1.25em;
+  margin: 0.75rem 0 0;
+  color: var(--muted);
+  font-size: 0.85rem;
+}
+
+.focus-stats-state[data-state="error"] {
+  color: var(--ink);
+  font-weight: 600;
+}
+
 .task-form {
   display: flex;
   gap: 8px;

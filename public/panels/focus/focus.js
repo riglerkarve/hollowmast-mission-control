@@ -75,6 +75,7 @@ const TEMPLATE = `
         </div>
       </div>
       <div class="bar-chart" id="barChart"></div>
+      <p class="focus-stats-state" id="focusStatsState" role="status" aria-live="polite">Loading focus history…</p>
     </section>
   </div>
 
@@ -86,14 +87,28 @@ const TEMPLATE = `
   </div>
 `;
 
-async function api(path, options) {
-  const res = await fetch(`/api${path}`, {
-    headers: { 'Content-Type': 'application/json' },
-    ...options,
-  });
-  if (!res.ok) throw new Error(`API ${path} failed: ${res.status}`);
-  if (res.status === 204) return null;
-  return res.json();
+async function api(path, options = {}) {
+  const { signal, ...requestOptions } = options;
+  // A pending request is not evidence that statistics are loading successfully. Bound it
+  // so the panel can state "could not look" instead of showing a permanent loading state.
+  const controller = new AbortController();
+  const timer = setTimeout(() => controller.abort(), 15000);
+  const abortForCaller = () => controller.abort();
+  if (signal) signal.addEventListener('abort', abortForCaller, { once: true });
+  if (signal?.aborted) controller.abort();
+  try {
+    const res = await fetch(`/api${path}`, {
+      headers: { 'Content-Type': 'application/json' },
+      ...requestOptions,
+      signal: controller.signal,
+    });
+    if (!res.ok) throw new Error(`API ${path} failed: ${res.status}`);
+    if (res.status === 204) return null;
+    return res.json();
+  } finally {
+    clearTimeout(timer);
+    if (signal) signal.removeEventListener('abort', abortForCaller);
+  }
 }
 
 function createPanel() {
@@ -209,6 +224,29 @@ function createPanel() {
       tooltip: (d) => (d.count === 1 ? '1 session' : `${d.count} sessions`),
       isHighlighted: (d) => d.date === todayKey,
     });
+
+    setStatsState(
+      daily.totalSessions === 0 ? 'empty' : 'ready',
+      daily.totalSessions === 0 ? 'No completed focus sessions in the last 7 days.' : '',
+    );
+  }
+
+  // Zero is a real, useful answer from /stats. It must not be the same UI as a failed
+  // request: otherwise an unavailable record tells the owner they have done no sessions.
+  function setStatsState(state, message) {
+    if (!container || !el.focusStatsState) return;
+    el.focusStatsState.dataset.state = state;
+    el.focusStatsState.textContent = message;
+  }
+
+  function showStatsUnavailable() {
+    if (!container) return;
+    el.sessionCount.textContent = '—';
+    el.streakCount.textContent = '—';
+    el.weekSessions.textContent = '—';
+    el.weekMinutes.textContent = '—';
+    el.barChart.replaceChildren();
+    setStatsState('error', 'Focus history could not be loaded. The timer is still available; no statistics are shown.');
   }
 
   function setMode(newMode) {
@@ -236,15 +274,21 @@ function createPanel() {
     renderTimer();
 
     if (mode === 'work') {
-      await api('/sessions', {
-        method: 'POST',
-        // todoId, not taskId. activeTaskId now holds a backlog id ('49', 'M3'), and the
-        // old field expects an INTEGER tasks.id -- sending it there would silently store
-        // null and the session would record no subject at all.
-        body: JSON.stringify({ todoId: activeTaskId, kind: 'work', durationMinutes: DURATIONS.work / 60 }),
-      });
-      await Promise.all([refreshActiveTask(), loadStats()]);
-      celebrate('Session complete! Take a break 🎉');
+      try {
+        await api('/sessions', {
+          method: 'POST',
+          // todoId, not taskId. activeTaskId now holds a backlog id ('49', 'M3'), and the
+          // old field expects an INTEGER tasks.id -- sending it there would silently store
+          // null and the session would record no subject at all.
+          body: JSON.stringify({ todoId: activeTaskId, kind: 'work', durationMinutes: DURATIONS.work / 60 }),
+        });
+        await Promise.all([refreshActiveTask(), loadStats()]);
+        celebrate('Session complete! Take a break 🎉');
+      } catch {
+        // The timer did end, but the record did not. Say that plainly rather than playing
+        // the completion state for a session the API never accepted.
+        setStatsState('error', 'Session ended, but it was not recorded. Check the connection before starting another.');
+      }
     } else {
       celebrate("Break's over — back to it!");
     }
@@ -350,7 +394,7 @@ function createPanel() {
         tickHandle = setInterval(tick, 1000);
       }
       renderFocusNow();
-      loadStats();
+      loadStats().catch(showStatsUnavailable);
     },
 
     unmount() {

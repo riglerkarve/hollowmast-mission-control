@@ -139,15 +139,21 @@ function gatherFacts() {
       WHERE category = 'Cash withdrawn' AND amount_pence < 0 AND date > ? AND date <= ?`
   ).get(d(28), d(0));
 
-  // NOT_CLAUDE, imported from the module that owns the column. This file has its own
-  // focus_sessions query and therefore did NOT inherit the filter added across stats.js on
-  // 18 Aug — a caller that bypasses a shared fix keeps the bug. Left alone, the morning
-  // briefing would have reported 62 hours of Claude's imported sessions as your focus time,
-  // in prose, once a day, with nothing to contradict it.
+  // NOT_AGENT, imported from the module that owns the column (server/routes/sessions.js,
+  // re-exported through stats.js too). This file has its own focus_sessions query and
+  // therefore did NOT inherit the filter added across stats.js on 18 Aug — a caller that
+  // bypasses a shared fix keeps the bug. Left alone, the morning briefing would have reported
+  // 62 hours of Claude's imported sessions as your focus time, in prose, once a day, with
+  // nothing to contradict it.
+  //
+  // THIS WAS ALSO A SECOND, SEPARATE BUG: the property was referenced as `sessions.NOT_CLAUDE`,
+  // which was never exported under that name -- the real export is `NOT_AGENT` (confirmed by
+  // grepping every occurrence in server/). That mismatch made this line throw "no such column:
+  // undefined" on every run, which is what actually broke the 20 Aug 07:00 scheduled briefing.
   const focus = db.prepare(
     `SELECT COUNT(*) n, COALESCE(SUM(duration_minutes), 0) mins
        FROM focus_sessions
-      WHERE kind = 'work' AND ${sessions.NOT_CLAUDE} AND date(completed_at) >= date(?, '-6 days')`
+      WHERE kind = 'work' AND ${sessions.NOT_AGENT} AND date(completed_at) >= date(?, '-6 days')`
   ).get(TODAY);
 
   const review = db.prepare(

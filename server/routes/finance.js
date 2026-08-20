@@ -738,7 +738,67 @@ function categoryMonthly(category, months = 12) {
   ).all(category, months);
 }
 
+// Per-counterparty payment history. THE owner of this figure is finance, and every other
+// module asks for it here rather than querying finance_transactions.
+//
+// direction: 'in' (money received -- clients) | 'out' (money paid -- suppliers)
+//
+// Amounts stay in PENCE. A float total is how two views of one number come to disagree in
+// the third decimal place and neither of them errors.
+function counterparties(opts) {
+  const o = opts || {};
+  const dir = o.direction === 'out' ? 'out' : 'in';
+  const cmp = dir === 'in' ? '>' : '<';
+  const params = [];
+  let where = 'amount_pence ' + cmp + ' 0 AND counterparty IS NOT NULL AND TRIM(counterparty) <> \'\'';
+  if (o.businessOnly) where += ' AND business = 1';
+  // minPence is applied AFTER grouping, in JS below -- it is a threshold on the SUM, and a
+  // WHERE clause runs per row, so putting it here would filter individual payments instead
+  // of clients. The first draft had a fragment here referencing a column that never existed.
+
+  const rows = db.prepare(
+    'SELECT counterparty,'
+  + '       COUNT(*)                AS payments,'
+  + '       SUM(ABS(amount_pence))  AS total_pence,'
+  + '       MIN(date)               AS first_at,'
+  + '       MAX(date)               AS last_at'
+  + '  FROM finance_transactions'
+  + ' WHERE ' + where +
+    ' GROUP BY counterparty'
+  + ' ORDER BY total_pence DESC'
+  ).all(...params);
+
+  const today = new Date();
+  return rows
+    .filter((r) => !o.minPence || r.total_pence >= o.minPence)
+    .map((r) => {
+      const last = Date.parse(r.last_at);
+      const first = Date.parse(r.first_at);
+      const daysSince = Number.isFinite(last) ? Math.floor((today - last) / 86400000) : null;
+      // Average gap between payments, which is what makes 'lapsed' meaningful. A client
+      // who pays yearly is not lapsed at 90 days; one who pays weekly is. A fixed
+      // threshold would flag the first and miss the second.
+      const spanDays = (Number.isFinite(last) && Number.isFinite(first))
+        ? Math.max(0, Math.floor((last - first) / 86400000)) : null;
+      const avgGapDays = (spanDays != null && r.payments > 1)
+        ? Math.round(spanDays / (r.payments - 1)) : null;
+      return {
+        counterparty: r.counterparty,
+        payments: r.payments,
+        total_pence: r.total_pence,
+        first_at: r.first_at,
+        last_at: r.last_at,
+        days_since_last: daysSince,
+        avg_gap_days: avgGapDays,
+        // null, not false, when there is no basis to judge -- a single payment gives no
+        // cadence, and guessing one would manufacture a lapsed flag out of nothing.
+        lapsed: (avgGapDays == null || daysSince == null) ? null : daysSince > avgGapDays * 2,
+      };
+    });
+}
+
 module.exports = router;
+module.exports.counterparties = counterparties;
 module.exports.recurring = recurring;
 module.exports.categoryMonthly = categoryMonthly;
 module.exports.monthlySpend = monthlySpend;

@@ -9,6 +9,7 @@
 // no colour that turns red, and no sentence that tells you how you are doing. The panel
 // shows you what you recorded and when — you do the interpreting.
 
+import { renderLede } from '/panels/lede/lede.js';
 const MOODS = [
   [1, 'rough'], [2, 'low'], [3, 'ok'], [4, 'good'], [5, 'great'],
 ];
@@ -98,9 +99,8 @@ async function api(p, opts) {
 // is not hiding a failure -- there is no DOM left to draw into. The failure that MUST
 // stay visible is /support not answering while the panel IS open, and that is the catch
 // block in mount(), which falls back to the fixed text rather than to nothing.
-function renderSupport(s) {
-  if (!root) return;
-  root.querySelector('#wbSupport').innerHTML = `
+function supportCardHTML(s) {
+  return `
     <h2 class="wb-h2">If you need to talk to someone</h2>
     <p class="wb-emergency">${esc(s.emergency)}</p>
     <ul class="wb-contacts">
@@ -114,6 +114,31 @@ function renderSupport(s) {
     <p class="wb-hint wb-dim">Checked ${esc(s.checkedOn)} against nhs.uk and samaritans.org.
     These are here every time, whatever you have or have not written.</p>
   `;
+}
+
+const FALLBACK_SUPPORT_HTML =
+  '<h2 class="wb-h2">If you need to talk to someone</h2>'
+  + '<p class="wb-emergency">If life is in danger, call 999 or go to A&amp;E.</p>'
+  + '<ul class="wb-contacts"><li><span class="wb-c-name">Samaritans</span>'
+  + '<span class="wb-c-how">Call 116 123</span><span class="wb-c-when">24 hours, every day · Free</span></li>'
+  + '<li><span class="wb-c-name">Shout</span><span class="wb-c-how">Text SHOUT to 85258</span>'
+  + '<span class="wb-c-when">24 hours, every day · Free</span></li></ul>'
+  + '<p class="wb-hint wb-dim">The server did not answer, so this is the built-in copy.</p>';
+
+function renderSupport(s) {
+  if (!root) return;
+  root.querySelector('#wbSupport').innerHTML = supportCardHTML(s);
+}
+
+// Exported so a host panel (the merged life.js shell mounts this alongside its own
+// tab-gated sub-panels) can draw the same fixed card outside this panel's own mount --
+// one copy of the emergency contacts and the offline fallback, not two drifting apart.
+// Keyed on el.isConnected rather than the module-level `root`, since the caller's element
+// belongs to a different panel's DOM tree and may be torn down independently of this one.
+export function mountSupportCard(el) {
+  if (!el) return;
+  api('/support').then((s) => { if (el.isConnected) el.innerHTML = supportCardHTML(s); })
+    .catch(() => { if (el.isConnected) el.innerHTML = FALLBACK_SUPPORT_HTML; });
 }
 
 async function save(mood) {
@@ -248,20 +273,11 @@ export default {
   mount(el) {
     root = el;
     el.innerHTML = TEMPLATE;
+    renderLede('wellbeing', el);
 
     // Draw the support card immediately from the server's fixed block, before any data
     // loads and regardless of whether it loads at all.
-    api('/support').then(renderSupport).catch(() => {
-      if (!root) return;
-      root.querySelector('#wbSupport').innerHTML =
-        '<h2 class="wb-h2">If you need to talk to someone</h2>'
-        + '<p class="wb-emergency">If life is in danger, call 999 or go to A&amp;E.</p>'
-        + '<ul class="wb-contacts"><li><span class="wb-c-name">Samaritans</span>'
-        + '<span class="wb-c-how">Call 116 123</span><span class="wb-c-when">24 hours, every day · Free</span></li>'
-        + '<li><span class="wb-c-name">Shout</span><span class="wb-c-how">Text SHOUT to 85258</span>'
-        + '<span class="wb-c-when">24 hours, every day · Free</span></li></ul>'
-        + '<p class="wb-hint wb-dim">The server did not answer, so this is the built-in copy.</p>';
-    });
+    mountSupportCard(el.querySelector('#wbSupport'));
 
     el.querySelectorAll('.wb-mood').forEach((b) => {
       b.addEventListener('click', () => save(Number(b.dataset.mood)));

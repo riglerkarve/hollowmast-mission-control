@@ -1,0 +1,82 @@
+/* voice — click to talk and talk back.
+   Tokens are from shell.css. No custom properties defined here; the panel
+   uses the shared palette so it matches every other card. */
+
+.vc-card { margin-bottom: 16px; }
+.vc-h2 { font-size: 13px; text-transform: uppercase; letter-spacing: .07em;
+  color: var(--muted); margin: 0 0 10px; padding-bottom: 6px;
+  border-bottom: 1px solid var(--border); }
+.vc-lede { color: var(--muted); font-size: 12px; margin: 0 0 14px; }
+
+/* The mic button — large, tappable, changes state visually. */
+.vc-mic-row { display: flex; justify-content: center; padding: 12px 0 16px; }
+.vc-mic { display: flex; flex-direction: column; align-items: center; gap: 8px;
+  background: var(--card); color: var(--ink);
+  border: 2px solid var(--border-strong); border-radius: 50%;
+  width: 96px; height: 96px; cursor: pointer; font: inherit;
+  transition: border-color var(--t-fast) var(--ease),
+    background var(--t-fast) var(--ease),
+    box-shadow var(--t-fast) var(--ease); }
+.vc-mic:hover { border-color: var(--accent); }
+.vc-mic:active { transform: scale(.97); }
+.vc-mic-icon { width: 32px; height: 32px; fill: var(--ink); }
+.vc-mic-label { font-size: 11px; color: var(--muted); }
+
+/* Recording state — the button turns into the accent colour. */
+.vc-mic.vc-recording { border-color: var(--accent);
+  background: var(--accent-soft); box-shadow: 0 0 0 6px var(--accent-glow); }
+.vc-mic.vc-recording .vc-mic-icon { fill: var(--accent-text); }
+.vc-mic.vc-recording .vc-mic-label { color: var(--accent-text); font-weight: 600; }
+
+/* Transcript display. */
+.vc-transcript { min-height: 40px; margin-bottom: 12px; }
+.vc-thinking { color: var(--muted); font-size: 13px; font-style: italic; margin: 0; }
+.vc-said { color: var(--ink); font-size: 15px; line-height: 1.5; margin: 0;
+  padding: 10px 12px; background: var(--accent-soft); border-radius: var(--r-card); }
+.vc-err { color: var(--tm-warn, var(--accent)); font-size: 13px; margin: 0; }
+.vc-sent { color: var(--muted); font-size: 13px; margin: 0; font-style: italic; }
+
+/* Send button row. */
+.vc-send-row { display: flex; gap: 8px; }
+
+/* Talk-back toggle. */
+.vc-toggle-row { display: flex; align-items: center; gap: 12px; margin-bottom: 14px; }
+.vc-switch { position: relative; display: inline-block; width: 44px; height: 24px; }
+.vc-switch input { opacity: 0; width: 0; height: 0; }
+.vc-slider { position: absolute; cursor: pointer; inset: 0;
+  background: var(--border-strong); border-radius: 24px; transition: var(--t-fast) var(--ease); }
+.vc-slider::before { content: ''; position: absolute; height: 18px; width: 18px;
+  left: 3px; bottom: 3px; background: var(--card); border-radius: 50%;
+  transition: var(--t-fast) var(--ease); }
+.vc-switch input:checked + .vc-slider { background: var(--accent); }
+.vc-switch input:checked + .vc-slider::before { transform: translateX(20px); }
+.vc-toggle-label { font-size: 13px; color: var(--muted); }
+
+/* Response area. */
+.vc-response { min-height: 40px; margin-bottom: 10px; }
+.vc-replay-row { display: flex; gap: 8px; }
+.vc-replay { background: var(--card); color: var(--muted);
+  border: 1px solid var(--border-strong); border-radius: var(--r-btn);
+  padding: 6px 13px; font: inherit; font-size: 12.5px; cursor: pointer; }
+.vc-replay:hover:not(:disabled) { border-color: var(--accent); color: var(--ink); }
+.vc-replay:disabled { opacity: .55; cursor: default; }
+
+/* Status display. */
+.vc-status { display: flex; flex-direction: column; gap: 6px; }
+.vc-stat { display: flex; gap: 10px; align-items: baseline; font-size: 13px; }
+.vc-stat-key { font-size: 10px; text-transform: uppercase; letter-spacing: .09em;
+  color: var(--muted); min-width: 56px; }
+.vc-stat-val { color: var(--ink); font-family: var(--mono); font-size: 12px; }
+
+/* The audio element is hidden — playback is triggered programmatically. */
+.vc-audio { display: none; }
+
+/* Quick action buttons — one-tap shortcuts. */
+.vc-quick { display: flex; flex-wrap: wrap; gap: 8px; }
+.vc-qa { background: var(--card); color: var(--ink);
+  border: 1px solid var(--border-strong); border-radius: var(--r-btn);
+  padding: 8px 14px; font: inherit; font-size: 13px; cursor: pointer;
+  transition: border-color var(--t-fast) var(--ease),
+    background var(--t-fast) var(--ease); }
+.vc-qa:hover { border-color: var(--accent); background: var(--accent-soft); color: var(--accent-text); }
+.vc-qa:active { transform: scale(.97); }

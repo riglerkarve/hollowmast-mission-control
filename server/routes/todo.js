@@ -1107,7 +1107,7 @@ router.get('/clusters', (req, res) => {
 // the panel right up until the day it did not.
 function openForBoard() {
   return db.prepare(`
-    SELECT id, title, project, kind, cluster, priority, owner, status, recheck_at
+    SELECT id, title, project, kind, cluster, priority, owner, status, recheck_at, created_at
       FROM todo_items
      WHERE status = 'open'
      ORDER BY ${PRI_RANK}, id`).all();

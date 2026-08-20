@@ -205,8 +205,11 @@ router.patch('/:id/link', (req, res) => {
 // Presence is a live heartbeat, not an inference from a previous completed session.
 // Unknown actors are refused: a row labelled unknown would be a claim that somebody is
 // working without identifying them, which is less useful than an explicit absence.
-router.get('/active', (req, res) => {
-  const active = db.prepare(`
+// Exported so another in-process module (activity.js) can call the same query directly
+// instead of duplicating it against the raw table — the module contract's "call the API",
+// done without a loopback HTTP round-trip to itself.
+function activeSessions() {
+  return db.prepare(`
     SELECT a.actor, a.started_at AS startedAt, a.last_seen_at AS lastSeenAt,
            a.todo_id AS todoId, t.title AS todoTitle, t.project AS project
       FROM focus_active_sessions a
@@ -214,6 +217,10 @@ router.get('/active', (req, res) => {
      WHERE datetime(a.last_seen_at) >= datetime('now','localtime','-90 seconds')
      ORDER BY a.started_at ASC, a.actor ASC
   `).all();
+}
+
+router.get('/active', (req, res) => {
+  const active = activeSessions();
   res.json({ active, recordedNothing: !active.length
     ? 'No contributor has sent a Focus heartbeat in the last 90 seconds.' : undefined });
 });
@@ -552,3 +559,4 @@ router.get('/claude', (req, res) => {
 module.exports = router;
 module.exports.NOT_AGENT = NOT_AGENT;
 module.exports.IS_CLAUDE = IS_CLAUDE;
+module.exports.activeSessions = activeSessions;

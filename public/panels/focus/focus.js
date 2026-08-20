@@ -71,6 +71,25 @@ const TEMPLATE = `
       </div>
     </section>
 
+    <section class="card focus-voice-card">
+      <div class="focus-voice-row">
+        <button class="fv-mic" id="fvMic" aria-label="Click to talk">
+          <svg class="fv-mic-icon" viewBox="0 0 24 24" aria-hidden="true">
+            <path d="M12 2a3 3 0 0 0-3 3v6a3 3 0 0 0 6 0V5a3 3 0 0 0-3-3z"/>
+            <path d="M19 11a7 7 0 0 1-14 0M12 18v4M8 22h8" fill="none"
+              stroke="currentColor" stroke-width="2" stroke-linecap="round"/>
+          </svg>
+          <span class="fv-mic-label" id="fvMicLabel">Click to talk</span>
+        </button>
+        <div class="fv-transcript" id="fvTranscript"></div>
+        <label class="fv-talkback">
+          <input type="checkbox" id="fvTalk">
+          <span class="fv-talkback-text">Talk back</span>
+        </label>
+      </div>
+      <audio id="fvAudio" class="fv-audio"></audio>
+    </section>
+
     <section class="card" id="focusNowCard">
       <h2>What are you working on?</h2>
       <div id="focusNow"></div>
@@ -169,6 +188,175 @@ function createPanel() {
   let sessionActor = 'you';
   let openBacklogItems = [];
   let linkTargetsState = 'loading';
+
+  // --- voice state (click-to-talk embedded in Focus) ---
+  let fvRecorder = null;
+  let fvChunks = [];
+  let fvRecording = false;
+  let fvStream = null;
+  let fvTalkBack = false;
+  let fvAudioEl = null;
+
+  async function fvStart() {
+    if (fvRecording) return;
+    try {
+      fvStream = await navigator.mediaDevices.getUserMedia({ audio: true });
+    } catch {
+      if (el.fvTranscript) el.fvTranscript.innerHTML = '<span class="fv-err">Microphone unavailable.</span>';
+      return;
+    }
+    fvChunks = [];
+    fvRecorder = new MediaRecorder(fvStream);
+    fvRecorder.ondataavailable = (e) => { if (e.data.size > 0) fvChunks.push(e.data); };
+    fvRecorder.onstop = fvTranscribe;
+    fvRecorder.start();
+    fvRecording = true;
+    const btn = container.querySelector('#fvMic');
+    if (btn) btn.classList.add('fv-recording');
+    const label = container.querySelector('#fvMicLabel');
+    if (label) label.textContent = 'Listening… click to stop';
+  }
+
+  function fvStop() {
+    if (!fvRecording || !fvRecorder) return;
+    fvRecorder.stop();
+    if (fvStream) fvStream.getTracks().forEach((t) => t.stop());
+    fvRecording = false;
+    const btn = container.querySelector('#fvMic');
+    if (btn) btn.classList.remove('fv-recording');
+    const label = container.querySelector('#fvMicLabel');
+    if (label) label.textContent = 'Click to talk';
+  }
+
+  async function fvTranscribe() {
+    if (!container) return;
+    if (!fvChunks.length) return;
+    const blob = new Blob(fvChunks, { type: 'audio/webm' });
+    const tr = container.querySelector('#fvTranscript');
+    if (tr) tr.innerHTML = '<span class="fv-thinking">Transcribing…</span>';
+    try {
+      const r = await fetch('/api/voice/stt', {
+        method: 'POST',
+        headers: { 'Content-Type': 'audio/webm' },
+        body: blob,
+      });
+      if (!container) return;
+      if (!r.ok) {
+        const e = await r.json().catch(() => ({}));
+        if (tr) tr.innerHTML = `<span class="fv-err">${escapeHtml(e.error || 'Transcription failed')}</span>`;
+        return;
+      }
+      const d = await r.json();
+      const text = (d.text || '').trim();
+      if (!text) {
+        if (tr) tr.innerHTML = '<span class="fv-err">No speech detected.</span>';
+        return;
+      }
+      if (tr) tr.innerHTML = `<span class="fv-said">${escapeHtml(text)}</span>`;
+      // Send the transcript to the command route and execute the result.
+      fvCommand(text);
+    } catch (err) {
+      if (tr) tr.innerHTML = `<span class="fv-err">Could not reach server: ${escapeHtml(err.message)}</span>`;
+    }
+  }
+
+  async function fvSpeak(text) {
+    if (!text || !text.trim()) return;
+    try {
+      const r = await fetch('/api/voice/tts', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ text }),
+      });
+      if (!r.ok) return;
+      const blob = await r.blob();
+      const url = URL.createObjectURL(blob);
+      if (fvAudioEl) {
+        fvAudioEl.src = url;
+        fvAudioEl.play().catch(() => {});
+      }
+    } catch { /* silent — text is still visible */ }
+  }
+
+  // Send transcript to the command route, then execute the returned intent.
+  // NAVIGATE switches panels. QUERY/BRIEFING/STATUS fetches data and speaks it.
+  async function fvCommand(text) {
+    if (!container || !text) return;
+    let cmd;
+    try {
+      const r = await fetch('/api/voice/command', {
+        method: 'POST', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ text }),
+      });
+      if (!r.ok) return;
+      const d = await r.json();
+      cmd = d.action || d;
+    } catch { return; }
+    if (!cmd || !container) return;
+
+    if (cmd.intent === 'navigate' && cmd.panel) {
+      const navBtn = document.querySelector(`[data-panel="${cmd.panel}"]`);
+      if (navBtn) {
+        navBtn.click();
+        if (fvTalkBack) fvSpeak(`Opening ${cmd.panel}.`);
+      } else if (fvTalkBack) {
+        // command.js only ever returns a panel name this page can mount, so reaching
+        // here means the nav changed underneath it -- say so instead of confirming a
+        // navigation that did not happen.
+        fvSpeak(`I don't have a ${cmd.panel} panel to open.`);
+      }
+      return;
+    }
+    if ((cmd.intent === 'query' || cmd.intent === 'briefing' || cmd.intent === 'status') && cmd.api) {
+      try {
+        const r = await fetch(cmd.api);
+        if (!r.ok) return;
+        const data = await r.json();
+        // Simple spoken summary for the focus voice bar
+        let spoken = 'Response received.';
+        if (cmd.api.includes('/briefing')) {
+          const n = (data.needsYou || []).length;
+          const h = (data.happened || []).length;
+          spoken = `${n} items need you, ${h} things happened.`;
+        } else if (cmd.api.includes('/stale')) {
+          spoken = `${(data.items || []).length} items are stale.`;
+        } else if (cmd.api.includes('/prioritize')) {
+          const items = data.items || [];
+          spoken = items.length ? `${items.length} open items. Top: ${items[0].title.slice(0, 60)}.` : 'No open items.';
+        } else if (cmd.api.includes('/sessions/active')) {
+          const a = data.active || [];
+          spoken = a.length ? `${a.length} agents active.` : 'No agents active.';
+        } else if (cmd.api.includes('/board')) {
+          spoken = `${(data.counts || {}).externalOpen || 0} open items.`;
+        }
+        const tr = container.querySelector('#fvTranscript');
+        if (tr) tr.innerHTML = `<span class="fv-said">${escapeHtml(spoken)}</span>`;
+        if (fvTalkBack) fvSpeak(spoken);
+      } catch {}
+      return;
+    }
+    if (cmd.intent === 'act' && cmd.action === 'start_focus') {
+      // We're already on the focus panel — just press start.
+      const startBtn = container.querySelector('#startPauseBtn');
+      if (startBtn && startBtn.textContent === 'Start') startBtn.click();
+      if (fvTalkBack) fvSpeak('Focus session started.');
+      return;
+    }
+  }
+
+  function onFvClick(ev) {
+    const mic = ev.target.closest && ev.target.closest('#fvMic');
+    if (mic) {
+      if (!fvRecording) fvStart();
+      else fvStop();
+      return;
+    }
+    const talk = ev.target.closest && ev.target.closest('#fvTalk');
+    if (talk) {
+      fvTalkBack = talk.checked;
+      return;
+    }
+  }
 
   function formatTime(s) {
     const m = Math.floor(s / 60).toString().padStart(2, '0');
@@ -718,6 +906,10 @@ function createPanel() {
         weekMinutes: container.querySelector('#weekMinutes'),
       };
 
+      // Voice: capture the audio element and attach the click handler for click-to-talk.
+      fvAudioEl = container.querySelector('#fvAudio');
+      container.addEventListener('click', onFvClick);
+
       el.ring.style.strokeDasharray = String(RING_CIRCUMFERENCE);
 
       el.modeTabs.forEach((tab) => tab.addEventListener('click', () => setMode(tab.dataset.mode)));
@@ -793,6 +985,10 @@ function createPanel() {
       clearInterval(tickHandle);
       clearInterval(presenceHandle);
       clearInterval(activePollHandle);
+      // Voice: stop recording if in progress and remove listener.
+      if (fvRecording) fvStop();
+      if (container && onFvClick) container.removeEventListener('click', onFvClick);
+      fvAudioEl = null;
       if (running) clearPresence();
       // The embedded panel holds an AbortController and three listeners of its own. Not
       // unmounting it leaks a fetch that resolves into a dead DOM.

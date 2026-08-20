@@ -1,0 +1,4 @@
+/* life — merged Lifestyle + Exercise + Wellbeing panel.
+   Reuses the money panel's tab styling (same class names). */
+/* The .mny-tab styles from money.css are shared — no duplicate definitions
+   here. Both panels use the same class name for tabs. */

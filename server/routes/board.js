@@ -87,7 +87,7 @@ db.migrate('board', [
 // quietly resolved.
 function summary() {
   const items = db.prepare(`
-    SELECT source, project, ref, kind, title, severity, status, status_basis, section
+    SELECT source, project, ref, kind, title, severity, status, status_basis, section, first_seen
       FROM board_items
      ORDER BY project, CASE severity WHEN 'P1' THEN 1 WHEN 'P2' THEN 2 WHEN 'P3' THEN 3 ELSE 9 END, ref`).all();
 
@@ -174,5 +174,18 @@ router.post('/refresh', express.json(), (req, res) => {
   }
 });
 
+// Exported so activity.js can call the same query directly instead of reading board_items
+// itself — the module contract's "call the API", without a loopback HTTP round-trip.
+function recentChanges(hours) {
+  return db.prepare(`
+    SELECT source, project, ref, kind, title, status, last_seen, first_seen
+      FROM board_items
+     WHERE datetime(last_seen) >= datetime('now','localtime', ?)
+     ORDER BY last_seen DESC
+     LIMIT 50
+  `).all(`-${hours} hours`);
+}
+
 module.exports = router;
 module.exports.summary = summary;
+module.exports.recentChanges = recentChanges;

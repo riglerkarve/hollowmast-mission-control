@@ -48,6 +48,17 @@ const TEMPLATE = `
         <button id="skipBtn" class="btn">Skip</button>
       </div>
 
+      <label class="focus-contributor">Record this timer as
+        <select id="focusSessionActor">
+          <option value="you" selected>You</option>
+          <option value="claude">Claude</option>
+          <option value="codex">Codex</option>
+          <option value="ollama">Ollama</option>
+          <option value="scribe">Scribe</option>
+        </select>
+      </label>
+      <p class="focus-contributor-note">This is an explicit contributor declaration, not a model label. Exact models and cost come only from telemetry.</p>
+
       <div class="session-count">
         Sessions today: <span id="sessionCount">0</span>
       </div>
@@ -56,6 +67,12 @@ const TEMPLATE = `
     <section class="card" id="focusNowCard">
       <h2>What are you working on?</h2>
       <div id="focusNow"></div>
+    </section>
+
+    <section class="card focus-active-card">
+      <h2>Active Focus</h2>
+      <p class="focus-active-lede">Live heartbeats only; a completed session is not treated as current work.</p>
+      <div id="focusActive" aria-live="polite">Checking active contributors…</div>
     </section>
 
     <div id="focusSteering"></div>
@@ -83,7 +100,8 @@ const TEMPLATE = `
 
     <section class="card focus-ledger-card">
       <div class="focus-ledger-head"><h2>Time ledger</h2>
-        <label>Window <select id="focusLedgerRange"><option value="7">7 days</option><option value="30" selected>30 days</option><option value="90">90 days</option></select></label>
+        <div><label>Window <select id="focusLedgerRange"><option value="7">7 days</option><option value="30" selected>30 days</option><option value="90">90 days</option></select></label>
+          <a class="focus-ledger-export" id="focusLedgerExport" href="/api/sessions/ledger/report.csv?days=30">Download allocation CSV</a></div>
       </div>
       <p class="focus-ledger-lede">Work time by contributor and project. Unknown and unlinked time stays visible rather than being assigned by guesswork.</p>
       <div id="focusLedger" aria-live="polite">Loading time ledger…</div>
@@ -132,10 +150,16 @@ function createPanel() {
   let tickHandle = null;
   let activeTaskId = null;
   let activeTaskTitle = '';
+  let runningTodoId = null;
   let container = null;
+  let presenceHandle = null;
+  let activePollHandle = null;
   let onBacklogFocus = null;
   let onBacklogChanged = null;
   let ledgerDays = 30;
+  let sessionActor = 'you';
+  let openBacklogItems = [];
+  let linkTargetsState = 'loading';
 
   function formatTime(s) {
     const m = Math.floor(s / 60).toString().padStart(2, '0');
@@ -155,6 +179,7 @@ function createPanel() {
     el.startPauseBtn.textContent = running ? 'Pause' : 'Start';
     const modeColors = { work: '#d9663d', short: '#4d8b6f', long: '#3f6fa6' };
     el.ring.style.stroke = modeColors[mode];
+    if (el.focusSessionActor) el.focusSessionActor.disabled = running;
     document.title = running ? `${formatTime(secondsLeft)} · Focus Flow` : 'Mission Control';
   }
 
@@ -172,10 +197,10 @@ function createPanel() {
   function renderFocusNow() {
     if (!el || !el.focusNow) return;
     el.focusNow.innerHTML = activeTaskId
-      ? `<p class="focus-now-has">Recording against
+      ? `<p class="focus-now-has">Recording ${escapeHtml(actorLabel(sessionActor))} against
            <b class="focus-now-title">${escapeHtml(activeTaskTitle || activeTaskId)}</b>
            <button type="button" class="btn focus-now-clear">Clear</button></p>`
-      : `<p class="empty-hint">Nothing selected. Press <b>Focus</b> on any item below and
+      : `<p class="empty-hint">No backlog item selected for ${escapeHtml(actorLabel(sessionActor))}. Press <b>Focus</b> on any item below and
            the timer will record against it. A session with nothing selected still counts —
            it just records no subject.</p>`;
     const clear = el.focusNow.querySelector('.focus-now-clear');
@@ -190,6 +215,7 @@ function createPanel() {
   // Pressing Focus on the item already selected clears it, so the same button is both
   // set and unset and there is no state you can get stuck in.
   function setActiveTask(id, title) {
+    if (running) return;
     if (id === null || activeTaskId === id) {
       activeTaskId = null;
       activeTaskTitle = '';
@@ -215,6 +241,39 @@ function createPanel() {
     }
   }
 
+  function renderActive(data) {
+    if (!container || !el.focusActive) return;
+    const active = data.active || [];
+    el.focusActive.innerHTML = active.length
+      ? `<ul class="focus-active-list">${active.map((row) => `<li><b>${escapeHtml(actorLabel(row.actor))}</b><span>${escapeHtml(row.todoTitle ? `${row.project || 'Unprojected'} — ${row.todoTitle}` : 'No backlog item selected')}</span><small>Started ${escapeHtml(row.startedAt)} · heartbeat ${escapeHtml(row.lastSeenAt)}</small></li>`).join('')}</ul>`
+      : `<p class="focus-ledger-empty">${escapeHtml(data.recordedNothing || 'No active contributors reported.')}</p>`;
+  }
+
+  function showActiveUnavailable() {
+    if (container && el.focusActive) el.focusActive.innerHTML = '<p class="focus-ledger-error">Could not read active Focus presence. This is not a report that nobody is working.</p>';
+  }
+
+  async function loadActive() {
+    renderActive(await api('/sessions/active'));
+  }
+
+  async function sendPresence() {
+    try {
+      await api('/sessions/active', {
+        method: 'PUT', body: JSON.stringify({ todoId: runningTodoId }), headers: { 'X-MC-By': sessionActor },
+      });
+      loadActive().catch(showActiveUnavailable);
+    } catch {
+      showActiveUnavailable();
+    }
+  }
+
+  function clearPresence() {
+    api('/sessions/active', { method: 'DELETE', headers: { 'X-MC-By': sessionActor } })
+      .then(() => loadActive())
+      .catch(showActiveUnavailable);
+  }
+
   async function loadStats() {
     setStatsState('loading', 'Loading focus history…');
     const [summary, daily] = await Promise.all([
@@ -231,6 +290,17 @@ function createPanel() {
     const hours = Math.floor(n / 60);
     const rest = n % 60;
     return hours ? `${hours}h ${rest}m` : `${rest}m`;
+  }
+
+  function formatUsd(microusd) {
+    if (microusd === null || microusd === undefined || microusd === '') return 'Not recorded';
+    const dollars = Number(microusd) / 1000000;
+    return Number.isFinite(dollars) ? `$${dollars.toFixed(2)}` : 'Not recorded';
+  }
+
+  function coverage(part, total) {
+    if (!total) return 'No recorded sessions';
+    return `${part} of ${total} (${Math.round((part / total) * 100)}%)`;
   }
 
   function actorLabel(actor, model) {
@@ -251,12 +321,13 @@ function createPanel() {
     return out;
   }
 
-  function bars(rows, days) {
+  function bars(rows, days, filter = {}) {
     const byDay = new Map(rows.map((row) => [row.day, Number(row.minutes) || 0]));
     const max = Math.max(1, ...byDay.values());
     return `<div class="focus-ledger-bars" style="grid-template-columns:repeat(${days}, minmax(2px, 1fr))" aria-label="${days}-day activity trend">${daysInWindow(days).map((day) => {
       const minutes = byDay.get(day) || 0;
-      return `<span title="${day}: ${formatMinutes(minutes)}" style="height:${Math.max(minutes ? 8 : 2, Math.round((minutes / max) * 100))}%"></span>`;
+      const data = [filter.actor ? `data-ledger-actor="${escapeHtml(filter.actor)}"` : '', filter.project ? `data-ledger-project="${escapeHtml(filter.project)}"` : ''].filter(Boolean).join(' ');
+      return `<button type="button" class="focus-ledger-bar" data-ledger-day="${day}" ${data} title="Show ${day}: ${formatMinutes(minutes)}" aria-label="Show ${day}: ${formatMinutes(minutes)}" style="height:${Math.max(minutes ? 8 : 2, Math.round((minutes / max) * 100))}%"></button>`;
     }).join('')}</div>`;
   }
 
@@ -269,38 +340,57 @@ function createPanel() {
     const models = data.models || [];
     const unlinked = data.unlinked || [];
     const missing = data.missing || {};
+    const quality = data.quality || {};
+    const targetByProject = new Map((data.targets || []).map((target) => [target.project, target]));
     const actorRows = actors.length
       ? `<ul class="focus-ledger-actors">${actors.map((row) => `<li>
           <b>${escapeHtml(actorLabel(row.actor, row.model))}</b><strong>${formatMinutes(row.minutes)}</strong>
-          <span>${row.sessions} work session${row.sessions === 1 ? '' : 's'}${row.unlinkedMinutes ? ` · ${formatMinutes(row.unlinkedMinutes)} not linked to an item` : ''}</span>
+          <span>${row.sessions} work session${row.sessions === 1 ? '' : 's'} · ${formatUsd(row.costMicrousd)}${row.unlinkedMinutes ? ` · ${formatMinutes(row.unlinkedMinutes)} not linked to an item` : ''}</span>
         </li>`).join('')}</ul>`
       : `<p class="focus-ledger-empty">${escapeHtml(data.recordedNothing || 'No work sessions in this window.')}</p>`;
     const projectRows = projects.length
-      ? `<div class="focus-ledger-projects"><h3>By project</h3><table><thead><tr><th>Project</th><th>Time</th><th>Sessions</th><th>Contributors</th></tr></thead><tbody>
-          ${projects.map((row) => `<tr><td>${escapeHtml(row.project === 'unassigned' ? 'Linked item without project' : row.project)}</td><td>${formatMinutes(row.minutes)}</td><td>${row.sessions}</td><td>${row.contributors}</td></tr>`).join('')}
+      ? `<div class="focus-ledger-projects"><h3>By project</h3><table><thead><tr><th>Project</th><th>Time</th><th>Sessions</th><th>Contributors</th><th>Weekly target</th></tr></thead><tbody>
+          ${projects.map((row) => {
+            const name = row.project === 'unassigned' ? 'Linked item without project' : row.project;
+            const target = targetByProject.get(row.project);
+            const targetMinutes = target ? target.weeklyTargetMinutes : '';
+            const targetText = target ? `${formatMinutes(targetMinutes)} / week` : 'Not set';
+            const targetControl = row.project === 'unassigned'
+              ? 'Needs a project label'
+              : `<label class="focus-target-control"><span>${escapeHtml(targetText)}</span><input type="number" min="1" max="10080" step="1" value="${targetMinutes}" placeholder="Minutes" data-target-project="${escapeHtml(row.project)}" aria-label="Weekly minutes target for ${escapeHtml(name)}"><button type="button" data-save-target="${escapeHtml(row.project)}">Save</button>${target ? `<button type="button" data-clear-target="${escapeHtml(row.project)}">Clear</button>` : ''}</label>`;
+            return `<tr><td>${escapeHtml(name)}</td><td>${formatMinutes(row.minutes)} · ${formatUsd(row.costMicrousd)}</td><td>${row.sessions}</td><td>${row.contributors}</td><td>${targetControl}</td></tr>`;
+          }).join('')}
         </tbody></table></div>`
       : '<p class="focus-ledger-empty">No work session is linked to a project in this window.</p>';
     const timeline = actors.length
-      ? `<div class="focus-ledger-timeline"><h3>Contributor timeline</h3>${[...new Set(actorDays.map((r) => r.actor))].map((actor) => `<div class="focus-ledger-lane"><b>${escapeHtml(actorLabel(actor))}</b>${bars(actorDays.filter((r) => r.actor === actor), data.days)}</div>`).join('')}</div>`
+      ? `<div class="focus-ledger-timeline"><h3>Contributor timeline</h3><p>Choose a day to inspect its recorded sessions.</p>${[...new Set(actorDays.map((r) => r.actor))].map((actor) => `<div class="focus-ledger-lane"><b>${escapeHtml(actorLabel(actor))}</b>${bars(actorDays.filter((r) => r.actor === actor), data.days, { actor })}</div>`).join('')}</div>`
       : '';
     const projectTrends = projects.length
-      ? `<div class="focus-ledger-trends"><h3>Project trends</h3>${projects.map((row) => `<div class="focus-ledger-lane"><b>${escapeHtml(row.project === 'unassigned' ? 'Linked item without project' : row.project)}</b>${bars(projectDays.filter((d) => d.project === row.project), data.days)}</div>`).join('')}</div>`
+      ? `<div class="focus-ledger-trends"><h3>Project trends</h3>${projects.map((row) => `<div class="focus-ledger-lane"><b>${escapeHtml(row.project === 'unassigned' ? 'Linked item without project' : row.project)}</b>${bars(projectDays.filter((d) => d.project === row.project), data.days, { project: row.project })}</div>`).join('')}</div>`
       : '';
     const modelRows = models.length
-      ? `<div class="focus-ledger-models"><h3>Model evidence</h3><table><thead><tr><th>Model</th><th>Time</th><th>Sessions</th></tr></thead><tbody>${models.map((row) => `<tr><td>${escapeHtml(actorLabel(row.actor, row.model))}</td><td>${formatMinutes(row.minutes)}</td><td>${row.sessions}</td></tr>`).join('')}</tbody></table></div>`
+      ? `<div class="focus-ledger-models"><h3>Model evidence</h3><table><thead><tr><th>Model</th><th>Time</th><th>Sessions</th><th>USD cost</th></tr></thead><tbody>${models.map((row) => `<tr><td>${escapeHtml(actorLabel(row.actor, row.model))}</td><td>${formatMinutes(row.minutes)}</td><td>${row.sessions}</td><td>${formatUsd(row.costMicrousd)}</td></tr>`).join('')}</tbody></table></div>`
       : '<p class="focus-ledger-empty">No session in this window carries an unambiguous model label.</p>';
     const queueRows = unlinked.length
-      ? `<div class="focus-ledger-queue"><h3>Time without project evidence <span>${unlinked.length}</span></h3><p>These records need a direct backlog or telemetry link before they can appear under a project.</p><table><thead><tr><th>Completed</th><th>Contributor / model</th><th>Time</th></tr></thead><tbody>${unlinked.slice(0, 20).map((row) => `<tr><td>${escapeHtml(row.completedAt)}</td><td>${escapeHtml(actorLabel(row.actor, row.model))}</td><td>${formatMinutes(row.minutes)}</td></tr>`).join('')}</tbody></table>${unlinked.length > 20 ? `<p>Showing the latest 20 of ${unlinked.length}; the total remains unallocated.</p>` : ''}</div>`
+      ? `<div class="focus-ledger-queue"><h3>Time without project evidence <span>${unlinked.length}</span></h3><p>Selecting a backlog item here records a manual link by the current contributor. It does not infer a project from time, model, cost, or files.</p><table><thead><tr><th>Completed</th><th>Contributor / model</th><th>Time</th><th>Direct link</th></tr></thead><tbody>${unlinked.slice(0, 20).map((row) => `<tr><td>${escapeHtml(row.completedAt)}</td><td>${escapeHtml(actorLabel(row.actor, row.model))}</td><td>${formatMinutes(row.minutes)} · ${formatUsd(row.costMicrousd)}</td><td><label class="focus-link-control"><select data-link-target="${row.id}" aria-label="Backlog item for this session"><option value="">Choose backlog item…</option></select><button type="button" data-link-session="${row.id}">Link</button></label></td></tr>`).join('')}</tbody></table>${unlinked.length > 20 ? `<p>Showing the latest 20 of ${unlinked.length}; the total remains unallocated.</p>` : ''}</div>`
       : '<p class="focus-ledger-empty">Every recorded work session in this window has direct project evidence.</p>';
+    const qualityRows = [
+      ['Project evidence', coverage(quality.linkedSessions || 0, quality.sessions || 0)],
+      ['Contributor attribution', coverage(quality.attributedSessions || 0, quality.sessions || 0)],
+      ['Exact model telemetry', coverage(quality.modelKnownSessions || 0, quality.sessions || 0)],
+      ['Source cost telemetry', coverage(quality.costKnownSessions || 0, quality.sessions || 0)],
+    ];
     const gaps = [
       missing.unlinkedMinutes ? `${formatMinutes(missing.unlinkedMinutes)} has no linked backlog item` : null,
       missing.unprojectedMinutes ? `${formatMinutes(missing.unprojectedMinutes)} links to an item without a project` : null,
       missing.unattributedMinutes ? `${formatMinutes(missing.unattributedMinutes)} has no contributor attribution` : null,
     ].filter(Boolean);
     el.focusLedger.innerHTML = `
-      <h3>People and models</h3>${actorRows}${timeline}${projectRows}${projectTrends}${modelRows}${queueRows}
+      <div class="focus-ledger-quality"><h3>Evidence coverage</h3><ul>${qualityRows.map(([label, value]) => `<li><b>${label}</b><span>${value}</span></li>`).join('')}</ul></div>
+      <h3>People and models</h3>${actorRows}${timeline}${projectRows}${projectTrends}${modelRows}${queueRows}<div id="focusLedgerDrilldown"></div>
       <p class="focus-ledger-note">${gaps.length ? `Not allocated by evidence: ${escapeHtml(gaps.join('; '))}.` : 'Every recorded work session in this window has a contributor and a linked project.'}</p>
       <p class="focus-ledger-basis">${escapeHtml(data.note || '')}</p>`;
+    populateLinkTargets();
   }
 
   function showLedgerUnavailable() {
@@ -309,7 +399,117 @@ function createPanel() {
   }
 
   async function loadLedger() {
-    renderLedger(await api(`/sessions/ledger?days=${ledgerDays}`));
+    const data = await api(`/sessions/ledger?days=${ledgerDays}`);
+    if (el.focusLedgerExport) el.focusLedgerExport.href = `/api/sessions/ledger/report.csv?days=${data.days}`;
+    renderLedger(data);
+  }
+
+  function populateLinkTargets() {
+    if (!el.focusLedger) return;
+    const selects = el.focusLedger.querySelectorAll('[data-link-target]');
+    for (const select of selects) {
+      if (linkTargetsState === 'loading') {
+        select.innerHTML = '<option value="">Loading open backlog items…</option>';
+        select.disabled = true;
+      } else if (linkTargetsState === 'error') {
+        select.innerHTML = '<option value="">Backlog choices unavailable</option>';
+        select.disabled = true;
+      } else {
+        select.innerHTML = `<option value="">Choose backlog item…</option>${openBacklogItems.map((item) => `<option value="${escapeHtml(item.id)}">${escapeHtml(item.project ? `${item.project} — ${item.title}` : item.title)}</option>`).join('')}`;
+        select.disabled = !openBacklogItems.length;
+      }
+    }
+  }
+
+  async function loadLinkTargets() {
+    linkTargetsState = 'loading';
+    try {
+      const body = await api('/todo/items?status=open');
+      openBacklogItems = body.items || [];
+      linkTargetsState = 'ready';
+    } catch {
+      // The queue remains a clear evidence gap if its repair choices cannot be read.
+      linkTargetsState = 'error';
+    }
+    populateLinkTargets();
+  }
+
+  function renderLedgerDrilldown(state, content) {
+    const target = el.focusLedger && el.focusLedger.querySelector('#focusLedgerDrilldown');
+    if (target) target.innerHTML = `<div class="focus-ledger-drilldown" data-state="${state}">${content}</div>`;
+  }
+
+  async function showLedgerSessions(button) {
+    const params = new URLSearchParams({ day: button.dataset.ledgerDay });
+    if (button.dataset.ledgerActor) params.set('actor', button.dataset.ledgerActor);
+    if (button.dataset.ledgerProject) params.set('project', button.dataset.ledgerProject);
+    renderLedgerDrilldown('loading', '<p>Loading recorded sessions…</p>');
+    try {
+      const body = await api(`/sessions/ledger/sessions?${params}`);
+      const rows = body.sessions || [];
+      const title = button.dataset.ledgerProject
+        ? `${button.dataset.ledgerDay} · ${button.dataset.ledgerProject}`
+        : `${button.dataset.ledgerDay} · ${actorLabel(button.dataset.ledgerActor)}`;
+      renderLedgerDrilldown(rows.length ? 'ready' : 'empty', rows.length
+        ? `<h3>Recorded sessions — ${escapeHtml(title)}</h3><table><thead><tr><th>Completed</th><th>Contributor / model</th><th>Time</th><th>Project evidence</th><th>USD cost</th></tr></thead><tbody>${rows.map((row) => `<tr><td>${escapeHtml(row.completedAt)}</td><td>${escapeHtml(actorLabel(row.actor, row.model))}</td><td>${formatMinutes(row.minutes)}</td><td>${escapeHtml(row.todoTitle ? `${row.project}: ${row.todoTitle} (${row.todoLinkSource || 'legacy'} link)` : 'No project link')}</td><td>${formatUsd(row.costMicrousd)}</td></tr>`).join('')}</tbody></table>`
+        : `<p>${escapeHtml(body.recordedNothing || 'No recorded sessions matched this bar.')}</p>`);
+    } catch {
+      renderLedgerDrilldown('error', '<p>Could not read this day’s sessions. The bar remains an aggregate; no empty result is being claimed.</p>');
+    }
+  }
+
+  async function saveProjectTarget(button) {
+    const row = button.closest('tr');
+    const input = row && row.querySelector('[data-target-project]');
+    if (!input || !input.value) return;
+    button.disabled = true;
+    try {
+      await api(`/sessions/ledger/targets/${encodeURIComponent(button.dataset.saveTarget)}`, {
+        method: 'PUT', body: JSON.stringify({ weeklyTargetMinutes: Number(input.value) }),
+      });
+      await loadLedger();
+    } catch {
+      button.disabled = false;
+      button.textContent = 'Could not save';
+    }
+  }
+
+  async function clearProjectTarget(button) {
+    button.disabled = true;
+    try {
+      await api(`/sessions/ledger/targets/${encodeURIComponent(button.dataset.clearTarget)}`, { method: 'DELETE' });
+      await loadLedger();
+    } catch {
+      button.disabled = false;
+      button.textContent = 'Could not clear';
+    }
+  }
+
+  async function linkUnallocatedSession(button) {
+    const row = button.closest('tr');
+    const select = row && row.querySelector('[data-link-target]');
+    if (!select || !select.value) return;
+    button.disabled = true;
+    try {
+      await api(`/sessions/${encodeURIComponent(button.dataset.linkSession)}/link`, {
+        method: 'PATCH', body: JSON.stringify({ todoId: select.value }), headers: { 'X-MC-By': sessionActor },
+      });
+      await loadLedger();
+    } catch {
+      button.disabled = false;
+      button.textContent = 'Could not link';
+    }
+  }
+
+  function onLedgerClick(event) {
+    const bar = event.target.closest('[data-ledger-day]');
+    if (bar) { showLedgerSessions(bar); return; }
+    const link = event.target.closest('[data-link-session]');
+    if (link) { linkUnallocatedSession(link); return; }
+    const saveTarget = event.target.closest('[data-save-target]');
+    if (saveTarget) { saveProjectTarget(saveTarget); return; }
+    const clearTarget = event.target.closest('[data-clear-target]');
+    if (clearTarget) clearProjectTarget(clearTarget);
   }
 
   function renderWeekChart(daily) {
@@ -356,6 +556,9 @@ function createPanel() {
     secondsLeft = DURATIONS[mode];
     running = false;
     clearInterval(tickHandle);
+    clearInterval(presenceHandle);
+    presenceHandle = null;
+    clearPresence();
     el.modeTabs.forEach((tab) => tab.classList.toggle('active', tab.dataset.mode === newMode));
     renderTimer();
   }
@@ -372,6 +575,9 @@ function createPanel() {
   async function completeSession() {
     running = false;
     clearInterval(tickHandle);
+    clearInterval(presenceHandle);
+    presenceHandle = null;
+    clearPresence();
     secondsLeft = 0;
     renderTimer();
 
@@ -383,7 +589,8 @@ function createPanel() {
           // todoId, not taskId. activeTaskId now holds a backlog id ('49', 'M3'), and the
           // old field expects an INTEGER tasks.id -- sending it there would silently store
           // null and the session would record no subject at all.
-          body: JSON.stringify({ todoId: activeTaskId, kind: 'work', durationMinutes: DURATIONS.work / 60 }),
+          body: JSON.stringify({ todoId: runningTodoId, kind: 'work', durationMinutes: DURATIONS.work / 60 }),
+          headers: { 'X-MC-By': sessionActor },
         });
         sessionRecorded = true;
       } catch {
@@ -437,9 +644,15 @@ function createPanel() {
   function startPause() {
     running = !running;
     if (running) {
+      runningTodoId = activeTaskId;
       tickHandle = setInterval(tick, 1000);
+      sendPresence();
+      presenceHandle = setInterval(sendPresence, 60000);
     } else {
       clearInterval(tickHandle);
+      clearInterval(presenceHandle);
+      presenceHandle = null;
+      clearPresence();
     }
     renderTimer();
   }
@@ -458,10 +671,13 @@ function createPanel() {
         sessionCount: container.querySelector('#sessionCount'),
         streakCount: container.querySelector('#streakCount'),
         focusNow: container.querySelector('#focusNow'),
+        focusActive: container.querySelector('#focusActive'),
         focusBacklog: container.querySelector('#focusBacklog'),
         focusSteering: container.querySelector('#focusSteering'),
         focusLedger: container.querySelector('#focusLedger'),
         focusLedgerRange: container.querySelector('#focusLedgerRange'),
+        focusLedgerExport: container.querySelector('#focusLedgerExport'),
+        focusSessionActor: container.querySelector('#focusSessionActor'),
         focusStatsState: container.querySelector('#focusStatsState'),
         focusStatsRetry: container.querySelector('#focusStatsRetry'),
         celebrateOverlay: container.querySelector('#celebrateOverlay'),
@@ -475,7 +691,12 @@ function createPanel() {
 
       el.modeTabs.forEach((tab) => tab.addEventListener('click', () => setMode(tab.dataset.mode)));
       el.startPauseBtn.addEventListener('click', startPause);
+      el.focusSessionActor.addEventListener('change', () => {
+        sessionActor = el.focusSessionActor.value;
+        renderFocusNow();
+      });
       el.focusStatsRetry.addEventListener('click', () => loadStats().catch(showStatsUnavailable));
+      el.focusLedger.addEventListener('click', onLedgerClick);
       el.focusLedgerRange.addEventListener('change', () => {
         ledgerDays = Number(el.focusLedgerRange.value) || 30;
         loadLedger().catch(showLedgerUnavailable);
@@ -483,12 +704,18 @@ function createPanel() {
       el.resetBtn.addEventListener('click', () => {
         running = false;
         clearInterval(tickHandle);
+        clearInterval(presenceHandle);
+        presenceHandle = null;
+        clearPresence();
         secondsLeft = DURATIONS[mode];
         renderTimer();
       });
       el.skipBtn.addEventListener('click', () => {
         running = false;
         clearInterval(tickHandle);
+        clearInterval(presenceHandle);
+        presenceHandle = null;
+        clearPresence();
         secondsLeft = 1;
         tick();
       });
@@ -518,16 +745,23 @@ function createPanel() {
       renderFocusNow();
       loadStats().catch(showStatsUnavailable);
       loadLedger().catch(showLedgerUnavailable);
+      loadLinkTargets();
+      loadActive().catch(showActiveUnavailable);
+      activePollHandle = setInterval(() => loadActive().catch(showActiveUnavailable), 30000);
     },
 
     unmount() {
       clearInterval(tickHandle);
+      clearInterval(presenceHandle);
+      clearInterval(activePollHandle);
+      if (running) clearPresence();
       // The embedded panel holds an AbortController and three listeners of its own. Not
       // unmounting it leaks a fetch that resolves into a dead DOM.
       backlogPanel.unmount();
       steeringCard.unmount();
       if (container && onBacklogFocus) container.removeEventListener('td:focus', onBacklogFocus);
       if (container && onBacklogChanged) container.removeEventListener('td:changed', onBacklogChanged);
+      if (el.focusLedger) el.focusLedger.removeEventListener('click', onLedgerClick);
       onBacklogFocus = onBacklogChanged = null;
       container = null;
       document.title = 'Mission Control';

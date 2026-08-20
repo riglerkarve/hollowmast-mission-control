@@ -87,6 +87,11 @@ function main() {
         // other completed_at in this table, which SQLite writes with 'localtime'.
         at: new Date(s.lastTs).toLocaleString('sv-SE').replace('T', ' '),
         model: singleModel(s.byModel),
+        // The telemetry owner reports USD cost for the complete session. Keep that exact
+        // source figure as an integer micro-USD; a missing cost remains null, while a
+        // recorded $0 is a real recorded zero.
+        costMicrousd: Number.isFinite(Number(s.totals && s.totals.cost))
+          ? Math.round(Number(s.totals.cost) * 1000000) : null,
         msgs: s.msgs || 0,
         tools: s.toolCalls || 0,
       };
@@ -111,17 +116,18 @@ function main() {
   // changed and adds the new ones; it can never double-count, which matters because this is
   // the sort of thing that gets run from a scheduled task later.
   const up = db.prepare(`
-    INSERT INTO focus_sessions (kind, duration_minutes, completed_at, by_whom, source_key, model)
-    VALUES ('work', ?, ?, 'claude', ?, ?)
+    INSERT INTO focus_sessions (kind, duration_minutes, completed_at, by_whom, source_key, model, cost_microusd)
+    VALUES ('work', ?, ?, 'claude', ?, ?, ?)
     ON CONFLICT(source_key) DO UPDATE SET
       duration_minutes = excluded.duration_minutes,
       completed_at     = excluded.completed_at,
-      model            = excluded.model
+      model            = excluded.model,
+      cost_microusd    = excluded.cost_microusd
   `);
 
   db.exec('BEGIN');
   try {
-    for (const r of rows) up.run(r.minutes, r.at, r.key, r.model);
+    for (const r of rows) up.run(r.minutes, r.at, r.key, r.model, r.costMicrousd);
     db.exec('COMMIT');
   } catch (err) {
     db.exec('ROLLBACK');

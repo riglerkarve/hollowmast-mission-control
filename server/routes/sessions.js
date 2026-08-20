@@ -62,6 +62,52 @@ db.migrate('sessions', [
       CREATE INDEX idx_focus_model ON focus_sessions(model);
     `);
   },
+
+  // v5 — a link chosen while a timer is running and a later manual correction are both
+  // direct evidence, but they are not the same provenance. Keep the distinction on the
+  // session itself so a project total can always say why it contains a row. Cost is stored
+  // in integer micro-USD because the telemetry source reports USD; it is nullable rather
+  // than treating a missing price as zero.
+  (d) => {
+    d.exec(`
+      ALTER TABLE focus_sessions ADD COLUMN todo_link_source TEXT CHECK(todo_link_source IN ('timer', 'manual', 'telemetry', 'legacy'));
+      ALTER TABLE focus_sessions ADD COLUMN todo_linked_by TEXT;
+      ALTER TABLE focus_sessions ADD COLUMN todo_linked_at TEXT;
+      ALTER TABLE focus_sessions ADD COLUMN cost_microusd INTEGER CHECK(cost_microusd IS NULL OR cost_microusd >= 0);
+      UPDATE focus_sessions SET todo_link_source = 'legacy'
+       WHERE todo_id IS NOT NULL AND todo_link_source IS NULL;
+      CREATE INDEX idx_focus_link_source ON focus_sessions(todo_link_source);
+    `);
+  },
+
+  // v6 — a project time target belongs to Focus, because Focus owns actual time and the
+  // comparison. The project name is verified on write against the canonical backlog;
+  // this table deliberately does not copy a project list.
+  (d) => {
+    d.exec(`
+      CREATE TABLE focus_project_targets (
+        project TEXT PRIMARY KEY,
+        weekly_target_minutes INTEGER NOT NULL CHECK(weekly_target_minutes > 0 AND weekly_target_minutes <= 10080),
+        set_by_whom TEXT NOT NULL DEFAULT 'unknown',
+        set_at TEXT NOT NULL DEFAULT (datetime('now', 'localtime'))
+      );
+    `);
+  },
+
+  // v7 — presence is intentionally separate from completed sessions. A timer that is
+  // presently running is not a completed work record, and treating a stale browser tab as
+  // active would be equally misleading. Each actor heartbeats its own row and reads expire
+  // it after 90 seconds.
+  (d) => {
+    d.exec(`
+      CREATE TABLE focus_active_sessions (
+        actor TEXT PRIMARY KEY,
+        todo_id TEXT REFERENCES todo_items(id) ON DELETE SET NULL,
+        started_at TEXT NOT NULL DEFAULT (datetime('now', 'localtime')),
+        last_seen_at TEXT NOT NULL DEFAULT (datetime('now', 'localtime'))
+      );
+    `);
+  },
 ]);
 
 // THE ONE PLACE THE FILTER IS WRITTEN. Exported and reused by stats.js rather than retyped
@@ -113,8 +159,11 @@ router.post('/', (req, res) => {
 
   // req.by, never a guess. A request that does not say who it is is recorded 'unknown'.
   const info = db
-    .prepare('INSERT INTO focus_sessions (task_id, todo_id, kind, duration_minutes, by_whom) VALUES (?, ?, ?, ?, ?)')
-    .run(resolvedTaskId, resolvedTodoId, kind, Math.round(minutes), req.by);
+    .prepare(`INSERT INTO focus_sessions
+      (task_id, todo_id, kind, duration_minutes, by_whom, todo_link_source, todo_linked_by, todo_linked_at)
+      VALUES (?, ?, ?, ?, ?, ?, ?, CASE WHEN ? IS NULL THEN NULL ELSE datetime('now','localtime') END)`)
+    .run(resolvedTaskId, resolvedTodoId, kind, Math.round(minutes), req.by,
+      resolvedTodoId ? 'timer' : null, resolvedTodoId ? req.by : null, resolvedTodoId);
 
   const row = db.prepare('SELECT * FROM focus_sessions WHERE id = ?').get(info.lastInsertRowid);
   res.status(201).json({
@@ -125,8 +174,102 @@ router.post('/', (req, res) => {
     durationMinutes: row.duration_minutes,
     completedAt: row.completed_at,
     byWhom: row.by_whom,
+    todoLinkSource: row.todo_link_source,
     label: label || undefined,
   });
+});
+
+// A missing project link is a visible data-quality gap, not a prompt for an algorithm to
+// guess. This is the deliberate repair path: a person selects the backlog item they know
+// the recorded session belongs to, and the writer and time of that decision are retained.
+// Existing direct links are immutable here; replacing one would erase evidence rather than
+// correct a gap.
+router.patch('/:id/link', (req, res) => {
+  const row = db.prepare('SELECT id, todo_id FROM focus_sessions WHERE id = ?').get(Number(req.params.id));
+  if (!row) return res.status(404).json({ error: 'no such focus session' });
+  if (row.todo_id != null) return res.status(409).json({ error: 'session already has direct project evidence' });
+
+  const todoId = String((req.body || {}).todoId || '').trim();
+  if (!todoId) return res.status(400).json({ error: 'todoId is required' });
+  const item = db.prepare('SELECT id, title, project FROM todo_items WHERE id = ?').get(todoId);
+  if (!item) return res.status(400).json({ error: `no backlog item "${todoId}"` });
+
+  db.prepare(`UPDATE focus_sessions
+                 SET todo_id = ?, todo_link_source = 'manual', todo_linked_by = ?,
+                     todo_linked_at = datetime('now','localtime')
+               WHERE id = ? AND todo_id IS NULL`)
+    .run(item.id, req.by, row.id);
+  res.json({ id: row.id, todoId: item.id, title: item.title, project: item.project || null, linkSource: 'manual', linkedBy: req.by });
+});
+
+// Presence is a live heartbeat, not an inference from a previous completed session.
+// Unknown actors are refused: a row labelled unknown would be a claim that somebody is
+// working without identifying them, which is less useful than an explicit absence.
+router.get('/active', (req, res) => {
+  const active = db.prepare(`
+    SELECT a.actor, a.started_at AS startedAt, a.last_seen_at AS lastSeenAt,
+           a.todo_id AS todoId, t.title AS todoTitle, t.project AS project
+      FROM focus_active_sessions a
+      LEFT JOIN todo_items t ON t.id = a.todo_id
+     WHERE datetime(a.last_seen_at) >= datetime('now','localtime','-90 seconds')
+     ORDER BY a.started_at ASC, a.actor ASC
+  `).all();
+  res.json({ active, recordedNothing: !active.length
+    ? 'No contributor has sent a Focus heartbeat in the last 90 seconds.' : undefined });
+});
+
+router.put('/active', (req, res) => {
+  if (req.by === 'unknown') return res.status(400).json({ error: 'active presence requires an explicit contributor' });
+  const rawTodoId = (req.body || {}).todoId;
+  let todoId = null;
+  if (rawTodoId != null && String(rawTodoId).trim() !== '') {
+    const item = db.prepare('SELECT id FROM todo_items WHERE id = ?').get(String(rawTodoId));
+    if (!item) return res.status(400).json({ error: `no backlog item "${rawTodoId}"` });
+    todoId = item.id;
+  }
+  db.prepare(`INSERT INTO focus_active_sessions (actor, todo_id, started_at, last_seen_at)
+              VALUES (?, ?, datetime('now','localtime'), datetime('now','localtime'))
+              ON CONFLICT(actor) DO UPDATE SET todo_id = excluded.todo_id,
+                  last_seen_at = excluded.last_seen_at`)
+    .run(req.by, todoId);
+  res.json({ actor: req.by, todoId });
+});
+
+router.delete('/active', (req, res) => {
+  if (req.by === 'unknown') return res.status(400).json({ error: 'active presence requires an explicit contributor' });
+  db.prepare('DELETE FROM focus_active_sessions WHERE actor = ?').run(req.by);
+  res.status(204).end();
+});
+
+router.get('/ledger/targets', (req, res) => {
+  const targets = db.prepare(`SELECT project, weekly_target_minutes AS weeklyTargetMinutes,
+                                     set_by_whom AS setByWhom, set_at AS setAt
+                                FROM focus_project_targets ORDER BY project COLLATE NOCASE`).all();
+  res.json({ targets, recordedNothing: !targets.length ? 'No project time targets have been set.' : undefined });
+});
+
+router.put('/ledger/targets/:project', (req, res) => {
+  const project = String(req.params.project || '').trim();
+  const weeklyTargetMinutes = Math.round(Number((req.body || {}).weeklyTargetMinutes));
+  if (!project) return res.status(400).json({ error: 'project is required' });
+  if (!Number.isInteger(weeklyTargetMinutes) || weeklyTargetMinutes < 1 || weeklyTargetMinutes > 10080) {
+    return res.status(400).json({ error: 'weeklyTargetMinutes must be a whole number from 1 to 10080' });
+  }
+  const known = db.prepare("SELECT 1 FROM todo_items WHERE TRIM(project) = ? LIMIT 1").get(project);
+  if (!known) return res.status(400).json({ error: 'project is not present on a backlog item' });
+  db.prepare(`INSERT INTO focus_project_targets (project, weekly_target_minutes, set_by_whom, set_at)
+              VALUES (?, ?, ?, datetime('now','localtime'))
+              ON CONFLICT(project) DO UPDATE SET weekly_target_minutes = excluded.weekly_target_minutes,
+                  set_by_whom = excluded.set_by_whom, set_at = excluded.set_at`)
+    .run(project, weeklyTargetMinutes, req.by);
+  res.json({ project, weeklyTargetMinutes, setByWhom: req.by });
+});
+
+router.delete('/ledger/targets/:project', (req, res) => {
+  const project = String(req.params.project || '').trim();
+  const found = db.prepare('DELETE FROM focus_project_targets WHERE project = ?').run(project);
+  if (!found.changes) return res.status(404).json({ error: 'no target is set for this project' });
+  res.status(204).end();
 });
 
 // Time spent per backlog item — the thing the old `tasks` list could never answer, because
@@ -177,6 +320,8 @@ router.get('/ledger', (req, res) => {
   const actors = db.prepare(`
     SELECT ${actor} AS actor, NULLIF(TRIM(s.model), '') AS model, COUNT(*) AS sessions,
            COALESCE(SUM(s.duration_minutes), 0) AS minutes,
+           COUNT(s.cost_microusd) AS costKnownSessions,
+           CASE WHEN COUNT(s.cost_microusd) = 0 THEN NULL ELSE SUM(s.cost_microusd) END AS costMicrousd,
            COALESCE(SUM(s.todo_id IS NULL), 0) AS unlinkedSessions,
            COALESCE(SUM(CASE WHEN s.todo_id IS NULL THEN s.duration_minutes ELSE 0 END), 0) AS unlinkedMinutes
       FROM focus_sessions s
@@ -188,6 +333,8 @@ router.get('/ledger', (req, res) => {
   const projects = db.prepare(`
     SELECT COALESCE(NULLIF(TRIM(t.project), ''), 'unassigned') AS project,
            COUNT(*) AS sessions, COALESCE(SUM(s.duration_minutes), 0) AS minutes,
+           COUNT(s.cost_microusd) AS costKnownSessions,
+           CASE WHEN COUNT(s.cost_microusd) = 0 THEN NULL ELSE SUM(s.cost_microusd) END AS costMicrousd,
            COUNT(DISTINCT ${actor}) AS contributors
       FROM focus_sessions s
       JOIN todo_items t ON t.id = s.todo_id
@@ -217,7 +364,9 @@ router.get('/ledger', (req, res) => {
 
   const models = db.prepare(`
     SELECT ${actor} AS actor, NULLIF(TRIM(s.model), '') AS model,
-           COUNT(*) AS sessions, COALESCE(SUM(s.duration_minutes), 0) AS minutes
+           COUNT(*) AS sessions, COALESCE(SUM(s.duration_minutes), 0) AS minutes,
+           COUNT(s.cost_microusd) AS costKnownSessions,
+           CASE WHEN COUNT(s.cost_microusd) = 0 THEN NULL ELSE SUM(s.cost_microusd) END AS costMicrousd
       FROM focus_sessions s
      WHERE ${WORK_IN_WINDOW} AND NULLIF(TRIM(s.model), '') IS NOT NULL
      GROUP BY ${actor}, NULLIF(TRIM(s.model), '')
@@ -225,9 +374,10 @@ router.get('/ledger', (req, res) => {
   `).all(since);
 
   const unlinked = db.prepare(`
-    SELECT date(s.completed_at) AS day, s.completed_at AS completedAt,
+    SELECT s.id, date(s.completed_at) AS day, s.completed_at AS completedAt,
            ${actor} AS actor, NULLIF(TRIM(s.model), '') AS model,
-           s.duration_minutes AS minutes, s.source_key AS sourceKey
+           s.duration_minutes AS minutes, s.source_key AS sourceKey,
+           s.cost_microusd AS costMicrousd
       FROM focus_sessions s
      WHERE ${WORK_IN_WINDOW} AND s.todo_id IS NULL
      ORDER BY s.completed_at DESC, s.id DESC
@@ -246,6 +396,20 @@ router.get('/ledger', (req, res) => {
      WHERE ${WORK_IN_WINDOW}
   `).get(since);
 
+  const quality = db.prepare(`
+    SELECT COUNT(*) AS sessions,
+           COALESCE(SUM(s.todo_id IS NOT NULL), 0) AS linkedSessions,
+           COALESCE(SUM(${actor} <> 'unknown'), 0) AS attributedSessions,
+           COALESCE(SUM(NULLIF(TRIM(s.model), '') IS NOT NULL), 0) AS modelKnownSessions,
+           COUNT(s.cost_microusd) AS costKnownSessions
+      FROM focus_sessions s
+     WHERE ${WORK_IN_WINDOW}
+  `).get(since);
+
+  const targets = db.prepare(`SELECT project, weekly_target_minutes AS weeklyTargetMinutes,
+                                     set_by_whom AS setByWhom, set_at AS setAt
+                                FROM focus_project_targets ORDER BY project COLLATE NOCASE`).all();
+
   res.json({
     days,
     actors,
@@ -255,11 +419,81 @@ router.get('/ledger', (req, res) => {
     models,
     unlinked,
     missing,
-    note: 'Work sessions only. Contributor labels are stored provenance values (for example you, Claude, Codex, Ollama, Scribe, or unknown). A specific model is shown only where telemetry recorded exactly one; mixed or missing model data is not guessed. Project allocation comes only from a linked backlog item.',
+    quality,
+    targets,
+    note: 'Work sessions only. Contributor labels are stored provenance values (for example you, Claude, Codex, Ollama, Scribe, or unknown). A specific model is shown only where telemetry recorded exactly one; mixed or missing model data is not guessed. USD cost is shown only where telemetry recorded it. Project allocation comes only from a linked backlog item; a later user-selected repair is marked manual.',
     recordedNothing: !actors.length
       ? 'No work sessions were recorded in this window. That is absence from this ledger, not evidence that nobody worked.'
       : undefined,
   });
+});
+
+// A timeline bar is an aggregate; this route provides its rows on demand so the default
+// ledger remains compact even when a 90-day window contains hundreds of sessions.
+router.get('/ledger/sessions', (req, res) => {
+  const day = String(req.query.day || '');
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(day)) return res.status(400).json({ error: 'day must be YYYY-MM-DD' });
+  const requestedActor = req.query.actor == null ? null : String(req.query.actor).trim();
+  const requestedProject = req.query.project == null ? null : String(req.query.project).trim();
+  if (requestedActor && requestedActor.length > 40) return res.status(400).json({ error: 'actor is too long' });
+  if (requestedProject && requestedProject.length > 160) return res.status(400).json({ error: 'project is too long' });
+
+  const actor = "COALESCE(NULLIF(TRIM(s.by_whom), ''), 'unknown')";
+  const where = ["s.kind = 'work'", 'date(s.completed_at) = ?'];
+  const args = [day];
+  if (requestedActor) { where.push(`${actor} = ?`); args.push(requestedActor); }
+  if (requestedProject) {
+    where.push("COALESCE(NULLIF(TRIM(t.project), ''), 'unassigned') = ?");
+    args.push(requestedProject);
+  }
+  const sessions = db.prepare(`
+    SELECT s.id, s.completed_at AS completedAt, ${actor} AS actor,
+           NULLIF(TRIM(s.model), '') AS model, s.duration_minutes AS minutes,
+           s.cost_microusd AS costMicrousd, s.source_key AS sourceKey,
+           s.todo_id AS todoId, t.title AS todoTitle,
+           COALESCE(NULLIF(TRIM(t.project), ''), 'unassigned') AS project,
+           s.todo_link_source AS todoLinkSource, s.todo_linked_by AS todoLinkedBy
+      FROM focus_sessions s
+      LEFT JOIN todo_items t ON t.id = s.todo_id
+     WHERE ${where.join(' AND ')}
+     ORDER BY s.completed_at DESC, s.id DESC
+     LIMIT 100
+  `).all(...args);
+  res.json({ day, actor: requestedActor || null, project: requestedProject || null, sessions,
+    recordedNothing: !sessions.length ? 'No matching work sessions were recorded for that day.' : undefined });
+});
+
+// The export is intentionally a row-per-attribution, not a blended total. A consumer can
+// sum it, but cannot accidentally turn a missing model or project into a named one.
+router.get('/ledger/report.csv', (req, res) => {
+  const days = Math.min(365, Math.max(1, Number(req.query.days) || 7));
+  const since = `-${days - 1} days`;
+  const actor = "COALESCE(NULLIF(TRIM(s.by_whom), ''), 'unknown')";
+  const rows = db.prepare(`
+    SELECT ${actor} AS actor, NULLIF(TRIM(s.model), '') AS model,
+           CASE WHEN s.todo_id IS NULL THEN 'unlinked'
+                ELSE COALESCE(NULLIF(TRIM(t.project), ''), 'unassigned') END AS project,
+           COUNT(*) AS sessions, COALESCE(SUM(s.duration_minutes), 0) AS minutes,
+           COUNT(s.cost_microusd) AS cost_known_sessions,
+           CASE WHEN COUNT(s.cost_microusd) = 0 THEN NULL ELSE SUM(s.cost_microusd) END AS cost_microusd
+      FROM focus_sessions s
+      LEFT JOIN todo_items t ON t.id = s.todo_id
+     WHERE s.kind = 'work' AND date(s.completed_at) >= date('now','localtime', ?)
+     GROUP BY ${actor}, NULLIF(TRIM(s.model), ''),
+              CASE WHEN s.todo_id IS NULL THEN 'unlinked'
+                   ELSE COALESCE(NULLIF(TRIM(t.project), ''), 'unassigned') END
+     ORDER BY minutes DESC, actor ASC, model ASC, project ASC
+  `).all(since);
+  const cell = (value) => {
+    const text = value == null ? '' : String(value);
+    return /[",\r\n]/.test(text) ? `"${text.replace(/"/g, '""')}"` : text;
+  };
+  const lines = [['actor', 'model', 'project', 'sessions', 'minutes', 'cost_known_sessions', 'cost_microusd'],
+    ...rows.map((row) => [row.actor, row.model, row.project, row.sessions, row.minutes, row.cost_known_sessions, row.cost_microusd])]
+    .map((row) => row.map(cell).join(','));
+  res.setHeader('Content-Type', 'text/csv; charset=utf-8');
+  res.setHeader('Content-Disposition', `attachment; filename="focus-allocation-${days}d.csv"`);
+  res.send(`\uFEFF${lines.join('\r\n')}\r\n`);
 });
 
 // What Claude has actually worked on. Kept as a SEPARATE reading rather than a filter on

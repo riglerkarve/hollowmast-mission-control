@@ -683,12 +683,65 @@ router.get('/shift', (req, res) => res.json(shiftView(req.query.shift)));
 
 // Resolve one canonical owner item.  The handover id proves the caller is addressing an item
 // that was actually filed in that report; the item id means a five-ask block can lose just one.
+// Which engine a session runs on, by roster title. Returns null when unknown -- and every
+// caller must treat null as 'could not check' rather than 'fine'.
+function engineOf(title) {
+  if (!title) return null;
+  const r = db.prepare('SELECT engine FROM team_sessions WHERE title = ? AND retired_at IS NULL').get(String(title));
+  return r && r.engine ? String(r.engine) : null;
+}
+
 router.post('/handover/:id/resolve-owner', express.json(), (req, res) => {
   const { by, note } = req.body || {};
   if (!by || !note) return res.status(400).json({ error: 'by and note are both required — a resolution with no account of how is a dropped question' });
   const h = db.prepare('SELECT * FROM team_handovers WHERE id = ?').get(req.params.id);
   if (!h) return res.status(404).json({ error: 'no such handover' });
   if (!h.needs_owner) return res.status(400).json({ error: 'that handover has no owner-facing item' });
+
+  // ONE ENGINE MAY NOT CLEAR ITS OWN WORK -- owner decision, 20 August 2026.
+  //
+  // The examination that produced this found the manager and the worker were the same
+  // session (Codex filed 34 handovers as worker and 26 as manager), and that BOTH of the
+  // two resolved handovers in the whole database had been resolved by their own author.
+  // One of those was mine. So this was not an occasional lapse -- self-resolution was the
+  // default behaviour, and nothing anywhere said no.
+  //
+  // The rule is ENGINE, not session, and that is the whole point. Two Claude sessions
+  // share a model, a training run and a set of blind spots; one confirming the other looks
+  // like review and reproduces the same misses. Cross-engine review is the only mechanism
+  // here with a track record of catching what the author could not see -- it found a P1, a
+  // dark theme swallowed by a stray comment, and an inverted rules pass, none of which the
+  // author's own checks could detect.
+  {
+    const resolver = String(by).trim();
+    const authorEngine = engineOf(resolver === h.title ? h.title : h.title);
+    const resolverEngine = engineOf(resolver);
+    if (resolver === h.title) {
+      return res.status(403).json({
+        error: 'a session may not resolve its own handover',
+        why: 'The owner-facing item was raised by ' + h.title + '. Clearing it requires somebody else.',
+      });
+    }
+    // An UNKNOWN engine is not a matching one, and must not be treated as a pass. If the
+    // resolver is not on the roster we cannot tell whether the rule is satisfied, so the
+    // answer is 'could not check', which fails closed.
+    if (!resolverEngine) {
+      return res.status(403).json({
+        error: 'resolver is not on the roster',
+        why: 'Cannot establish which engine ' + resolver + ' runs on, so cannot establish that it '
+           + 'differs from the author. Register the session first -- an unverifiable rule is not a satisfied one.',
+      });
+    }
+    if (authorEngine && resolverEngine === authorEngine) {
+      return res.status(403).json({
+        error: 'same-engine resolution refused',
+        why: resolver + ' and ' + h.title + ' both run on ' + resolverEngine + '. A reviewer sharing '
+           + "the author's model shares the author's blind spots, so this would look like review and "
+           + 'reproduce the same misses. Route it to a session on a different engine.',
+        author_engine: authorEngine, resolver_engine: resolverEngine,
+      });
+    }
+  }
   const items = ownerItemsForHandovers([h]);
   if (!items.length) return res.status(409).json({ error: 'this handover raised no owner item' });
   const now = new Date().toISOString();
@@ -726,6 +779,17 @@ router.post('/handover/:id/read', express.json(), (req, res) => {
 // -------------------------------------------------------------------------------- plan
 
 router.post('/plan', express.json(), (req, res) => {
+    return res.status(410).json({
+      error: 'RETIRED_CYCLE',
+      why: 'The plan/confirm/assign cycle was retired by owner decision on 20 August 2026. It ran for '
+         + 'two hours on 19 Aug and then stopped, while 88 commits shipped from a markdown plan instead. '
+         + 'A dormant mechanism is worse than an absent one: it reported plans:0 and confirmed:0 '
+         + 'truthfully, and those zeros read as nothing-to-do rather than nobody-is-here.',
+      instead: 'Work is planned in a plan document and tracked on /api/board. Handovers, decisions and '
+             + 'the daily steering question are unchanged.',
+      history_preserved: 'The existing rows are NOT deleted -- they are the only record of how this '
+                       + 'worked while in use. GET /api/team/plan still reads them.',
+    });
   const { shift, drafted_by: by, body } = req.body || {};
   if (!by || !body) return res.status(400).json({ error: 'drafted_by and body are required' });
   const now = new Date().toISOString();
@@ -752,6 +816,17 @@ router.patch('/plan/:id', express.json(), (req, res) => {
 // Mark a draft as replaced by a later plan. This is the supervisor's to set — it is the only
 // role that knows whether it revised a plan or abandoned it, and both leave the same nulls.
 router.post('/plan/:id/superseded-by/:newId', express.json(), (req, res) => {
+    return res.status(410).json({
+      error: 'RETIRED_CYCLE',
+      why: 'The plan/confirm/assign cycle was retired by owner decision on 20 August 2026. It ran for '
+         + 'two hours on 19 Aug and then stopped, while 88 commits shipped from a markdown plan instead. '
+         + 'A dormant mechanism is worse than an absent one: it reported plans:0 and confirmed:0 '
+         + 'truthfully, and those zeros read as nothing-to-do rather than nobody-is-here.',
+      instead: 'Work is planned in a plan document and tracked on /api/board. Handovers, decisions and '
+             + 'the daily steering question are unchanged.',
+      history_preserved: 'The existing rows are NOT deleted -- they are the only record of how this '
+                       + 'worked while in use. GET /api/team/plan still reads them.',
+    });
   const old = db.prepare('SELECT * FROM team_plans WHERE id = ?').get(req.params.id);
   const neu = db.prepare('SELECT * FROM team_plans WHERE id = ?').get(req.params.newId);
   if (!old || !neu) return res.status(404).json({ error: 'no such plan' });
@@ -768,6 +843,17 @@ router.get('/plan', (req, res) => {
 // -------------------------------------------------------------------------- delegation
 
 router.post('/assign', express.json(), (req, res) => {
+    return res.status(410).json({
+      error: 'RETIRED_CYCLE',
+      why: 'The plan/confirm/assign cycle was retired by owner decision on 20 August 2026. It ran for '
+         + 'two hours on 19 Aug and then stopped, while 88 commits shipped from a markdown plan instead. '
+         + 'A dormant mechanism is worse than an absent one: it reported plans:0 and confirmed:0 '
+         + 'truthfully, and those zeros read as nothing-to-do rather than nobody-is-here.',
+      instead: 'Work is planned in a plan document and tracked on /api/board. Handovers, decisions and '
+             + 'the daily steering question are unchanged.',
+      history_preserved: 'The existing rows are NOT deleted -- they are the only record of how this '
+                       + 'worked while in use. GET /api/team/plan still reads them.',
+    });
   const { plan_id: planId, source, ref, session_id: sid, note } = req.body || {};
   if (!source || !ref || !sid) return res.status(400).json({ error: 'source, ref and session_id are required' });
 
@@ -811,6 +897,17 @@ router.post('/assign', express.json(), (req, res) => {
 // A mismatch is allowed and needs a reason. Refusing the write would push sessions into not
 // reporting at all, and an unreported mismatch is worse than a stated one.
 router.post('/assign/:id/used', express.json(), (req, res) => {
+    return res.status(410).json({
+      error: 'RETIRED_CYCLE',
+      why: 'The plan/confirm/assign cycle was retired by owner decision on 20 August 2026. It ran for '
+         + 'two hours on 19 Aug and then stopped, while 88 commits shipped from a markdown plan instead. '
+         + 'A dormant mechanism is worse than an absent one: it reported plans:0 and confirmed:0 '
+         + 'truthfully, and those zeros read as nothing-to-do rather than nobody-is-here.',
+      instead: 'Work is planned in a plan document and tracked on /api/board. Handovers, decisions and '
+             + 'the daily steering question are unchanged.',
+      history_preserved: 'The existing rows are NOT deleted -- they are the only record of how this '
+                       + 'worked while in use. GET /api/team/plan still reads them.',
+    });
   const b = req.body || {};
   const row = db.prepare('SELECT * FROM team_assignments WHERE id = ?').get(req.params.id);
   if (!row) return res.status(404).json({ error: 'no such assignment' });

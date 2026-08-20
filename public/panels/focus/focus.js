@@ -82,7 +82,9 @@ const TEMPLATE = `
     </section>
 
     <section class="card focus-ledger-card">
-      <h2>Time ledger <span class="focus-ledger-window">last 30 days</span></h2>
+      <div class="focus-ledger-head"><h2>Time ledger</h2>
+        <label>Window <select id="focusLedgerRange"><option value="7">7 days</option><option value="30" selected>30 days</option><option value="90">90 days</option></select></label>
+      </div>
       <p class="focus-ledger-lede">Work time by contributor and project. Unknown and unlinked time stays visible rather than being assigned by guesswork.</p>
       <div id="focusLedger" aria-live="polite">Loading time ledger…</div>
     </section>
@@ -133,6 +135,7 @@ function createPanel() {
   let container = null;
   let onBacklogFocus = null;
   let onBacklogChanged = null;
+  let ledgerDays = 30;
 
   function formatTime(s) {
     const m = Math.floor(s / 60).toString().padStart(2, '0');
@@ -236,10 +239,35 @@ function createPanel() {
     return model ? `${base} · ${model}` : base;
   }
 
+  function daysInWindow(days) {
+    const out = [];
+    const cursor = new Date();
+    cursor.setHours(0, 0, 0, 0);
+    cursor.setDate(cursor.getDate() - (days - 1));
+    for (let i = 0; i < days; i += 1) {
+      out.push(`${cursor.getFullYear()}-${String(cursor.getMonth() + 1).padStart(2, '0')}-${String(cursor.getDate()).padStart(2, '0')}`);
+      cursor.setDate(cursor.getDate() + 1);
+    }
+    return out;
+  }
+
+  function bars(rows, days) {
+    const byDay = new Map(rows.map((row) => [row.day, Number(row.minutes) || 0]));
+    const max = Math.max(1, ...byDay.values());
+    return `<div class="focus-ledger-bars" style="grid-template-columns:repeat(${days}, minmax(2px, 1fr))" aria-label="${days}-day activity trend">${daysInWindow(days).map((day) => {
+      const minutes = byDay.get(day) || 0;
+      return `<span title="${day}: ${formatMinutes(minutes)}" style="height:${Math.max(minutes ? 8 : 2, Math.round((minutes / max) * 100))}%"></span>`;
+    }).join('')}</div>`;
+  }
+
   function renderLedger(data) {
     if (!container || !el.focusLedger) return;
     const actors = data.actors || [];
     const projects = data.projects || [];
+    const actorDays = data.actorDays || [];
+    const projectDays = data.projectDays || [];
+    const models = data.models || [];
+    const unlinked = data.unlinked || [];
     const missing = data.missing || {};
     const actorRows = actors.length
       ? `<ul class="focus-ledger-actors">${actors.map((row) => `<li>
@@ -252,13 +280,25 @@ function createPanel() {
           ${projects.map((row) => `<tr><td>${escapeHtml(row.project === 'unassigned' ? 'Linked item without project' : row.project)}</td><td>${formatMinutes(row.minutes)}</td><td>${row.sessions}</td><td>${row.contributors}</td></tr>`).join('')}
         </tbody></table></div>`
       : '<p class="focus-ledger-empty">No work session is linked to a project in this window.</p>';
+    const timeline = actors.length
+      ? `<div class="focus-ledger-timeline"><h3>Contributor timeline</h3>${[...new Set(actorDays.map((r) => r.actor))].map((actor) => `<div class="focus-ledger-lane"><b>${escapeHtml(actorLabel(actor))}</b>${bars(actorDays.filter((r) => r.actor === actor), data.days)}</div>`).join('')}</div>`
+      : '';
+    const projectTrends = projects.length
+      ? `<div class="focus-ledger-trends"><h3>Project trends</h3>${projects.map((row) => `<div class="focus-ledger-lane"><b>${escapeHtml(row.project === 'unassigned' ? 'Linked item without project' : row.project)}</b>${bars(projectDays.filter((d) => d.project === row.project), data.days)}</div>`).join('')}</div>`
+      : '';
+    const modelRows = models.length
+      ? `<div class="focus-ledger-models"><h3>Model evidence</h3><table><thead><tr><th>Model</th><th>Time</th><th>Sessions</th></tr></thead><tbody>${models.map((row) => `<tr><td>${escapeHtml(actorLabel(row.actor, row.model))}</td><td>${formatMinutes(row.minutes)}</td><td>${row.sessions}</td></tr>`).join('')}</tbody></table></div>`
+      : '<p class="focus-ledger-empty">No session in this window carries an unambiguous model label.</p>';
+    const queueRows = unlinked.length
+      ? `<div class="focus-ledger-queue"><h3>Time without project evidence <span>${unlinked.length}</span></h3><p>These records need a direct backlog or telemetry link before they can appear under a project.</p><table><thead><tr><th>Completed</th><th>Contributor / model</th><th>Time</th></tr></thead><tbody>${unlinked.slice(0, 20).map((row) => `<tr><td>${escapeHtml(row.completedAt)}</td><td>${escapeHtml(actorLabel(row.actor, row.model))}</td><td>${formatMinutes(row.minutes)}</td></tr>`).join('')}</tbody></table>${unlinked.length > 20 ? `<p>Showing the latest 20 of ${unlinked.length}; the total remains unallocated.</p>` : ''}</div>`
+      : '<p class="focus-ledger-empty">Every recorded work session in this window has direct project evidence.</p>';
     const gaps = [
       missing.unlinkedMinutes ? `${formatMinutes(missing.unlinkedMinutes)} has no linked backlog item` : null,
       missing.unprojectedMinutes ? `${formatMinutes(missing.unprojectedMinutes)} links to an item without a project` : null,
       missing.unattributedMinutes ? `${formatMinutes(missing.unattributedMinutes)} has no contributor attribution` : null,
     ].filter(Boolean);
     el.focusLedger.innerHTML = `
-      <h3>People and models</h3>${actorRows}${projectRows}
+      <h3>People and models</h3>${actorRows}${timeline}${projectRows}${projectTrends}${modelRows}${queueRows}
       <p class="focus-ledger-note">${gaps.length ? `Not allocated by evidence: ${escapeHtml(gaps.join('; '))}.` : 'Every recorded work session in this window has a contributor and a linked project.'}</p>
       <p class="focus-ledger-basis">${escapeHtml(data.note || '')}</p>`;
   }
@@ -269,7 +309,7 @@ function createPanel() {
   }
 
   async function loadLedger() {
-    renderLedger(await api('/sessions/ledger?days=30'));
+    renderLedger(await api(`/sessions/ledger?days=${ledgerDays}`));
   }
 
   function renderWeekChart(daily) {
@@ -421,6 +461,7 @@ function createPanel() {
         focusBacklog: container.querySelector('#focusBacklog'),
         focusSteering: container.querySelector('#focusSteering'),
         focusLedger: container.querySelector('#focusLedger'),
+        focusLedgerRange: container.querySelector('#focusLedgerRange'),
         focusStatsState: container.querySelector('#focusStatsState'),
         focusStatsRetry: container.querySelector('#focusStatsRetry'),
         celebrateOverlay: container.querySelector('#celebrateOverlay'),
@@ -435,6 +476,10 @@ function createPanel() {
       el.modeTabs.forEach((tab) => tab.addEventListener('click', () => setMode(tab.dataset.mode)));
       el.startPauseBtn.addEventListener('click', startPause);
       el.focusStatsRetry.addEventListener('click', () => loadStats().catch(showStatsUnavailable));
+      el.focusLedgerRange.addEventListener('change', () => {
+        ledgerDays = Number(el.focusLedgerRange.value) || 30;
+        loadLedger().catch(showLedgerUnavailable);
+      });
       el.resetBtn.addEventListener('click', () => {
         running = false;
         clearInterval(tickHandle);

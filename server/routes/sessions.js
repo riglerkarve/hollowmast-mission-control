@@ -196,6 +196,43 @@ router.get('/ledger', (req, res) => {
      ORDER BY minutes DESC, project ASC
   `).all(since);
 
+  const actorDays = db.prepare(`
+    SELECT ${actor} AS actor, date(s.completed_at) AS day,
+           COALESCE(SUM(s.duration_minutes), 0) AS minutes
+      FROM focus_sessions s
+     WHERE ${WORK_IN_WINDOW}
+     GROUP BY ${actor}, date(s.completed_at)
+     ORDER BY actor ASC, day ASC
+  `).all(since);
+
+  const projectDays = db.prepare(`
+    SELECT COALESCE(NULLIF(TRIM(t.project), ''), 'unassigned') AS project,
+           date(s.completed_at) AS day, COALESCE(SUM(s.duration_minutes), 0) AS minutes
+      FROM focus_sessions s
+      JOIN todo_items t ON t.id = s.todo_id
+     WHERE ${WORK_IN_WINDOW}
+     GROUP BY COALESCE(NULLIF(TRIM(t.project), ''), 'unassigned'), date(s.completed_at)
+     ORDER BY project ASC, day ASC
+  `).all(since);
+
+  const models = db.prepare(`
+    SELECT ${actor} AS actor, NULLIF(TRIM(s.model), '') AS model,
+           COUNT(*) AS sessions, COALESCE(SUM(s.duration_minutes), 0) AS minutes
+      FROM focus_sessions s
+     WHERE ${WORK_IN_WINDOW} AND NULLIF(TRIM(s.model), '') IS NOT NULL
+     GROUP BY ${actor}, NULLIF(TRIM(s.model), '')
+     ORDER BY minutes DESC, actor ASC, model ASC
+  `).all(since);
+
+  const unlinked = db.prepare(`
+    SELECT date(s.completed_at) AS day, s.completed_at AS completedAt,
+           ${actor} AS actor, NULLIF(TRIM(s.model), '') AS model,
+           s.duration_minutes AS minutes, s.source_key AS sourceKey
+      FROM focus_sessions s
+     WHERE ${WORK_IN_WINDOW} AND s.todo_id IS NULL
+     ORDER BY s.completed_at DESC, s.id DESC
+  `).all(since);
+
   const missing = db.prepare(`
     SELECT
       COALESCE(SUM(s.todo_id IS NULL), 0) AS unlinkedSessions,
@@ -213,6 +250,10 @@ router.get('/ledger', (req, res) => {
     days,
     actors,
     projects,
+    actorDays,
+    projectDays,
+    models,
+    unlinked,
     missing,
     note: 'Work sessions only. Contributor labels are stored provenance values (for example you, Claude, Codex, Ollama, Scribe, or unknown). A specific model is shown only where telemetry recorded exactly one; mixed or missing model data is not guessed. Project allocation comes only from a linked backlog item.',
     recordedNothing: !actors.length

@@ -1086,6 +1086,18 @@ router.all('*', (req, res) => {
   });
 });
 
+// Food definitions by id. THE accessor for anything outside this module that needs to know
+// what a food is -- inventory joins stock to it rather than copying kcal onto a stock row.
+function foodsByIds(ids) {
+  const list = (ids || []).map(Number).filter(Number.isFinite);
+  if (!list.length) return new Map();
+  const marks = list.map(() => '?').join(',');
+  const rows = db.prepare('SELECT * FROM lifestyle_foods WHERE id IN (' + marks + ')').all(...list);
+  return new Map(rows.map((r) => [r.id, r]));
+}
+
 module.exports = router;
 module.exports.activitySince = activitySince;
 module.exports.dueSummary = dueSummary;
+
+module.exports.foodsByIds = foodsByIds;

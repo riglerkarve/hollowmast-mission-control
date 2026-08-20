@@ -38,6 +38,7 @@
 const express = require('express');
 const db = require('../db.js');
 const finance = require('./finance.js');
+const lifestyle = require('./lifestyle.js');
 
 const router = express.Router();
 
@@ -80,6 +81,17 @@ db.migrate('inventory', [
       CREATE INDEX IF NOT EXISTS idx_inv_category ON inventory_items(category);
       CREATE INDEX IF NOT EXISTS idx_inv_reorder ON inventory_items(category, quantity);
     `);
+  },
+  // 2 -- food_id. Owner, 20 Aug 2026: "add items ordered to inventory so that when I look
+  // at meal planning it can see what i have available."
+  //
+  // A nullable FK to lifestyle_foods. Nutrition is NOT copied here: lifestyle owns what a
+  // food is, inventory owns how much of it is in the house, and the join is how meal
+  // planning gets both without either module recomputing the other's figure.
+  (d) => {
+    const cols = d.prepare("SELECT name FROM pragma_table_info('inventory_items')").all().map((r) => r.name);
+    if (!cols.includes('food_id')) d.exec('ALTER TABLE inventory_items ADD COLUMN food_id INTEGER');
+    d.exec('CREATE INDEX IF NOT EXISTS idx_inv_food ON inventory_items(food_id)');
   },
 ]);
 
@@ -127,9 +139,13 @@ router.post('/items', express.json(), (req, res) => {
       { why: 'Without a threshold it can never appear in /reorder, so it would be storage that tells you nothing.' });
   }
 
+  // food_id is accepted here, not only via PATCH. Adding the column without wiring the
+  // create path is the defect that already happened once on this project -- kind and
+  // project were added to a table in a migration and silently dropped by the route, so
+  // the API accepted them and stored nothing.
   const info = db.prepare(
     'INSERT INTO inventory_items (category, name, note, cost_pence, acquired_on, supplier, serial, '
-  + 'quantity, unit, reorder_at, location, insured, created_at) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?)'
+  + 'quantity, unit, reorder_at, location, insured, food_id, created_at) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?)'
   ).run(category, name, b.note || null,
         b.cost_pence == null ? null : Math.round(Number(b.cost_pence)),
         b.acquired_on || null, b.supplier || null, b.serial || null,
@@ -137,6 +153,7 @@ router.post('/items', express.json(), (req, res) => {
         b.reorder_at == null ? null : Number(b.reorder_at),
         b.location || null,
         b.insured == null ? null : (b.insured ? 1 : 0),
+        b.food_id == null ? null : Number(b.food_id),
         new Date().toISOString());
 
   res.json({ ok: true, item: db.prepare('SELECT * FROM inventory_items WHERE id = ?').get(info.lastInsertRowid) });
@@ -147,7 +164,7 @@ router.patch('/items/:id', express.json(), (req, res) => {
   if (!row) return res.status(404).json({ error: 'no such item' });
   const b = req.body || {};
   const fields = ['name', 'note', 'cost_pence', 'acquired_on', 'supplier', 'serial', 'disposed_on',
-                  'quantity', 'unit', 'reorder_at', 'location', 'insured'];
+                  'quantity', 'unit', 'reorder_at', 'location', 'insured', 'food_id'];
   const set = [], vals = [];
   for (const f of fields) if (b[f] !== undefined) { set.push(f + ' = ?'); vals.push(b[f]); }
   if (!set.length) return bad(res, 'nothing to update');
@@ -288,6 +305,57 @@ router.get('/candidates', (req, res) => {
   });
 });
 
+// What food is actually in the house, with its nutrition attached.
+//
+// THE ACCESSOR meal planning calls. It asks lifestyle for the definitions rather than
+// reading lifestyle_foods, so if a food's macros are corrected there is exactly one place
+// that happens and this reflects it immediately.
+function foodInStock(opts) {
+  const includeEmpty = !!(opts && opts.includeEmpty);
+  const rows = db.prepare(
+    "SELECT * FROM inventory_items WHERE category = 'consumable' AND food_id IS NOT NULL"
+  ).all();
+  const inStock = includeEmpty ? rows : rows.filter((r) => Number(r.quantity || 0) > 0);
+
+  let defs = new Map();
+  let defState = null;
+  try {
+    defs = lifestyle.foodsByIds(inStock.map((r) => r.food_id));
+  } catch (e) {
+    // Could not look. Must NOT render as 'these foods have no nutrition' -- that is a
+    // statement about the food, and this is a statement about the lookup.
+    defState = 'COULD NOT READ food definitions from lifestyle: ' + e.message.slice(0, 80);
+  }
+
+  return {
+    ok: true,
+    items: inStock.map((r) => ({
+      inventory_id: r.id, name: r.name, quantity: r.quantity, unit: r.unit,
+      reorder_at: r.reorder_at, food_id: r.food_id,
+      food: defs.get(r.food_id) || null,
+      food_state: defState ? defState
+        : defs.get(r.food_id) ? 'linked' : 'food_id set but no such food in lifestyle_foods',
+    })),
+    count: inStock.length,
+    // Out-of-stock rows are EXCLUDED by default and counted, not hidden: 'you have no Huel'
+    // and 'you never recorded Huel' are different answers to a meal planner.
+    residue: { out_of_stock: rows.length - inStock.length },
+    definitions_state: defState,
+  };
+}
+
+router.get('/food', (req, res) => {
+  const r = foodInStock({ includeEmpty: req.query.include_empty === '1' });
+  res.json({
+    ...r,
+    state: r.count === 0
+      ? 'No food linked to a lifestyle food definition is in stock. This is a real count, not a failed read.'
+      : null,
+  });
+});
+
 module.exports = router;
 module.exports.CATEGORIES = CATEGORIES;
 module.exports.ukTaxYear = ukTaxYear;
+
+module.exports.foodInStock = foodInStock;

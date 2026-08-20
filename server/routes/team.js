@@ -570,6 +570,20 @@ db.migrate('team', [
       CREATE INDEX IF NOT EXISTS idx_scribe_prop_module ON scribe_proposals(module);
     `);
   },
+
+  // 11 -- who ASKED a steering question, not just who answered it.
+  //
+  // The daily quiz is the owner's own instruction and it has run ONCE since 19 Aug,
+  // because it depended on a manager session being alive to type it and usually one is
+  // not. So the briefing pass now composes one itself -- which makes the asker a fact
+  // worth recording. A question the owner wrote, a question a manager wrote, and a
+  // question a nightly job assembled from a SQL count are three different things, and
+  // only the last one is allowed to be wrong without anybody having been careless.
+  (db) => {
+    const cols = db.prepare("SELECT name FROM pragma_table_info('team_steering')").all().map(r => r.name);
+    if (!cols.includes('asked_by')) db.exec('ALTER TABLE team_steering ADD COLUMN asked_by TEXT');
+    if (!cols.includes('source')) db.exec('ALTER TABLE team_steering ADD COLUMN source TEXT');
+  },
 ]);
 
 // A shift label both a human and a script can produce without consulting anything.
@@ -1501,6 +1515,149 @@ router.post('/scribe/proposals/:id/review', express.json(), (req, res) => {
   res.json({ ok: true, status: 'enacted', enacted_at: now });
 });
 
+
+// ---------------------------------------------------------------------------
+// THE DAILY STEERING QUESTION, COMPOSED WITHOUT A MANAGER
+//
+// Owner instruction, 19 Aug: "The team manager will quiz the owner every day to get
+// steering directions." Measured on 20 Aug: it had run ONCE, ever. Not because anyone
+// refused -- because the question required a live manager session to type it, and for
+// twelve of the last fourteen hours there wasn't one.
+//
+// A capability that only works when the right session happens to be awake is not a
+// capability. So the briefing pass composes it, from data.
+//
+// THE HARD PART IS NOT ASKING -- IT IS NOT ASKING.
+// 'An alert you learn to dismiss is worse than no alert, because it teaches you to
+// ignore the channel.' A daily question that fires whether or not anything needs
+// deciding trains exactly that. So this returns NOTHING unless there is a real
+// candidate, and 'nothing to ask' is reported as its own state rather than as silence.
+//
+// AND THE RECOMMENDATION IS ARITHMETIC, NEVER JUDGEMENT.
+// The endpoint refuses a question with no recommendation, on the grounds that a question
+// without one hands the thinking back. That rule was written for a reasoning author. A
+// job that assembles a question from a COUNT cannot honour it the same way, so the
+// recommendation here is always something derivable and checkable -- the oldest, the
+// most-refiled -- and it says which, so it can be audited rather than trusted.
+// THE canonical answer to "what is outstanding for the owner", and the only one.
+//
+// Two things it does that a bare COUNT(*) does not.
+//
+// It DROPS the parse artefacts. A handover that writes "- None" under Blocked on you
+// produces an owner item saying "None", and six of the thirty-three unresolved rows were
+// that. Codex had already spotted one by hand and resolved it with the note "filed
+// inadvertently". Counting them inflates the headline by 22% with rows that ask nothing.
+//
+// And it REPORTS WHAT IT DROPPED. A filter that quietly removes rows makes the survivors
+// look cleaner than they are, and it always fails flatteringly -- if the None-matcher were
+// too greedy it would silently eat real asks and the count would just look better. So the
+// residue is returned alongside the answer, and every caller can print it.
+//
+// NOTE THE SCOPE, because there is a second number with the same name: the shift report's
+// `gaps` says "N distinct owner-facing ask(s) untriaged" for ONE SHIFT. This is all-time
+// outstanding. Both are right; they answer different questions, and the briefing says
+// 'outstanding' rather than 'untriaged' so the two cannot be read as the same figure.
+// A handover that writes "- None" under Blocked on you still produces an owner-item row.
+// Six of thirty-three unresolved rows were exactly that, and Codex had already resolved
+// one by hand with the note "filed inadvertently".
+//
+// Exported so every reader uses the SAME test. It was inlined in openOwnerItems first, and
+// fromTeam went on pushing the rows it dropped -- a shared fix only reaches the callers
+// that actually call it, and the ones that bypass it keep the bug.
+function isNoneOwnerItem(text) {
+  return /^[-*\s]*(none|n\/a|nothing)\b/i.test(String(text == null ? '' : text).trim());
+}
+
+function openOwnerItems() {
+  let rows;
+  try {
+    rows = db.prepare('SELECT id, title, text, first_seen_at FROM team_owner_items WHERE resolved_at IS NULL ORDER BY id ASC').all();
+  } catch (e) {
+    return { ok: false, why: 'team_owner_items unreadable: ' + e.message };
+  }
+  const isNone = isNoneOwnerItem;
+  const dropped = rows.filter((r) => isNone(r.text));
+  const items = rows.filter((r) => !isNone(r.text));
+  return {
+    ok: true, items, count: items.length,
+    residue: { dropped: dropped.length, why: 'handover said None under Blocked on you', ids: dropped.map((d) => d.id) },
+    total_rows: rows.length,
+  };
+}
+
+function ensureSteering(opts) {
+  const now = new Date();
+  const today = now.toISOString().slice(0, 10);
+
+  const already = db.prepare('SELECT id, asked_by FROM team_steering WHERE substr(asked_at,1,10) = ?').get(today);
+  if (already) {
+    return { asked: false, state: 'already-asked-today', id: already.id, by: already.asked_by || 'a session' };
+  }
+
+  // Candidate 1: owner-facing items raised in handovers and never triaged.
+  let items = [];
+  try {
+    const oi = openOwnerItems();
+    if (!oi.ok) return { asked: false, state: 'could-not-look', why: oi.why };
+    items = oi.items;
+  } catch (e) {
+    // COULD NOT LOOK. Must not be reported as 'nothing to ask' -- a broken read and an
+    // empty queue are the failure this whole codebase keeps re-learning to separate.
+    return { asked: false, state: 'could-not-look', why: 'team_owner_items unreadable: ' + e.message };
+  }
+
+  // Candidate 2: decisions whose revisit_when date has arrived.
+  let due = [];
+  try {
+    due = db.prepare(
+      'SELECT id, decision, revisit_when FROM team_decisions '
+    + " WHERE revisit_when IS NOT NULL AND revisit_when <> '' AND revisit_when <= ? "
+    + ' ORDER BY revisit_when ASC'
+    ).all(today);
+  } catch (e) { due = []; }
+
+  if (!items.length && !due.length) {
+    return { asked: false, state: 'nothing-to-ask',
+             why: 'No untriaged owner item and no decision due for revisit. Asking anyway would '
+                + 'teach the owner to dismiss this channel.' };
+  }
+
+  let question, options, recommend;
+
+  if (items.length) {
+    const oldest = items[0];
+    // No age claim here: first_seen_at is when the ITEM ROW was written, not when the ask
+    // was raised, and it printed '0 days' for an ask filed yesterday. The count is the claim.
+    question = items.length + ' owner item' + (items.length === 1 ? '' : 's') + ' raised in handovers '
+             + 'are still outstanding. The earliest is: "'
+             + String(oldest.text || oldest.title).replace(/\s+/g, ' ').trim().slice(0, 160) + '"';
+    options = items.slice(0, 4).map(i => String(i.text || i.title).replace(/\s+/g, ' ').trim().slice(0, 120));
+    recommend = 'Take the oldest first (#' + oldest.id + '). This is arithmetic, not judgement: it is '
+              + 'the earliest first_seen_at of ' + items.length + ' unresolved rows, chosen because it has '
+              + 'been waiting longest and for no other reason. If another matters more, that is exactly '
+              + 'the steer this question exists to collect.';
+  } else {
+    const d = due[0];
+    question = due.length + ' decision' + (due.length === 1 ? '' : 's') + ' reached the date it was marked '
+             + 'for revisiting. The earliest is #' + d.id + ' (' + d.revisit_when + '): "'
+             + String(d.decision).replace(/\s+/g, ' ').trim().slice(0, 160) + '"';
+    options = due.slice(0, 4).map(x => '#' + x.id + ' (' + x.revisit_when + ') ' + String(x.decision).slice(0, 100));
+    recommend = 'Revisit #' + d.id + ' first -- it is the earliest revisit_when that has passed. Arithmetic, '
+              + 'not a view about which matters most.';
+  }
+
+  const info = db.prepare(
+    'INSERT INTO team_steering (asked_at, shift, question, options, recommend, asked_by, source) '
+  + 'VALUES (?,?,?,?,?,?,?)'
+  ).run(now.toISOString(), shiftLabel(), question, JSON.stringify(options), recommend,
+        'briefing-auto', 'composed from SQL, not written by a session');
+
+  return { asked: true, id: info.lastInsertRowid, question, recommend, options,
+           note: 'Composed by the briefing pass, not by a manager. The recommendation is arithmetic.' };
+}
+
+router.post('/steering/ensure', express.json(), (req, res) => res.json(ensureSteering(req.body || {})));
+
 module.exports = router;
 module.exports.shiftView = shiftView;
 module.exports.shiftLabel = shiftLabel;
@@ -1512,3 +1669,7 @@ module.exports.ROLES = ROLES;
 module.exports.CHAIN_ROLES = CHAIN_ROLES;
 module.exports.ownerItemKey = ownerItemKey;
 module.exports.ownerItemsFromBlock = ownerItemsFromBlock;
+
+module.exports.ensureSteering = ensureSteering;
+module.exports.openOwnerItems = openOwnerItems;
+module.exports.isNoneOwnerItem = isNoneOwnerItem;

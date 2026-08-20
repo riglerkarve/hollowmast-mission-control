@@ -49,6 +49,27 @@ db.migrate('brain', [
       CREATE INDEX idx_brain_notes_kind ON brain_notes(kind);
     `);
   },
+  // Owner decisions belong with the owner's Second Brain entries, not with the AI team's
+  // operational decisions. The shapes are deliberately parallel so both can explain a call
+  // later, without pretending a business choice was made by an agent.
+  (d) => {
+    d.exec(`
+      CREATE TABLE brain_decisions (
+        id            INTEGER PRIMARY KEY AUTOINCREMENT,
+        at            TEXT NOT NULL DEFAULT (datetime('now', 'localtime')),
+        venture       TEXT NOT NULL,
+        decision      TEXT NOT NULL,
+        because       TEXT NOT NULL,
+        cost_if_wrong TEXT,
+        revisit_when  TEXT,
+        recheck_at    TEXT,
+        evidence      TEXT,
+        supersedes    INTEGER REFERENCES brain_decisions(id)
+      );
+      CREATE INDEX idx_brain_decisions_venture ON brain_decisions(venture, id DESC);
+      CREATE INDEX idx_brain_decisions_recheck ON brain_decisions(recheck_at);
+    `);
+  },
 ]);
 
 const NOTE_KINDS = ['note', 'reference', 'decision'];
@@ -277,6 +298,65 @@ function writeNotesFile() {
   return rows.length;
 }
 
+function isCalendarDate(value) {
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(value)) return false;
+  const [year, month, day] = value.split('-').map(Number);
+  const date = new Date(Date.UTC(year, month - 1, day));
+  return date.getUTCFullYear() === year
+    && date.getUTCMonth() === month - 1
+    && date.getUTCDate() === day;
+}
+
+// Like team decisions, only an explicit date can become an automatic reminder. A prose
+// condition remains useful context, but turning it into a date would invent an obligation.
+function dueOwnerDecisions() {
+  const asOf = db.prepare("SELECT date('now', 'localtime') AS day").get().day;
+  const rows = db.prepare(`
+    SELECT d.*, EXISTS(SELECT 1 FROM brain_decisions successor WHERE successor.supersedes = d.id) AS superseded
+    FROM brain_decisions d ORDER BY d.id DESC
+  `).all();
+  const items = [];
+  const residue = { undated: [], future: [], malformed: [], superseded: [] };
+  for (const row of rows) {
+    const recheckAt = row.recheck_at == null ? '' : String(row.recheck_at).trim();
+    const item = { ...row, recheck_at: recheckAt || null };
+    if (row.superseded) residue.superseded.push(item);
+    else if (!recheckAt) residue.undated.push(item);
+    else if (!isCalendarDate(recheckAt)) residue.malformed.push(item);
+    else if (recheckAt > asOf) residue.future.push(item);
+    else items.push(item);
+  }
+  return {
+    asOf, state: items.length ? 'due' : 'none-due', items, residue,
+    note: items.length
+      ? `${items.length} owner decision(s) have a dated recheck on or before ${asOf}.`
+      : `No dated owner-decision rechecks are due on ${asOf}. ${residue.undated.length} decision(s) have a condition but no calendar date.`,
+  };
+}
+
+// This is deliberately a separate generated file. `_notes.md` is prose the owner wrote;
+// decisions are a register whose fields must remain visible as fields when Claude reads it.
+function writeDecisionsFile() {
+  const rows = db.prepare('SELECT * FROM brain_decisions ORDER BY id DESC').all();
+  const file = path.join(MEMORY_DIR, '_decisions.md');
+  if (!rows.length) { try { fs.unlinkSync(file); } catch { /* nothing to remove */ } return 0; }
+  const lines = [
+    '# Owner decision register', '',
+    'GENERATED FILE. Written by `mission-control/server/routes/brain.js`; do not hand-edit.',
+    'These are the owner\'s cross-venture decisions, not AI-team decisions or inferred preferences.', '',
+  ];
+  for (const row of rows) {
+    lines.push(`## ${row.venture} — ${row.decision}`, '', `**Because:** ${row.because}`);
+    if (row.cost_if_wrong) lines.push('', `**If wrong:** ${row.cost_if_wrong}`);
+    if (row.revisit_when) lines.push('', `**Revisit when:** ${row.revisit_when}${row.recheck_at ? ` (by ${row.recheck_at})` : ''}`);
+    if (row.evidence) lines.push('', `**Evidence:** ${row.evidence}`);
+    if (row.supersedes) lines.push('', `**Supersedes:** owner decision #${row.supersedes}`);
+    lines.push('');
+  }
+  fs.writeFileSync(file, lines.join('\n'));
+  return rows.length;
+}
+
 // Backlinks across BOTH sides of the store. This is the derivation that makes an entry more
 // than a text box: writing [[a-cap-is-a-biased-sample]] in a note makes that note visible
 // FROM the memory, which is the direction you cannot get by reading the file you wrote.
@@ -374,6 +454,46 @@ router.delete('/notes/:id', (req, res) => {
   if (!r.changes) return res.status(404).json({ error: 'no such note' });
   const written = writeNotesFile();
   res.json({ deleted: Number(req.params.id), remaining: written });
+});
+
+// --- owner decision register ------------------------------------------------------
+router.get('/decisions', (req, res) => {
+  if (req.query.due === '1') return res.json(dueOwnerDecisions());
+  const venture = String(req.query.venture || '').trim();
+  const rows = venture
+    ? db.prepare('SELECT * FROM brain_decisions WHERE venture = ? ORDER BY id DESC').all(venture)
+    : db.prepare('SELECT * FROM brain_decisions ORDER BY id DESC').all();
+  return res.json({ state: 'ok', decisions: rows, ventures: [...new Set(db.prepare('SELECT venture FROM brain_decisions ORDER BY venture').all().map((r) => r.venture))] });
+});
+
+router.post('/decisions', express.json(), (req, res) => {
+  const b = req.body || {};
+  const venture = String(b.venture || '').trim();
+  const decision = String(b.decision || '').trim();
+  const because = String(b.because || '').trim();
+  const recheckAt = b.recheck_at == null ? '' : String(b.recheck_at).trim();
+  if (!venture || !decision || !because) {
+    return res.status(400).json({ error: 'venture, decision, and because are all required' });
+  }
+  if (recheckAt && !isCalendarDate(recheckAt)) {
+    return res.status(400).json({ error: 'recheck_at must be a real YYYY-MM-DD calendar date' });
+  }
+  if (b.supersedes != null && !db.prepare('SELECT 1 FROM brain_decisions WHERE id = ?').get(Number(b.supersedes))) {
+    return res.status(400).json({ error: 'supersedes must name an existing owner decision' });
+  }
+  const info = db.prepare(`INSERT INTO brain_decisions
+    (venture, decision, because, cost_if_wrong, revisit_when, recheck_at, evidence, supersedes)
+    VALUES (?,?,?,?,?,?,?,?)`).run(venture, decision, because,
+    b.cost_if_wrong ? String(b.cost_if_wrong).trim() : null,
+    b.revisit_when ? String(b.revisit_when).trim() : null,
+    recheckAt || null, b.evidence ? String(b.evidence).trim() : null,
+    b.supersedes == null ? null : Number(b.supersedes));
+  try {
+    const written = writeDecisionsFile();
+    return res.status(201).json({ id: Number(info.lastInsertRowid), written });
+  } catch (err) {
+    return res.status(500).json({ error: `decision saved to the database but _decisions.md could not be written: ${err.message}` });
+  }
 });
 
 router.post('/:name/flag', (req, res) => {

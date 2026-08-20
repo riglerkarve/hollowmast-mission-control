@@ -388,6 +388,27 @@ db.migrate('todo', [
       if (hits.length === 1) byTitle.run(hits[0], row.id);
     }
   },
+
+  // 6. KIND PROVENANCE — a kind is a routing input, so its source must survive the write.
+  //
+  // The original `todo_items.kind` column records only the current label. That made the 21
+  // labels written while rules-first was inverted indistinguishable from rule-set labels.
+  // Historical rows stay untouched: their authorship cannot be recovered honestly. From this
+  // migration forward, every successful `ollama-shift.cjs` write appends its rule/model source
+  // and model name (NULL for a deterministic rule) in the same transaction as the label.
+  (d) => {
+    d.exec(`
+      CREATE TABLE todo_kind_log (
+        id           INTEGER PRIMARY KEY AUTOINCREMENT,
+        todo_item_id TEXT NOT NULL REFERENCES todo_items(id) ON DELETE RESTRICT,
+        kind         TEXT NOT NULL CHECK(kind IN ('bug', 'feature', 'chore', 'question')),
+        source       TEXT NOT NULL CHECK(source IN ('rule', 'model')),
+        model        TEXT,
+        at           TEXT NOT NULL DEFAULT (datetime('now', 'localtime'))
+      );
+      CREATE INDEX idx_todo_kind_log_item_at ON todo_kind_log(todo_item_id, at);
+    `);
+  },
 ]);
 
 const router = express.Router();

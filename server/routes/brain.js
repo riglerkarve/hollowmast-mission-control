@@ -117,6 +117,10 @@ function readStore() {
       // hedging about both cases at once.
       dateFrom: meta.modified ? 'frontmatter' : 'file mtime',
       flag: f ? { status: f.status, note: f.note, updated_at: f.updated_at } : null,
+      // Kept only in process while handling a local search. It is deliberately stripped
+      // before the list response: searching a memory body should find a memory, not turn
+      // the index endpoint into another way to download every memory body.
+      searchText: `${name}\n${meta.description || ''}\n${body}`.toLowerCase(),
     };
   });
 }
@@ -146,9 +150,15 @@ router.get('/', (req, res) => {
   const type = String(req.query.type || '').trim();
   const flaggedOnly = req.query.flagged === '1';
 
-  let filtered = q
-    ? store.filter((m) => m.name.toLowerCase().includes(q) || m.description.toLowerCase().includes(q))
-    : store.slice();
+  let filtered = q ? store.map((memory) => {
+    const matchedFields = [];
+    if (memory.name.toLowerCase().includes(q)) matchedFields.push('name');
+    if (memory.description.toLowerCase().includes(q)) matchedFields.push('description');
+    // `searchText` contains the body only in memory, and is removed below. The result says
+    // THAT a body matched without exposing the sentence that matched it.
+    if (memory.searchText.includes(q) && !matchedFields.length) matchedFields.push('body');
+    return { ...memory, matchedFields };
+  }).filter((memory) => memory.matchedFields.length) : store.slice();
   if (type) filtered = filtered.filter((m) => m.type === type);
   if (flaggedOnly) filtered = filtered.filter((m) => m.flag);
 
@@ -176,7 +186,8 @@ router.get('/', (req, res) => {
     byType,
     flagged: store.filter((m) => m.flag).length,
     dangling,
-    memories: filtered,
+    searchScope: q ? 'Matched locally against memory name, description and body. Body text is not returned by this index.' : null,
+    memories: filtered.map(({ searchText, ...memory }) => memory),
   });
 });
 

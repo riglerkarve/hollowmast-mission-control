@@ -170,6 +170,50 @@ about — check `/api/team/assignments` before picking up anything not on this t
 
 ---
 
+## Also now in scope: PrintProfit (`income-portfolio/`)
+
+Owner instruction, 20 August 2026: opened up to the three active tracks, not every project in
+the workspace. Those three are Mission Control (ops), HOLLOWMAST (game), PrintProfit (income) —
+one project per track, matching `../CLAUDE.md`'s own "one active build per track" rule exactly.
+**The parked side projects (Oxford AutoWorks, thin-air, Fallow, emberfall,
+high-society-420-tycoon, Mini Games) are explicitly not included** — those are "kept, documented,
+not in the rotation" by standing decision, and picking one up would be a fourth-game-class
+violation, not a scope grant.
+
+**Read `income-portfolio/CLAUDE.md` before touching anything there — it has its own hard rules,
+distinct from this repo's:**
+
+- **No spend, with one recorded, already-used exception** (a £40 Microsoft Ads test). Anything
+  else that costs money does not happen.
+- **No guaranteed-income claims** anywhere in user-facing copy. Not softened, not implied.
+- **No fake reviews, no astroturfing, no posting as a community member.** This is the one that
+  burns the niche permanently and cannot be undone — and it is moot for you specifically, because
+  posting only ever happens from the owner's own account (`marketing/REPLY-KIT-2026-08.md`,
+  clipboard-driven, never typed by an agent — see that project's own memory on why).
+- **Never create an account, enter identity or tax details, or complete a verification.** Prepare
+  up to that line, same as everywhere else in this workspace.
+- **The calculator and the spreadsheet must agree line for line.** The sold artefact is
+  recalculated with LibreOffice headless before it ships, every time — a past mismatch there
+  shipped an 800% pricing error.
+- **CI is the source of truth for what actually ships**, not a local build. Node 24 is available
+  there now for local dev, but verify a claim about the live site against the deployed artefact
+  (`gh run download`, or the live URL), not against what a local build produced.
+
+**There is no numbered batch queue here like Mission Control's, and that is not a gap to fill.**
+Read `income-portfolio/HUMAN_CHECKPOINTS.md`: the technical side is essentially finished — built,
+deployed, measured, legal all checked off. **The only remaining gap is distribution (CP-10) and
+the paid-test review (CP-11), both explicitly owner-only** — nothing there is yours to pick up.
+So the standing job is what that file already calls "what I keep doing without asking": bug
+fixes, code quality, keeping the build honest — **not inventing a batch of work to look busy.**
+If you find nothing that needs fixing, that is the correct, reportable outcome, not a sign to
+manufacture something.
+
+**The wrapper does not reach here either**, same as HOLLOWMAST — `tools/codex-run.cjs` is
+hard-coded to this repo. Leave work in the tree, list the exact paths under *Blocked*, same
+fallback as always until it takes a `--repo` argument.
+
+---
+
 ## Also now in scope: the open batches, M116, M117 — and Ollama, both tiers
 
 Owner instruction, 20 August 2026: keep adding to the project. This is not a pause between

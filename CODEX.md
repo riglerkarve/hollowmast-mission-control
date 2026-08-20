@@ -226,6 +226,13 @@ this is continuation of the audit/verification work you are already doing, not a
 a new route, table or panel. If a finding genuinely needs one, the answer is still the same —
 propose it in a handover, do not build it.
 
+**M109's scope, resolved (`team_decisions` #28) — the correct stop was right, and this is what
+comes after it.** You reproduced that `health` has no panel before flagging it rather than
+inventing a substitute scope, which is exactly the right call. The resolution: M109's own
+rationale is about panels stating claims **in their own copy**, so an absent panel has no claim
+to check — drop `health` from M109's scope and proceed with `exercise`, `lifestyle`, `wellbeing`.
+Resume Batch H from there.
+
 **M116 — `todo_items.kind` has no per-row author, filed 20 Aug 00:32.** 21 kinds were written by
 the model during the window `ollama-shift.cjs` had rules-first inverted (fixed in `3aece42`),
 and there is no way to tell which 21 rows they are — `kind` has no source column and no

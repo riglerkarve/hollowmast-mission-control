@@ -45,6 +45,7 @@ const SOURCES = [
 // Chromium epoch offset: seconds between 1601-01-01 and 1970-01-01.
 const EPOCH = 11644473600;
 const UNIX = `(last_visit_time/1000000 - ${EPOCH})`;
+const VISIT_UNIX = `(v.visit_time/1000000 - ${EPOCH})`;
 
 // Domain out of a URL, in SQL, so no URL is ever selected into this process.
 const DOMAIN = `
@@ -53,7 +54,7 @@ const DOMAIN = `
        ELSE substr(url, instr(url,'://')+3) END`;
 
 function readSource(label, file) {
-  if (!fs.existsSync(file)) return { label, present: false, rows: [] };
+  if (!fs.existsSync(file)) return { label, present: false, rows: [], dailyRows: [] };
 
   // Copy first — the live file is locked by the running browser.
   const tmp = path.join(os.tmpdir(), `mc-history-${label}-${process.pid}.db`);
@@ -72,8 +73,22 @@ function readSource(label, file) {
        GROUP BY domain
        HAVING domain <> ''
        ORDER BY visits DESC`).all();
+    // visits is the Chromium visit table, rather than url.visit_count: the latter is a
+    // current counter, while this preserves the day each visit occurred. DOMAIN stays in
+    // SQL, so a URL never crosses into JavaScript or the Mission Control database.
+    const dailyRows = src.prepare(`
+      SELECT ${DOMAIN} AS domain,
+             date(${VISIT_UNIX}, 'unixepoch') AS day,
+             COUNT(*) AS visits,
+             COUNT(DISTINCT u.id) AS pages
+        FROM visits v
+        JOIN urls u ON u.id = v.url
+       WHERE u.url LIKE 'http%' AND v.visit_time > 0
+       GROUP BY domain, day
+      HAVING domain <> '' AND day IS NOT NULL
+       ORDER BY day ASC, domain ASC`).all();
     src.close();
-    return { label, present: true, rows };
+    return { label, present: true, rows, dailyRows };
   } finally {
     // The copy holds the same private data as the original. Remove it even if the read threw.
     try { fs.unlinkSync(tmp); } catch { /* already gone */ }
@@ -93,10 +108,11 @@ function main() {
 
   for (const f of found) {
     if (!f.present) { console.log(`  ${f.label.padEnd(7)} not installed`); continue; }
-    console.log(`  ${f.label.padEnd(7)} ${f.rows.length} domains, ${f.rows.reduce((s, r) => s + r.visits, 0)} visits`);
+    console.log(`  ${f.label.padEnd(7)} ${f.rows.length} domains, ${f.rows.reduce((s, r) => s + r.visits, 0)} visits, ${f.dailyRows.length} daily domain rows`);
   }
 
   const all = present.flatMap((f) => f.rows.map((r) => ({ ...r, source: f.label })));
+  const daily = present.flatMap((f) => f.dailyRows.map((r) => ({ ...r, source: f.label })));
 
   if (DRY) {
     console.log('\n--dry: nothing written. Top 12 by visits:\n');
@@ -114,10 +130,17 @@ function main() {
       first_seen = MIN(browsing_domains.first_seen, excluded.first_seen),
       last_seen = MAX(browsing_domains.last_seen, excluded.last_seen),
       imported_at = datetime('now','localtime')`);
+  const dailyIns = db.prepare(`
+    INSERT INTO browsing_domain_days (source, domain, day, visits, pages)
+    VALUES (?, ?, ?, ?, ?)
+    ON CONFLICT(source, domain, day) DO UPDATE SET
+      visits = excluded.visits, pages = excluded.pages,
+      imported_at = datetime('now','localtime')`);
 
   db.exec('BEGIN');
   try {
     for (const r of all) ins.run(r.domain, r.visits, r.pages, r.first_seen, r.last_seen, r.source);
+    for (const r of daily) dailyIns.run(r.source, r.domain, r.day, r.visits, r.pages);
     db.exec('COMMIT');
   } catch (err) {
     db.exec('ROLLBACK');
@@ -127,6 +150,7 @@ function main() {
 
   const n = db.prepare('SELECT COUNT(*) c, SUM(visits) v FROM browsing_domains').get();
   console.log(`\nimported: ${n.c} domains, ${n.v} visits total.`);
+  console.log(`daily trend data: ${daily.length} source/domain/day rows.`);
   console.log('Domains and counts only — no URLs and no page titles were read into the database.');
 }
 

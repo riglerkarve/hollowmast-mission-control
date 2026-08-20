@@ -36,3 +36,20 @@
   border: 1px solid var(--border);
   border-radius: 7px;
 }
+
+.br-topic-form { display: flex; flex-wrap: wrap; gap: 0.45rem; align-items: center; margin: 0.65rem 0 0.45rem; }
+.br-topic-form label { font-size: 0.78rem; color: var(--muted); }
+.br-topic-form input { min-width: 14rem; flex: 1; padding: 0.42rem 0.55rem; color: var(--ink); background: var(--card); border: 1px solid var(--border); border-radius: var(--r-btn); font: inherit; font-size: 0.82rem; }
+.br-btn { margin-top: 0.5rem; padding: 0.42rem 0.7rem; color: var(--ink); background: var(--card); border: 1px solid var(--border-strong); border-radius: var(--r-btn); cursor: pointer; font: inherit; font-size: 0.8rem; }
+.br-topic-form .br-btn { margin-top: 0; }
+.br-btn:hover:not(:disabled) { border-color: var(--accent); }
+.br-btn:disabled { cursor: default; opacity: 0.55; }
+.br-topics { display: flex; flex-wrap: wrap; gap: 0.35rem; min-height: 1.5rem; align-items: center; }
+.br-topic { display: inline-flex; align-items: center; gap: 0.3rem; padding: 0.2rem 0.4rem; color: var(--ink); background: var(--ring-bg); border-radius: var(--r-btn); font-size: 0.76rem; }
+.br-topic button { padding: 0; color: inherit; background: none; border: 0; cursor: pointer; font: inherit; font-size: 1rem; line-height: 0.8; }
+.br-action-state { margin-left: 0.5rem; color: var(--muted); font-size: 0.75rem; }
+.br-briefing { margin-top: 0.7rem; }
+.br-brief-list { list-style: none; margin: 0.45rem 0 0; padding: 0; display: flex; flex-direction: column; gap: 0.45rem; }
+.br-brief-list li { display: grid; gap: 0.12rem; padding: 0.45rem 0.55rem; border: 1px solid var(--border); border-radius: 7px; }
+.br-brief-list a { color: var(--ink); font-size: 0.83rem; font-weight: 600; }
+.br-source, .br-why { color: var(--muted); font-size: 0.75rem; }

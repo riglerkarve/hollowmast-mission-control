@@ -21,9 +21,65 @@ const TEMPLATE = `
       <div class="badge"><span class="badge-icon">◷</span><span id="brWindow">—</span></div>
     </div>
     <section class="card" id="brTop"></section>
+    <section class="card" id="brRecent"></section>
+    <section class="card" id="brNews"></section>
     <section class="card" id="brCross"></section>
   </div>
 `;
+
+function briefingMarkup(briefing) {
+  if (!briefing) return '<p class="empty-hint">No local news briefing has been built yet.</p>';
+  if (briefing.state !== 'ok' || !briefing.briefing) {
+    return `<p class="empty-hint failure-hint">The last briefing was not completed locally.<br><small>${esc(briefing.failure || 'No usable local-model answer.')}</small></p>`;
+  }
+  return `
+    <p class="br-note"><strong>${esc(briefing.briefing.headline)}</strong> · built ${esc(briefing.fetchedAt)} with ${esc(briefing.model || 'the local model')}</p>
+    <ul class="br-brief-list">${briefing.briefing.items.map((item) => `
+      <li><a href="${esc(item.url)}" target="_blank" rel="noopener noreferrer">${esc(item.title)}</a>
+        <span class="br-source">${esc(item.source)}</span>
+        <span class="br-why">${esc(item.why)}</span></li>`).join('')}</ul>`;
+}
+
+function wireNewsActions() {
+  const form = root && root.querySelector('#brTopicForm');
+  if (form) form.addEventListener('submit', async (event) => {
+    event.preventDefault();
+    const input = root.querySelector('#brTopic');
+    const status = root.querySelector('#brNewsStatus');
+    status.textContent = 'Saving local topic…';
+    try {
+      const response = await fetch('/api/browsing/topics', {
+        method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ topic: input.value }),
+      });
+      const data = await response.json();
+      if (!response.ok) throw new Error(data.error || `HTTP ${response.status}`);
+      input.value = '';
+      load();
+    } catch (error) { status.textContent = `Could not save topic: ${error.message}`; }
+  });
+  root.querySelectorAll('[data-br-remove-topic]').forEach((button) => button.addEventListener('click', async () => {
+    const status = root.querySelector('#brNewsStatus');
+    status.textContent = 'Removing local topic…';
+    try {
+      const response = await fetch(`/api/browsing/topics/${encodeURIComponent(button.dataset.brRemoveTopic)}`, { method: 'DELETE' });
+      const data = await response.json();
+      if (!response.ok) throw new Error(data.error || `HTTP ${response.status}`);
+      load();
+    } catch (error) { status.textContent = `Could not remove topic: ${error.message}`; }
+  }));
+  const refresh = root && root.querySelector('#brRefreshBriefing');
+  if (refresh) refresh.addEventListener('click', async () => {
+    const status = root.querySelector('#brNewsStatus');
+    refresh.disabled = true;
+    status.textContent = 'Reading fixed public feeds and asking the local model…';
+    try {
+      const response = await fetch('/api/browsing/briefing/refresh', { method: 'POST' });
+      const data = await response.json();
+      if (!response.ok) throw new Error(data.error || data.briefing?.failure || `HTTP ${response.status}`);
+      load();
+    } catch (error) { refresh.disabled = false; status.textContent = `Could not build briefing: ${error.message}`; }
+  });
+}
 
 async function load() {
   if (!root) return;   // may be CALLED after teardown, not only resumed after it
@@ -44,6 +100,8 @@ async function load() {
   if (d.state === 'empty') {
     // Nothing imported and nothing browsed must not read the same.
     root.querySelector('#brTop').innerHTML = `<p class="empty-hint">${esc(d.message)}<br><small>${esc(d.note)}</small></p>`;
+    root.querySelector('#brRecent').innerHTML = '';
+    root.querySelector('#brNews').innerHTML = '';
     root.querySelector('#brCross').innerHTML = '';
     return;
   }
@@ -66,6 +124,26 @@ async function load() {
     </ul>
     <p class="br-note br-dim">${esc(d.privacy)}</p>`;
 
+  root.querySelector('#brRecent').innerHTML = d.recent.state === 'ok' ? `
+    <h2 class="br-h2">Recent attention</h2>
+    <p class="br-note">Seven days ending ${esc(d.recent.asOf)} (latest imported day), compared with the seven before it.</p>
+    <ul class="br-cross">${d.recent.rows.map((row) => `
+      <li><span class="br-name">${esc(row.domain)}</span><span class="br-n">${row.recent.toLocaleString('en-GB')} visits · ${row.change >= 0 ? '+' : ''}${row.change.toLocaleString('en-GB')} vs previous week</span></li>`).join('')}</ul>`
+    : `<h2 class="br-h2">Recent attention</h2><p class="empty-hint">${esc(d.recent.reason)}</p>`;
+
+  root.querySelector('#brNews').innerHTML = `
+    <h2 class="br-h2">Local news briefing</h2>
+    <p class="br-note">Choose topics you want to follow. They stay on this machine; requests use fixed public RSS feeds, and the local model ranks only public feed metadata.</p>
+    <form class="br-topic-form" id="brTopicForm">
+      <label for="brTopic">Local topic</label><input id="brTopic" maxlength="80" required placeholder="e.g. 3D printing" />
+      <button class="br-btn" type="submit">Add topic</button>
+    </form>
+    <div class="br-topics">${d.topics.length ? d.topics.map((topic) => `<span class="br-topic">${esc(topic.topic)} <button type="button" aria-label="Remove ${esc(topic.topic)}" data-br-remove-topic="${esc(topic.topic)}">×</button></span>`).join('') : '<span class="br-note">No topics chosen yet.</span>'}</div>
+    <button class="br-btn" id="brRefreshBriefing" type="button" ${d.topics.length ? '' : 'disabled'}>Build local briefing</button>
+    <span class="br-action-state" id="brNewsStatus"></span>
+    <div class="br-briefing">${briefingMarkup(d.briefing)}</div>`;
+  wireNewsActions();
+
   root.querySelector('#brCross').innerHTML = `
     <h2 class="br-h2">Paid for, but not visited</h2>
     ${d.paidNotVisited.length ? `
@@ -74,7 +152,7 @@ async function load() {
           <li><span class="br-name">${esc(s.name)}</span>
             <span class="br-n">${esc(s.status)} · last charge ${esc(s.lastOn)} · ${gbp(s.totalPence)} in total</span></li>`).join('')}
       </ul>`
-    : '<p class="empty-hint">Every recurring service matched a domain you visited.</p>'}
+    : '<p class="empty-hint">No active recurring services were unmatched.</p>'}
     <p class="br-note br-dim">${esc(d.matchNote)}</p>`;
 }
 

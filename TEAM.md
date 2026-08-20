@@ -8,6 +8,29 @@ idea.
 
 ---
 
+## A temporary exception — Codex is also a manager, until Sunday 23 August
+
+Owner instruction, 20 August 2026 (`team_decisions` #27). Every Claude-driven role except the
+architect went silent at `2026-08-19T15:03` — Team Supervisor, Team Manager, and every Claude
+worker. Only Codex and one new session were active. With no manager to confirm a plan,
+`POST /api/team/assign`'s unconfirmed-plan guard was blocking delegation outright, so Codex
+Worker was added as a second manager to unblock it.
+
+**This is a real exception, not a quiet policy change, and it carries a real cost.** Codex is
+also the primary active worker right now and the team's designated independent reviewer of
+Claude's commits. A manager confirming plans built substantially from its own work is a
+self-approval loop — structurally the same collapse `cross-review.cjs` refuses one level down
+(a same-engine review that finds nothing is indistinguishable from a clean bill of health). It
+is not eliminated by this note, only named: **any plan Codex confirms as manager should say so
+explicitly**, and anything reviewable by a different engine should still go through
+`cross-review.cjs` rather than being waved through by the same session that built it.
+
+**Revert to worker on Sunday 23 August**, when the owner is back, unless explicitly continued —
+or sooner, if a genuine second Claude manager session appears before then. `node
+tools/team-roster.cjs --set "Codex Worker" worker`.
+
+---
+
 ## The one idea
 
 Nine sessions were running against this workspace when this was written, six of them in

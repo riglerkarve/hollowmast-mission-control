@@ -25,6 +25,29 @@
 // cannot reproduce answers a regex already knows is not one to trust on the answers nobody
 // knows.
 'use strict';
+
+// The verifier must be self-contained: starting this script without MC_DB_PATH would load the
+// live database before it could prove anything. The parent process creates a unique temporary
+// path, then the child below runs the same writer against it.
+const VERIFY_KIND_LOG = process.argv.includes('--verify-kind-log');
+if (VERIFY_KIND_LOG && !process.env.MC_DB_PATH) {
+  const fs = require('node:fs');
+  const os = require('node:os');
+  const path = require('node:path');
+  const { spawnSync } = require('node:child_process');
+  const tempDir = fs.mkdtempSync(path.join(os.tmpdir(), 'mission-control-kind-log-'));
+  const tempDb = path.join(tempDir, 'dashboard.db');
+  const child = spawnSync(process.execPath, [__filename, '--verify-kind-log'], {
+    cwd: path.join(__dirname, '..'),
+    env: { ...process.env, MC_DB_PATH: tempDb, MC_DISABLE_ACCESS_LOG: '1' },
+    encoding: 'utf8',
+  });
+  process.stdout.write(child.stdout || '');
+  process.stderr.write(child.stderr || '');
+  console.log(`  temporary database: ${tempDb}`);
+  fs.rmSync(tempDir, { recursive: true, force: true });
+  process.exit(child.status == null ? 1 : child.status);
+}
 require('./_run-log.cjs').record();
 
 const db = require('../server/db');
@@ -39,6 +62,50 @@ const BATCH = 10;
 const ACCURACY_FLOOR = 0.8;
 
 const KINDS = ['bug', 'feature', 'chore', 'question'];
+
+// Update first, then append exactly one provenance row only when the guarded write changed a
+// row. The two statements are called inside db.withTransaction(), so a committed kind can
+// never lack its source entry and a losing concurrent update cannot fabricate one.
+function setKind(update, log, { id, kind, source, model = null }) {
+  const changed = update.run(kind, id).changes;
+  if (changed) log.run(id, kind, source, model);
+  return changed;
+}
+
+function verifyKindLog() {
+  const live = require('node:path').resolve(__dirname, '..', 'data', 'dashboard.db');
+  if (!process.env.MC_DB_PATH || require('node:path').resolve(db.databasePath) === live) {
+    throw new Error('--verify-kind-log refuses the live database; run without MC_DB_PATH so it creates a temporary one');
+  }
+
+  // Loading this route applies its append-only migration to the temporary database only.
+  require('../server/routes/todo');
+  const insert = db.prepare(
+    `INSERT INTO todo_items (id, source, title, priority, owner, status, kind)
+     VALUES (?, 'test', ?, 'P2', 'DET', 'open', NULL)`,
+  );
+  const update = db.prepare('UPDATE todo_items SET kind = ? WHERE id = ? AND kind IS NULL');
+  const log = db.prepare('INSERT INTO todo_kind_log (todo_item_id, kind, source, model) VALUES (?, ?, ?, ?)');
+  const rowsFor = db.prepare('SELECT todo_item_id, kind, source, model FROM todo_kind_log WHERE todo_item_id = ? ORDER BY id');
+
+  db.withTransaction(() => {
+    insert.run('M116-rule-probe', 'temporary rule provenance probe');
+    insert.run('M116-model-probe', 'temporary model provenance probe');
+    if (setKind(update, log, { id: 'M116-rule-probe', kind: 'bug', source: 'rule' }) !== 1) throw new Error('rule write did not change its temporary row');
+    if (setKind(update, log, { id: 'M116-rule-probe', kind: 'bug', source: 'rule' }) !== 0) throw new Error('second rule write bypassed the guarded update');
+    if (setKind(update, log, { id: 'M116-model-probe', kind: 'question', source: 'model', model: 'test-model' }) !== 1) throw new Error('model write did not change its temporary row');
+  });
+
+  const ruleRows = rowsFor.all('M116-rule-probe');
+  const modelRows = rowsFor.all('M116-model-probe');
+  if (ruleRows.length !== 1 || ruleRows[0].kind !== 'bug' || ruleRows[0].source !== 'rule' || ruleRows[0].model !== null) {
+    throw new Error('rule provenance row is missing or wrong');
+  }
+  if (modelRows.length !== 1 || modelRows[0].kind !== 'question' || modelRows[0].source !== 'model' || modelRows[0].model !== 'test-model') {
+    throw new Error('model provenance row is missing or wrong');
+  }
+  console.log('  PASS kind log: one append-only row per successful rule/model write; no row for a guarded no-op.');
+}
 
 // The deterministic half. Narrow on purpose: a pattern that matches half the backlog is not a
 // rule, it is noise with a regex around it. Anything it cannot settle returns null and goes to
@@ -79,7 +146,9 @@ async function askBatch(items) {
   catch { return { fail: { why: `unparseable JSON: ${String(r.text).slice(0, 70)}` } }; }
 }
 
-(async () => {
+if (VERIFY_KIND_LOG) {
+  verifyKindLog();
+} else (async () => {
   // THE ORACLE IS THE ITEMS THAT ALREADY HAVE A KIND, not the ones being filled. The first
   // version derived both from the same unset rows, so APPLYING the rules destroyed the oracle
   // for every later run: 12 items settled, written, and then invisible to the next scoring
@@ -156,6 +225,7 @@ async function askBatch(items) {
   let applied = 0;
   if (APPLY) {
     const up = db.prepare('UPDATE todo_items SET kind = ? WHERE id = ? AND kind IS NULL');
+    const log = db.prepare('INSERT INTO todo_kind_log (todo_item_id, kind, source, model) VALUES (?, ?, ?, ?)');
 
     // THE RULES PASS APPLIES TO THE UNLABELLED ROWS, NOT TO THE ORACLE. It iterated the
     // oracle -- rows that by definition already have a kind -- against an UPDATE guarded on
@@ -168,7 +238,11 @@ async function askBatch(items) {
     // Measured afterwards: 12 of 12 rule-settleable items hold the matching kind, so no data
     // was harmed -- by luck rather than by design, which is not a defence.
     // `ruled` and `modelTail` are computed once, above, before this block -- not re-derived here.
-    db.withTransaction(() => { for (const s of ruled) applied += up.run(s.kind, s.id).changes; });
+    db.withTransaction(() => {
+      for (const s of ruled) applied += setKind(up, log, {
+        id: s.id, kind: s.kind, source: 'rule',
+      });
+    });
     console.log(`\n  wrote ${applied} kinds from the RULES (exact, auditable, free).`);
 
     if (acc >= ACCURACY_FLOOR && modelTail.length) {
@@ -177,7 +251,9 @@ async function askBatch(items) {
         const res = await askBatch(modelTail.slice(i, i + BATCH));
         if (res.fail) { console.log(`    tail batch ${i / BATCH + 1}: ${res.fail.why}`); continue; }
         db.withTransaction(() => {
-          for (const a of res.answers) if (KINDS.includes(a.kind)) m += up.run(a.kind, a.id).changes;
+          for (const a of res.answers) if (KINDS.includes(a.kind)) m += setKind(up, log, {
+            id: a.id, kind: a.kind, source: 'model', model: MODEL,
+          });
         });
       }
       console.log(`  wrote ${m} more from the MODEL, on the tail the rules could not settle.`);

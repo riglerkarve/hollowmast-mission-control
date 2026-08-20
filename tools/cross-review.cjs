@@ -40,7 +40,14 @@ const arg = (n) => { const i = argv.indexOf(`--${n}`); return i >= 0 ? argv[i + 
 const has = (n) => argv.includes(`--${n}`);
 
 const REPO = arg('repo') || 'mission-control';
-const DRY = has('dry');
+// --dry-run is accepted alongside --dry, not because the flag was renamed but because it
+// wasn't: a real run against this exact mismatch (`--dry-run` typed, `--dry` checked) is what
+// exposed it. DRY silently evaluated false, the refusal path below reached its `if (!DRY)
+// record(...)` write, and it failed inside Codex's sandbox with "attempt to write a readonly
+// database" -- a database that is, in fact, writable from an unsandboxed process (verified).
+// So the write attempt itself was correct behaviour for the (wrongly) non-dry flag; the actual
+// bug was one hyphenated word never being recognised as the same intent.
+const DRY = has('dry') || has('dry-run');
 const UNCOMMITTED = has('uncommitted');
 const TARGET = UNCOMMITTED ? 'uncommitted' : argv.find((a) => /^[0-9a-f]{7,40}$/.test(a));
 const AUTHOR = arg('author');

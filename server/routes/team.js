@@ -906,6 +906,59 @@ function shifts() {
     ) GROUP BY shift ORDER BY shift DESC`).all();
 }
 
+// A free-text revisit condition and a date are deliberately separate fields. A condition
+// such as "when the next review fails" cannot honestly become a calendar alert just because
+// it contains the word "when". Only a real ISO calendar date is eligible for the automatic
+// due list; the undated remainder is returned explicitly so it does not disappear from view.
+function isCalendarDate(value) {
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(value)) return false;
+  const [year, month, day] = value.split('-').map(Number);
+  const date = new Date(Date.UTC(year, month - 1, day));
+  return date.getUTCFullYear() === year
+    && date.getUTCMonth() === month - 1
+    && date.getUTCDate() === day;
+}
+
+function dueDecisions() {
+  const asOf = db.prepare("SELECT date('now', 'localtime') AS day").get().day;
+  const rows = db.prepare(`
+    SELECT d.*,
+      EXISTS(SELECT 1 FROM team_decisions successor WHERE successor.supersedes = d.id) AS superseded
+    FROM team_decisions d
+    ORDER BY d.id DESC
+  `).all();
+  const due = [];
+  const residue = { undated: [], future: [], malformed: [], superseded: [] };
+
+  for (const row of rows) {
+    const recheckAt = row.recheck_at == null ? '' : String(row.recheck_at).trim();
+    const item = { ...row, recheck_at: recheckAt || null };
+    if (row.superseded) {
+      residue.superseded.push(item);
+    } else if (!recheckAt) {
+      residue.undated.push(item);
+    } else if (!isCalendarDate(recheckAt)) {
+      residue.malformed.push(item);
+    } else if (recheckAt > asOf) {
+      residue.future.push(item);
+    } else {
+      due.push(item);
+    }
+  }
+
+  return {
+    asOf,
+    state: due.length ? 'due' : 'none-due',
+    items: due,
+    residue,
+    // A zero due count means exactly that. It does not mean the register is empty or that
+    // every decision is safe to forget: undated conditions still need a human-triggered review.
+    note: due.length
+      ? `${due.length} decision(s) have a dated recheck on or before ${asOf}.`
+      : `No dated decision rechecks are due on ${asOf}. ${residue.undated.length} decision(s) have a revisit condition but no calendar date.`,
+  };
+}
+
 function reportFor(shift) {
   // DEFAULTS TO THE LATEST SHIFT THAT HAS ANYTHING IN IT, not to the clock. Caught at 18:00
   // today: the label rolled to `-evening`, the report came back empty, and an empty report
@@ -918,6 +971,7 @@ function reportFor(shift) {
   const steering = db.prepare('SELECT * FROM team_steering WHERE shift = ? ORDER BY id').all(s)
     .map((r) => ({ ...r, options: r.options ? JSON.parse(r.options) : null }));
   const decisions = db.prepare('SELECT * FROM team_decisions WHERE shift = ? ORDER BY id').all(s);
+  const decisionsDue = dueDecisions();
   const assignments = db.prepare('SELECT * FROM team_assignments WHERE shift = ? ORDER BY id').all(s);
   const roster = db.prepare('SELECT * FROM team_sessions WHERE retired_at IS NULL').all();
   const ownerItemFilings = ownerItemsForHandovers(handovers);
@@ -1001,6 +1055,7 @@ function reportFor(shift) {
     plans,
     steering,
     decisions,
+    decisionsDue,
     assignments,
     roster,
     ownerItems,
@@ -1086,6 +1141,9 @@ router.post('/decision', express.json(), (req, res) => {
   if (!b.decision) return res.status(400).json({ error: 'decision is required' });
   if (!b.because) return res.status(400).json({ error: 'because is required — a decision with no reasoning cannot be reviewed later, which is the only reason to record it' });
   if (!b.decided_by) return res.status(400).json({ error: 'decided_by is required' });
+  if (b.recheck_at && !isCalendarDate(String(b.recheck_at).trim())) {
+    return res.status(400).json({ error: 'recheck_at must be a real YYYY-MM-DD calendar date' });
+  }
   const info = db.prepare(`
     INSERT INTO team_decisions (at, shift, decided_by, role, decision, because, cost_if_wrong,
                                 revisit_when, recheck_at, supersedes, evidence, by_whom)
@@ -1097,7 +1155,8 @@ router.post('/decision', express.json(), (req, res) => {
 });
 
 router.get('/decisions', (req, res) => {
-  res.json({ decisions: db.prepare('SELECT * FROM team_decisions ORDER BY id DESC LIMIT 100').all() });
+  if (req.query.due === '1') return res.json(dueDecisions());
+  res.json({ state: 'ok', decisions: db.prepare('SELECT * FROM team_decisions ORDER BY id DESC LIMIT 100').all() });
 });
 
 
@@ -1350,6 +1409,7 @@ module.exports.shiftView = shiftView;
 module.exports.shiftLabel = shiftLabel;
 module.exports.openSteering = openSteering;
 module.exports.reportFor = reportFor;
+module.exports.dueDecisions = dueDecisions;
 module.exports.shifts = shifts;
 module.exports.ROLES = ROLES;
 module.exports.CHAIN_ROLES = CHAIN_ROLES;

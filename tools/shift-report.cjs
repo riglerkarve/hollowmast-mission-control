@@ -48,7 +48,7 @@ const p = (s = '') => L.push(s);
 // this file only renders it.
 const R = team.reportFor(arg('shift'));
 const {
-  handovers, plans, steering, decisions, assignments, roster,
+  handovers, plans, steering, decisions, decisionsDue, assignments, roster,
 } = R;
 const SHIFT = R.shift;
 
@@ -70,6 +70,34 @@ p(`| Work delegated | ${assignments.length} |`);
 p(`| Decisions recorded | ${decisions.length + steering.filter((s) => s.answer).length + plans.filter((x) => x.verdict).length} |`);
 p(`| Questions put to the owner | ${steering.length} |`);
 p();
+
+// ---------------------------------------------------------------- decision revisit radar
+// The shift's decisions are not the whole register. A decision made on an earlier shift can
+// become the most important thing to review today, so this reads the central due derivation
+// rather than making the reader remember which previous report contained it.
+p('## Decisions due for recheck');
+p();
+if (!decisionsDue.items.length) {
+  p(`**No dated decision rechecks are due as of ${decisionsDue.asOf}.**`);
+  p(`${decisionsDue.residue.undated.length} decision(s) have a revisit condition but no calendar date, so they cannot truthfully be presented as overdue.`);
+  if (decisionsDue.residue.malformed.length) {
+    p(`${decisionsDue.residue.malformed.length} decision(s) have malformed recheck dates and need correction before they can be scheduled.`);
+  }
+  p();
+} else {
+  for (const d of decisionsDue.items) {
+    p(`### Decision #${d.id} — due ${d.recheck_at}`);
+    p(`**${d.decision}**`);
+    p();
+    p(`**Revisit because:** ${d.revisit_when || 'A scheduled recheck was recorded without a condition.'}`);
+    p(`\n**Original reasoning:** ${d.because}`);
+    p();
+  }
+  if (decisionsDue.residue.malformed.length) {
+    p(`> ${decisionsDue.residue.malformed.length} decision(s) have malformed recheck dates and were not treated as due.`);
+    p();
+  }
+}
 
 // ------------------------------------------------------------------------ what was decided
 p('## What was decided, and by whom');

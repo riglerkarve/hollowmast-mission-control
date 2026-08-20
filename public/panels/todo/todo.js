@@ -24,6 +24,10 @@ const VIEWS = {
 
 const STATUS_LABEL = { open: 'open', in_progress: 'in progress', done: 'done', declined: 'declined' };
 const CLUSTERS_FALLBACK = [];
+// Must stay in lockstep with server/routes/todo.js's closed OWNERS vocabulary. The server
+// remains the authority: this list makes the control understandable, while its validation
+// keeps stale clients from writing a made-up assignee.
+const OWNERS = ['DET', 'LOC', 'FRO', 'DET+LOC', 'CODEX', 'YOU'];
 
 const TEMPLATE = `
   <div class="panel panel-wide td-panel">
@@ -71,7 +75,7 @@ const TEMPLATE = `
               </select>
               <select id="tdOwner" class="td-in td-sm">
                 <option value="DET">DET</option><option value="LOC">LOC</option>
-                <option value="DET+LOC">DET+LOC</option><option value="FRO">FRO</option>
+                <option value="DET+LOC">DET+LOC</option><option value="FRO">FRO</option><option value="CODEX">CODEX</option>
                 <option value="YOU">YOU</option>
               </select>
               <input id="tdEffort" class="td-in td-sm" placeholder="Effort e.g. 3h">
@@ -222,6 +226,7 @@ async function loadSummary() {
 function itemHtml(i) {
   const why = String(i.rationale || '');
   const teaser = why.length > 96 ? `${why.slice(0, 96).trimEnd()}…` : why;
+  const ownerChoices = OWNERS.map((owner) => `<option value="${esc(owner)}"${owner === i.owner ? ' selected' : ''}>${esc(owner)}</option>`).join('');
   return `
     <li class="td-item ${i.status}${i.isNext ? ' is-next' : ''}${i.isStarted ? ' is-started' : ''}" data-id="${esc(i.id)}">
       <div class="td-row">
@@ -250,9 +255,16 @@ function itemHtml(i) {
         ${i.status !== 'done' ? `<button class="btn td-act" type="button" data-act="status" data-to="done">Done</button>` : ''}
         ${i.status === 'open' || i.status === 'in_progress' ? `<button class="btn td-act" type="button" data-act="status" data-to="declined">Decline</button>` : ''}
         ${i.status === 'done' || i.status === 'declined' ? `<button class="btn td-act" type="button" data-act="status" data-to="open">Reopen</button>` : ''}
-        <select class="td-in td-pri" data-act="priority" title="Re-prioritise">
-          ${['P0', 'P1', 'P2', 'P3', 'DECLINE', 'DONE'].map((p) => `<option value="${p}"${p === i.priority ? ' selected' : ''}>${p}</option>`).join('')}
-        </select>
+        <label class="td-control">Priority
+          <select class="td-in td-pri" data-act="priority" aria-label="Priority for ${esc(i.id)}" title="Re-prioritise">
+            ${['P0', 'P1', 'P2', 'P3', 'DECLINE', 'DONE'].map((p) => `<option value="${p}"${p === i.priority ? ' selected' : ''}>${p}</option>`).join('')}
+          </select>
+        </label>
+        <label class="td-control">Assign to
+          <select class="td-in td-owner" data-act="owner" aria-label="Assignee for ${esc(i.id)}" title="Move this task to another agent">
+            ${ownerChoices}
+          </select>
+        </label>
         <button class="btn td-act td-focus-btn" type="button" data-act="focus" title="Work on this — the timer records against it">Focus</button>
         <button class="td-note-btn" type="button" data-act="note" title="Add a note">+ note</button>
         <button class="td-del" type="button" data-act="delete" title="Delete — the seed only runs once, so it will not come back">×</button>
@@ -458,19 +470,21 @@ async function handleChange(ev) {
     if (!root) return;   // the panel was torn down mid-await; root is null now
     return;
   }
-  const p = ev.target.closest('.td-pri');
-  if (!p) return;
-  const li = p.closest('.td-item');
+  const control = ev.target.closest('.td-pri, .td-owner');
+  if (!control) return;
+  const li = control.closest('.td-item');
+  if (!li) return;
+  const changingOwner = control.classList.contains('td-owner');
   try {
     await api(`/items/${encodeURIComponent(li.dataset.id)}`, {
       method: 'PATCH', headers: { 'content-type': 'application/json', 'x-mc-by': 'you' },
-      body: JSON.stringify({ priority: p.value }),
+      body: JSON.stringify(changingOwner ? { owner: control.value } : { priority: control.value }),
     });
     await reloadAll();
     if (!root) return;   // the panel was torn down mid-await; root is null now
   } catch (err) {
     if (!root) return;   // the panel was torn down mid-await; root is null now
-    fail(root.querySelector('#tdList'), 'the priority change', err);
+    fail(root.querySelector('#tdList'), changingOwner ? 'the assignment change' : 'the priority change', err);
   }
 }
 

@@ -45,7 +45,11 @@ const provenance = require('../provenance');
 // this file computes a score out of numbers I chose and presents the result as a fact;
 // the rationale text travels with every item so the judgement can be argued with.
 
-const OWNERS = ['DET', 'LOC', 'FRO', 'YOU', 'DET+LOC'];
+// A task owner is an assignment target, not free-form prose. CODEX was initially omitted
+// because the seeded board pre-dated its worker role, while subsequent sessions were already
+// claiming work as CODEX through PATCH. Keeping the same closed vocabulary for creates AND
+// changes means Remote Control cannot turn a typo into a task that no agent ever sees.
+const OWNERS = ['DET', 'LOC', 'FRO', 'YOU', 'DET+LOC', 'CODEX'];
 const PRIORITIES = ['P0', 'P1', 'P2', 'P3', 'DECLINE', 'DONE'];
 const STATUSES = ['open', 'in_progress', 'done', 'declined'];
 const VIEWS = ['mine', 'build'];
@@ -870,6 +874,9 @@ router.patch('/items/:id', (req, res) => {
   }
   if (priority !== undefined && !PRIORITIES.includes(priority)) {
     return res.status(400).json({ error: `priority must be one of ${PRIORITIES.join(', ')}` });
+  }
+  if (clean.owner !== undefined && !OWNERS.includes(clean.owner)) {
+    return res.status(400).json({ error: `owner must be one of ${OWNERS.join(', ')}` });
   }
 
   const before = db.prepare('SELECT * FROM todo_items WHERE id = ?').get(req.params.id);

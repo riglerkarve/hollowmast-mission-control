@@ -166,6 +166,8 @@
 .td-acts { display: flex; gap: 0.35rem; align-items: center; flex-wrap: wrap; margin-top: 0.15rem; }
 .td-act { font-size: 0.74rem; padding: 0.25rem 0.6rem; border-radius: 8px; }
 .td-pri { padding: 0.2rem 0.35rem; font-size: 0.74rem; }
+.td-owner { padding: 0.2rem 0.35rem; font-size: 0.74rem; }
+.td-control { display: inline-flex; align-items: center; gap: 0.25rem; color: var(--muted); font-size: 0.7rem; white-space: nowrap; }
 
 .td-note-btn {
   border: 0; background: transparent; color: var(--muted); font: inherit; font-size: 0.74rem;

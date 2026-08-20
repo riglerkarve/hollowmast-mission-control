@@ -29,15 +29,18 @@ const TEMPLATE = `
 
 function briefingMarkup(briefing) {
   if (!briefing) return '<p class="empty-hint">No local news briefing has been built yet.</p>';
+  const sourceFailure = briefing.feedFailures && briefing.feedFailures.length
+    ? `<p class="br-note failure-hint">Partial feed check: ${briefing.feedFailures.map(esc).join(' · ')}</p>` : '';
   if (briefing.state !== 'ok' || !briefing.briefing) {
-    return `<p class="empty-hint failure-hint">The last briefing was not completed locally.<br><small>${esc(briefing.failure || 'No usable local-model answer.')}</small></p>`;
+    return `<p class="empty-hint failure-hint">The last briefing was not completed locally.<br><small>${esc(briefing.failure || 'No usable local-model answer.')}</small></p>${sourceFailure}`;
   }
   return `
     <p class="br-note"><strong>${esc(briefing.briefing.headline)}</strong> · built ${esc(briefing.fetchedAt)} with ${esc(briefing.model || 'the local model')}</p>
     <ul class="br-brief-list">${briefing.briefing.items.map((item) => `
       <li><a href="${esc(item.url)}" target="_blank" rel="noopener noreferrer">${esc(item.title)}</a>
         <span class="br-source">${esc(item.source)}</span>
-        <span class="br-why">${esc(item.why)}</span></li>`).join('')}</ul>`;
+        <span class="br-why">${esc(item.why)}</span>
+        <span class="br-feedback"><button type="button" data-br-feedback="relevant" data-br-url="${esc(item.url)}" data-br-title="${esc(item.title)}" data-br-source="${esc(item.source)}">Relevant</button><button type="button" data-br-feedback="hide" data-br-url="${esc(item.url)}" data-br-title="${esc(item.title)}" data-br-source="${esc(item.source)}">Hide</button></span></li>`).join('')}</ul>${sourceFailure}`;
 }
 
 function wireNewsActions() {
@@ -79,6 +82,24 @@ function wireNewsActions() {
       load();
     } catch (error) { refresh.disabled = false; status.textContent = `Could not build briefing: ${error.message}`; }
   });
+  root.querySelectorAll('[data-br-feedback]').forEach((button) => button.addEventListener('click', async () => {
+    const controls = button.closest('.br-feedback');
+    const decision = button.dataset.brFeedback;
+    controls.querySelectorAll('button').forEach((control) => { control.disabled = true; });
+    try {
+      const response = await fetch('/api/browsing/briefing/feedback', {
+        method: 'POST', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ decision, url: button.dataset.brUrl, title: button.dataset.brTitle, source: button.dataset.brSource }),
+      });
+      const data = await response.json();
+      if (!response.ok) throw new Error(data.error || `HTTP ${response.status}`);
+      controls.textContent = decision === 'relevant' ? 'Saved as relevant locally' : 'Hidden from future local rankings';
+    } catch (error) {
+      controls.querySelectorAll('button').forEach((control) => { control.disabled = false; });
+      const status = root.querySelector('#brNewsStatus');
+      status.textContent = `Could not save local feedback: ${error.message}`;
+    }
+  }));
 }
 
 async function load() {
@@ -112,7 +133,7 @@ async function load() {
   root.querySelector('#brTop').innerHTML = `
     <h2 class="br-h2">Where the visits went</h2>
     <p class="br-note">${esc(d.window.from)} to ${esc(d.window.to)} · ${d.window.visits.toLocaleString('en-GB')} visits
-      across ${d.window.domains} domains.</p>
+      across ${d.window.domains} domains · last imported ${esc(d.window.importedAt || 'unknown')}.</p>
     <p class="br-note br-dim">${esc(d.windowNote)}</p>
     <ul class="br-list">
       ${d.top.map((t) => `
@@ -133,7 +154,7 @@ async function load() {
 
   root.querySelector('#brNews').innerHTML = `
     <h2 class="br-h2">Local news briefing</h2>
-    <p class="br-note">Choose topics you want to follow. They stay on this machine; requests use fixed public RSS feeds, and the local model ranks only public feed metadata.</p>
+    <p class="br-note">Choose topics you want to follow. They stay on this machine; requests use fixed public RSS feeds (${d.newsSources.map(esc).join(', ')}), and the local model ranks only public feed metadata.</p>
     <form class="br-topic-form" id="brTopicForm">
       <label for="brTopic">Local topic</label><input id="brTopic" maxlength="80" required placeholder="e.g. 3D printing" />
       <button class="br-btn" type="submit">Add topic</button>

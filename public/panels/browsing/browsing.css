@@ -53,3 +53,7 @@
 .br-brief-list li { display: grid; gap: 0.12rem; padding: 0.45rem 0.55rem; border: 1px solid var(--border); border-radius: 7px; }
 .br-brief-list a { color: var(--ink); font-size: 0.83rem; font-weight: 600; }
 .br-source, .br-why { color: var(--muted); font-size: 0.75rem; }
+.br-feedback { display: flex; gap: 0.35rem; margin-top: 0.15rem; color: var(--muted); font-size: 0.72rem; }
+.br-feedback button { padding: 0.18rem 0.4rem; color: var(--muted); background: var(--card); border: 1px solid var(--border); border-radius: var(--r-btn); cursor: pointer; font: inherit; }
+.br-feedback button:hover:not(:disabled) { color: var(--ink); border-color: var(--accent); }
+.br-feedback button:disabled { cursor: default; opacity: 0.55; }

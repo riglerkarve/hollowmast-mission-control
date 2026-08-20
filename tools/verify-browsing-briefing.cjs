@@ -13,6 +13,7 @@ if (process.argv.includes('--worker')) {
   (async () => {
     const db = require('../server/db');
     const browsing = require('../server/routes/browsing');
+    assert.equal(db.prepare(`SELECT version FROM schema_meta WHERE module = 'browsing'`).get().version, 4);
     db.prepare(`INSERT INTO browsing_domains (domain, visits, pages, first_seen, last_seen, source)
       VALUES (?, ?, ?, ?, ?, ?)`)
       .run('example.test', 12, 4, '2026-08-01', '2026-08-08', 'fixture');
@@ -31,6 +32,12 @@ if (process.argv.includes('--worker')) {
       <title><![CDATA[Public &amp; useful]]></title><link>https://news.example/item</link>
       <pubDate>Wed, 20 Aug 2026 10:00:00 GMT</pubDate></item></channel></rss>`, 'Fixture News');
     assert.deepEqual(parsed, [{ title: 'Public & useful', url: 'https://news.example/item', published: 'Wed, 20 Aug 2026 10:00:00 GMT', source: 'Fixture News' }]);
+    const deduped = browsing.dedupeArticles([
+      { title: 'Public & useful', url: 'https://news.example/item', source: 'Fixture News' },
+      { title: 'Public & useful', url: 'https://news.example/item/', source: 'Duplicate News' },
+    ]);
+    assert.equal(deduped.duplicatesRemoved, 1);
+    assert.deepEqual(deduped.articles.map((article) => article.id), [1]);
     assert.ok(browsing.NEWS_FEEDS.every((feed) => !feed.url.includes('example.test')));
 
     const express = require('express');
@@ -44,8 +51,16 @@ if (process.argv.includes('--worker')) {
       const base = `http://127.0.0.1:${server.address().port}`;
       const create = await fetch(`${base}/topics`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ topic: '3D printing' }) });
       assert.equal(create.status, 201);
+      const savedFeedback = await fetch(`${base}/briefing/feedback`, {
+        method: 'POST', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ decision: 'relevant', url: 'https://news.example/item', title: 'Public & useful', source: 'Fixture News' }),
+      });
+      assert.equal(savedFeedback.status, 201);
+      assert.deepEqual(await savedFeedback.json(), { saved: true, decision: 'relevant' });
+      assert.equal(db.prepare('SELECT decision FROM browsing_news_feedback WHERE url = ?').get('https://news.example/item').decision, 'relevant');
       const overview = await fetch(`${base}/`).then((r) => r.json());
       assert.deepEqual(overview.topics.map((row) => row.topic), ['3D printing']);
+      assert.deepEqual(overview.newsSources, ['BBC News', 'BBC Business', 'BBC Technology']);
       const removed = await fetch(`${base}/topics/${encodeURIComponent('3D printing')}`, { method: 'DELETE' });
       assert.equal(removed.status, 200);
       const needsTopic = await fetch(`${base}/briefing/refresh`, { method: 'POST' });

@@ -80,6 +80,12 @@ const TEMPLATE = `
         <button type="button" class="focus-stats-retry" id="focusStatsRetry" hidden>Retry</button>
       </div>
     </section>
+
+    <section class="card focus-ledger-card">
+      <h2>Time ledger <span class="focus-ledger-window">last 30 days</span></h2>
+      <p class="focus-ledger-lede">Work time by contributor and project. Unknown and unlinked time stays visible rather than being assigned by guesswork.</p>
+      <div id="focusLedger" aria-live="polite">Loading time ledger…</div>
+    </section>
   </div>
 
   <div id="celebrateOverlay" class="celebrate-overlay">
@@ -91,7 +97,7 @@ const TEMPLATE = `
 `;
 
 async function api(path, options = {}) {
-  const { signal, ...requestOptions } = options;
+  const { signal, headers, ...requestOptions } = options;
   // A pending request is not evidence that statistics are loading successfully. Bound it
   // so the panel can state "could not look" instead of showing a permanent loading state.
   const controller = new AbortController();
@@ -101,7 +107,9 @@ async function api(path, options = {}) {
   if (signal?.aborted) controller.abort();
   try {
     const res = await fetch(`/api${path}`, {
-      headers: { 'Content-Type': 'application/json' },
+      // This is the owner-facing browser surface. Its future work rows must not fall into
+      // the "unknown" bucket that exists precisely to prevent an attribution guess.
+      headers: { 'Content-Type': 'application/json', 'X-MC-By': 'you', ...headers },
       ...requestOptions,
       signal: controller.signal,
     });
@@ -213,6 +221,55 @@ function createPanel() {
     el.sessionCount.textContent = summary.today;
     el.streakCount.textContent = summary.streak;
     renderWeekChart(daily);
+  }
+
+  function formatMinutes(minutes) {
+    const n = Math.max(0, Number(minutes) || 0);
+    const hours = Math.floor(n / 60);
+    const rest = n % 60;
+    return hours ? `${hours}h ${rest}m` : `${rest}m`;
+  }
+
+  function actorLabel(actor, model) {
+    const labels = { you: 'You', claude: 'Claude (model)', codex: 'Codex (model)', ollama: 'Ollama (model)', scribe: 'Scribe (model)', import: 'Import', schedule: 'Schedule', unknown: 'Unattributed' };
+    const base = labels[actor] || actor;
+    return model ? `${base} · ${model}` : base;
+  }
+
+  function renderLedger(data) {
+    if (!container || !el.focusLedger) return;
+    const actors = data.actors || [];
+    const projects = data.projects || [];
+    const missing = data.missing || {};
+    const actorRows = actors.length
+      ? `<ul class="focus-ledger-actors">${actors.map((row) => `<li>
+          <b>${escapeHtml(actorLabel(row.actor, row.model))}</b><strong>${formatMinutes(row.minutes)}</strong>
+          <span>${row.sessions} work session${row.sessions === 1 ? '' : 's'}${row.unlinkedMinutes ? ` · ${formatMinutes(row.unlinkedMinutes)} not linked to an item` : ''}</span>
+        </li>`).join('')}</ul>`
+      : `<p class="focus-ledger-empty">${escapeHtml(data.recordedNothing || 'No work sessions in this window.')}</p>`;
+    const projectRows = projects.length
+      ? `<div class="focus-ledger-projects"><h3>By project</h3><table><thead><tr><th>Project</th><th>Time</th><th>Sessions</th><th>Contributors</th></tr></thead><tbody>
+          ${projects.map((row) => `<tr><td>${escapeHtml(row.project === 'unassigned' ? 'Linked item without project' : row.project)}</td><td>${formatMinutes(row.minutes)}</td><td>${row.sessions}</td><td>${row.contributors}</td></tr>`).join('')}
+        </tbody></table></div>`
+      : '<p class="focus-ledger-empty">No work session is linked to a project in this window.</p>';
+    const gaps = [
+      missing.unlinkedMinutes ? `${formatMinutes(missing.unlinkedMinutes)} has no linked backlog item` : null,
+      missing.unprojectedMinutes ? `${formatMinutes(missing.unprojectedMinutes)} links to an item without a project` : null,
+      missing.unattributedMinutes ? `${formatMinutes(missing.unattributedMinutes)} has no contributor attribution` : null,
+    ].filter(Boolean);
+    el.focusLedger.innerHTML = `
+      <h3>People and models</h3>${actorRows}${projectRows}
+      <p class="focus-ledger-note">${gaps.length ? `Not allocated by evidence: ${escapeHtml(gaps.join('; '))}.` : 'Every recorded work session in this window has a contributor and a linked project.'}</p>
+      <p class="focus-ledger-basis">${escapeHtml(data.note || '')}</p>`;
+  }
+
+  function showLedgerUnavailable() {
+    if (!container || !el.focusLedger) return;
+    el.focusLedger.innerHTML = '<p class="focus-ledger-error">Could not read the time ledger. This is a failure to look, not a report that no time was recorded.</p>';
+  }
+
+  async function loadLedger() {
+    renderLedger(await api('/sessions/ledger?days=30'));
   }
 
   function renderWeekChart(daily) {
@@ -363,6 +420,7 @@ function createPanel() {
         focusNow: container.querySelector('#focusNow'),
         focusBacklog: container.querySelector('#focusBacklog'),
         focusSteering: container.querySelector('#focusSteering'),
+        focusLedger: container.querySelector('#focusLedger'),
         focusStatsState: container.querySelector('#focusStatsState'),
         focusStatsRetry: container.querySelector('#focusStatsRetry'),
         celebrateOverlay: container.querySelector('#celebrateOverlay'),
@@ -414,6 +472,7 @@ function createPanel() {
       }
       renderFocusNow();
       loadStats().catch(showStatsUnavailable);
+      loadLedger().catch(showLedgerUnavailable);
     },
 
     unmount() {

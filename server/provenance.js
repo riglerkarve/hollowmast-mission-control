@@ -13,7 +13,9 @@
 // honest gap can be filtered out later while a wrong attribution cannot be found again.
 //
 //   X-MC-By: you       the browser panels send this — they are the human surface
-//   X-MC-By: claude    scripts and tools run by an agent set this
+//   X-MC-By: claude    Claude sessions and tools
+//   X-MC-By: codex     Codex sessions and tools
+//   X-MC-By: ollama    a local-model run (distinct from the worker that launched it)
 //   X-MC-By: import    importers writing bulk data from a file
 //   X-MC-By: schedule  a scheduled task reading on a timer, with no human present
 //                      (added 18 Aug: the daily briefing is none of the three above,
@@ -28,7 +30,7 @@
 // Loopback is NOT used as the signal. It cannot be: the browser, a Claude session running
 // curl, and every importer all arrive on 127.0.0.1, so the network tells you nothing about
 // who is typing. Only an explicit claim does.
-const VALID = ['you', 'claude', 'import', 'schedule', 'scribe'];
+const VALID = ['you', 'claude', 'codex', 'ollama', 'import', 'schedule', 'scribe'];
 
 function readBy(req) {
   const raw = String((req && req.get && req.get('x-mc-by')) || '').trim().toLowerCase();

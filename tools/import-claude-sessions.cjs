@@ -38,10 +38,18 @@ db.setProcessActor('import');
 // server start happened to leave behind. Without this line the first run failed with
 // "no column named source_key" — the column exists in code and had never been applied in
 // this process. Requiring the owner makes the tool responsible for the schema it uses.
-require('../server/routes/sessions');
+const { NOT_AGENT } = require('../server/routes/sessions');
 
 const DRY = process.argv.includes('--dry');
 const SESSIONS = path.join(__dirname, '..', 'data', 'telemetry', 'sessions.json');
+
+// Telemetry gives a session-level model breakdown, but not active minutes per model. Keep
+// the exact name only where there is one; choosing a "main" model from tokens or cost would
+// fabricate where the session's time went.
+const singleModel = (byModel) => {
+  const names = Object.keys(byModel || {}).filter(Boolean);
+  return names.length === 1 ? names[0] : null;
+};
 
 function main() {
   // Absence and failure must differ: no telemetry file is a different problem from a
@@ -78,6 +86,7 @@ function main() {
         // The session's END is when the work landed. Stored in local time to match every
         // other completed_at in this table, which SQLite writes with 'localtime'.
         at: new Date(s.lastTs).toLocaleString('sv-SE').replace('T', ' '),
+        model: singleModel(s.byModel),
         msgs: s.msgs || 0,
         tools: s.toolCalls || 0,
       };
@@ -102,16 +111,17 @@ function main() {
   // changed and adds the new ones; it can never double-count, which matters because this is
   // the sort of thing that gets run from a scheduled task later.
   const up = db.prepare(`
-    INSERT INTO focus_sessions (kind, duration_minutes, completed_at, by_whom, source_key)
-    VALUES ('work', ?, ?, 'claude', ?)
+    INSERT INTO focus_sessions (kind, duration_minutes, completed_at, by_whom, source_key, model)
+    VALUES ('work', ?, ?, 'claude', ?, ?)
     ON CONFLICT(source_key) DO UPDATE SET
       duration_minutes = excluded.duration_minutes,
-      completed_at     = excluded.completed_at
+      completed_at     = excluded.completed_at,
+      model            = excluded.model
   `);
 
   db.exec('BEGIN');
   try {
-    for (const r of rows) up.run(r.minutes, r.at, r.key);
+    for (const r of rows) up.run(r.minutes, r.at, r.key, r.model);
     db.exec('COMMIT');
   } catch (err) {
     db.exec('ROLLBACK');
@@ -124,7 +134,7 @@ function main() {
 
   // The check that matters, printed every run rather than assumed: the owner's own numbers
   // must be untouched by any of this.
-  const yours = db.prepare("SELECT COUNT(*) n FROM focus_sessions WHERE by_whom IS NULL OR by_whom <> 'claude'").get().n;
+  const yours = db.prepare(`SELECT COUNT(*) n FROM focus_sessions WHERE ${NOT_AGENT}`).get().n;
   console.log(`  your sessions, unaffected: ${yours}`);
 }
 

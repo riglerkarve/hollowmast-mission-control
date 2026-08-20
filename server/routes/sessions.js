@@ -52,6 +52,16 @@ db.migrate('sessions', [
       CREATE INDEX idx_focus_todo ON focus_sessions(todo_id);
     `);
   },
+
+  // v4 — the telemetry importer can name a model only where one model served the whole
+  // session. It is deliberately nullable: splitting a mixed-model session by token count
+  // would turn a cost measure into fabricated time allocation.
+  (d) => {
+    d.exec(`
+      ALTER TABLE focus_sessions ADD COLUMN model TEXT;
+      CREATE INDEX idx_focus_model ON focus_sessions(model);
+    `);
+  },
 ]);
 
 // THE ONE PLACE THE FILTER IS WRITTEN. Exported and reused by stats.js rather than retyped
@@ -59,12 +69,13 @@ db.migrate('sessions', [
 // does not error — it just quietly folds my hours into your streak. A shared fragment also
 // means grep can PROVE every site is converted, which retyping never can.
 //
-// It excludes Claude rather than selecting 'you', and the difference is deliberate. The one
+// It excludes every known model actor rather than selecting 'you', and the difference is deliberate. The one
 // pre-existing row is 'unknown': it was recorded on 2026-08-01, before any of this, and is
 // almost certainly the owner's — but "almost certainly" is a guess, and the standing rule
-// is never to guess 'you'. Excluding what is known to be mine keeps that row visible and
-// makes the honest claim: these are the sessions Claude did not do.
-const NOT_CLAUDE = "(by_whom IS NULL OR by_whom <> 'claude')";
+// is never to guess 'you'. It stays visible, but every known model actor is excluded from
+// the owner's totals so a multi-model time ledger cannot quietly lengthen a human streak.
+const AGENT_ACTORS = ['claude', 'codex', 'ollama', 'scribe'];
+const NOT_AGENT = `(by_whom IS NULL OR by_whom NOT IN (${AGENT_ACTORS.map((a) => `'${a}'`).join(', ')}))`;
 const IS_CLAUDE = "by_whom = 'claude'";
 
 const router = express.Router();
@@ -148,6 +159,68 @@ router.get('/by-item', (req, res) => {
   });
 });
 
+// TIME LEDGER — Focus is a record of where time went, not only a timer for the person
+// looking at it. The rows already hold the two facts needed for that question: `by_whom`
+// says who recorded the work and `todo_id` can lead to a project's canonical label.
+//
+// The three missing-link states remain separate. A session with no backlog item has no
+// project evidence at all; a session linked to an item without a project is known work with
+// an incomplete project label; an unknown actor is a provenance gap. Folding any of them
+// into a named person or project would manufacture an allocation that the record cannot
+// support.
+router.get('/ledger', (req, res) => {
+  const days = Math.min(365, Math.max(1, Number(req.query.days) || 30));
+  const since = `-${days - 1} days`;
+  const WORK_IN_WINDOW = `s.kind = 'work' AND date(s.completed_at) >= date('now','localtime', ?)`;
+  const actor = "COALESCE(NULLIF(TRIM(s.by_whom), ''), 'unknown')";
+
+  const actors = db.prepare(`
+    SELECT ${actor} AS actor, NULLIF(TRIM(s.model), '') AS model, COUNT(*) AS sessions,
+           COALESCE(SUM(s.duration_minutes), 0) AS minutes,
+           COALESCE(SUM(s.todo_id IS NULL), 0) AS unlinkedSessions,
+           COALESCE(SUM(CASE WHEN s.todo_id IS NULL THEN s.duration_minutes ELSE 0 END), 0) AS unlinkedMinutes
+      FROM focus_sessions s
+     WHERE ${WORK_IN_WINDOW}
+     GROUP BY ${actor}, NULLIF(TRIM(s.model), '')
+     ORDER BY minutes DESC, actor ASC, model ASC
+  `).all(since);
+
+  const projects = db.prepare(`
+    SELECT COALESCE(NULLIF(TRIM(t.project), ''), 'unassigned') AS project,
+           COUNT(*) AS sessions, COALESCE(SUM(s.duration_minutes), 0) AS minutes,
+           COUNT(DISTINCT ${actor}) AS contributors
+      FROM focus_sessions s
+      JOIN todo_items t ON t.id = s.todo_id
+     WHERE ${WORK_IN_WINDOW}
+     GROUP BY COALESCE(NULLIF(TRIM(t.project), ''), 'unassigned')
+     ORDER BY minutes DESC, project ASC
+  `).all(since);
+
+  const missing = db.prepare(`
+    SELECT
+      COALESCE(SUM(s.todo_id IS NULL), 0) AS unlinkedSessions,
+      COALESCE(SUM(CASE WHEN s.todo_id IS NULL THEN s.duration_minutes ELSE 0 END), 0) AS unlinkedMinutes,
+      COALESCE(SUM(s.todo_id IS NOT NULL AND (t.project IS NULL OR TRIM(t.project) = '')), 0) AS unprojectedSessions,
+      COALESCE(SUM(CASE WHEN s.todo_id IS NOT NULL AND (t.project IS NULL OR TRIM(t.project) = '') THEN s.duration_minutes ELSE 0 END), 0) AS unprojectedMinutes,
+      COALESCE(SUM(${actor} = 'unknown'), 0) AS unattributedSessions,
+      COALESCE(SUM(CASE WHEN ${actor} = 'unknown' THEN s.duration_minutes ELSE 0 END), 0) AS unattributedMinutes
+      FROM focus_sessions s
+      LEFT JOIN todo_items t ON t.id = s.todo_id
+     WHERE ${WORK_IN_WINDOW}
+  `).get(since);
+
+  res.json({
+    days,
+    actors,
+    projects,
+    missing,
+    note: 'Work sessions only. Contributor labels are stored provenance values (for example you, Claude, Codex, Ollama, Scribe, or unknown). A specific model is shown only where telemetry recorded exactly one; mixed or missing model data is not guessed. Project allocation comes only from a linked backlog item.',
+    recordedNothing: !actors.length
+      ? 'No work sessions were recorded in this window. That is absence from this ledger, not evidence that nobody worked.'
+      : undefined,
+  });
+});
+
 // What Claude has actually worked on. Kept as a SEPARATE reading rather than a filter on
 // the main stats, because the two answer different questions and blending them is the whole
 // thing this is designed against: "how much did you focus" and "how much did the agent
@@ -171,7 +244,7 @@ router.get('/claude', (req, res) => {
   ).all(`-${days - 1} days`);
 
   const yours = db.prepare(
-    `SELECT COUNT(*) AS sessions FROM focus_sessions WHERE ${NOT_CLAUDE}`
+    `SELECT COUNT(*) AS sessions FROM focus_sessions WHERE ${NOT_AGENT}`
   ).get();
 
   res.json({
@@ -192,5 +265,5 @@ router.get('/claude', (req, res) => {
 });
 
 module.exports = router;
-module.exports.NOT_CLAUDE = NOT_CLAUDE;
+module.exports.NOT_AGENT = NOT_AGENT;
 module.exports.IS_CLAUDE = IS_CLAUDE;

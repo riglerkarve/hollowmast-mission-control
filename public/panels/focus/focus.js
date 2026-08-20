@@ -75,7 +75,10 @@ const TEMPLATE = `
         </div>
       </div>
       <div class="bar-chart" id="barChart"></div>
-      <p class="focus-stats-state" id="focusStatsState" role="status" aria-live="polite">Loading focus history…</p>
+      <div class="focus-stats-state" data-state="loading">
+        <span id="focusStatsState" role="status" aria-live="polite">Loading focus history…</span>
+        <button type="button" class="focus-stats-retry" id="focusStatsRetry" hidden>Retry</button>
+      </div>
     </section>
   </div>
 
@@ -202,6 +205,7 @@ function createPanel() {
   }
 
   async function loadStats() {
+    setStatsState('loading', 'Loading focus history…');
     const [summary, daily] = await Promise.all([
       api('/stats/summary'),
       api('/stats/daily?days=7'),
@@ -235,18 +239,19 @@ function createPanel() {
   // request: otherwise an unavailable record tells the owner they have done no sessions.
   function setStatsState(state, message) {
     if (!container || !el.focusStatsState) return;
-    el.focusStatsState.dataset.state = state;
+    el.focusStatsState.parentElement.dataset.state = state;
     el.focusStatsState.textContent = message;
+    el.focusStatsRetry.hidden = state !== 'error';
   }
 
-  function showStatsUnavailable() {
+  function showStatsUnavailable(message = 'Focus history could not be loaded. The timer is still available; no statistics are shown.') {
     if (!container) return;
     el.sessionCount.textContent = '—';
     el.streakCount.textContent = '—';
     el.weekSessions.textContent = '—';
     el.weekMinutes.textContent = '—';
     el.barChart.replaceChildren();
-    setStatsState('error', 'Focus history could not be loaded. The timer is still available; no statistics are shown.');
+    setStatsState('error', message);
   }
 
   function setMode(newMode) {
@@ -273,6 +278,7 @@ function createPanel() {
     secondsLeft = 0;
     renderTimer();
 
+    let sessionRecorded = mode !== 'work';
     if (mode === 'work') {
       try {
         await api('/sessions', {
@@ -282,18 +288,28 @@ function createPanel() {
           // null and the session would record no subject at all.
           body: JSON.stringify({ todoId: activeTaskId, kind: 'work', durationMinutes: DURATIONS.work / 60 }),
         });
-        await Promise.all([refreshActiveTask(), loadStats()]);
-        celebrate('Session complete! Take a break 🎉');
+        sessionRecorded = true;
       } catch {
         // The timer did end, but the record did not. Say that plainly rather than playing
         // the completion state for a session the API never accepted.
         setStatsState('error', 'Session ended, but it was not recorded. Check the connection before starting another.');
       }
+      if (sessionRecorded) {
+        try {
+          await Promise.all([refreshActiveTask(), loadStats()]);
+          celebrate('Session complete! Take a break 🎉');
+        } catch {
+          // The write already returned 201. A stale dashboard must not rewrite that fact as
+          // a failed session merely because its follow-up read is unavailable.
+          showStatsUnavailable('Session recorded, but the statistics could not refresh. Retry when the connection returns.');
+          celebrate('Session recorded! Take a break 🎉');
+        }
+      }
     } else {
       celebrate("Break's over — back to it!");
     }
 
-    playChime();
+    if (sessionRecorded) playChime();
     const nextMode = mode === 'work' ? 'short' : 'work';
     setTimeout(() => setMode(nextMode), 1600);
   }
@@ -347,6 +363,8 @@ function createPanel() {
         focusNow: container.querySelector('#focusNow'),
         focusBacklog: container.querySelector('#focusBacklog'),
         focusSteering: container.querySelector('#focusSteering'),
+        focusStatsState: container.querySelector('#focusStatsState'),
+        focusStatsRetry: container.querySelector('#focusStatsRetry'),
         celebrateOverlay: container.querySelector('#celebrateOverlay'),
         celebrateText: container.querySelector('#celebrateText'),
         barChart: container.querySelector('#barChart'),
@@ -358,6 +376,7 @@ function createPanel() {
 
       el.modeTabs.forEach((tab) => tab.addEventListener('click', () => setMode(tab.dataset.mode)));
       el.startPauseBtn.addEventListener('click', startPause);
+      el.focusStatsRetry.addEventListener('click', () => loadStats().catch(showStatsUnavailable));
       el.resetBtn.addEventListener('click', () => {
         running = false;
         clearInterval(tickHandle);

@@ -60,6 +60,18 @@
   font-weight: 600;
 }
 
+.focus-stats-retry {
+  margin-left: 0.5rem;
+  padding: 0.2rem 0.45rem;
+  border: 1px solid currentColor;
+  border-radius: 5px;
+  background: transparent;
+  color: inherit;
+  font: inherit;
+  font-size: 0.9em;
+  cursor: pointer;
+}
+
 .task-form {
   display: flex;
   gap: 8px;

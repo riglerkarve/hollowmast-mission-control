@@ -270,6 +270,62 @@ const SOURCES = [
   },
 ].map((s) => ({ ...s, exists: () => fs.existsSync(s.file) }));
 
+// ------------------------------------------------------------------------- coverage
+//
+// WHICH PROJECTS THIS BOARD CAN SEE, AND WHICH IT CANNOT. Added 23 Aug 2026, when the owner
+// asked for sessions to work the whole workspace rather than only HOLLOWMAST.
+//
+// `SOURCES` above holds two entries and both are HOLLOWMAST. Nothing said so. A board built
+// from it answers "11 open" and reads as the state of the workspace, when it is the state of
+// one project out of thirteen — the most flattering possible failure, and the one nobody
+// investigates, because a short list of open bugs looks like good news rather than like a
+// missing input. The parsers in this file each report their residue for exactly that reason;
+// the SOURCES LIST ITSELF had no such report, so the residue it dropped was whole projects.
+//
+// This does not invent trackers. Only HOLLOWMAST keeps one — verified by searching the
+// workspace for BUGS/TODO/BACKLOG/TASKS/ISSUES/REQUESTS/ROADMAP files at any of the top three
+// depths, which returns `Survive/BUGS.md`, `Survive/dash/requests.jsonl` and
+// `Fallow/docs/ROADMAP.md` and nothing else. So the honest thing is not to fabricate a queue
+// per project; it is to say which projects have one, so an empty column reads as "no tracker
+// here" rather than as "nothing wrong here". Those are different facts and they must not look
+// the same.
+function coverage() {
+  // Required lazily. `projects.js` builds an express Router at require time and this file is
+  // loaded by it indirectly through the board route; taking the dependency at module scope
+  // makes the two files a cycle, and the cycle resolves to an empty object rather than to an
+  // error — a silent half-loaded module, which is worse than a crash.
+  let PROJECTS = [];
+  try { ({ PROJECTS } = require('./routes/projects')); } catch (e) { PROJECTS = []; }
+
+  const withTracker = new Map();
+  for (const s of SOURCES) {
+    if (!withTracker.has(s.project)) withTracker.set(s.project, []);
+    withTracker.get(s.project).push({ id: s.id, file: s.file, exists: s.exists() });
+  }
+
+  const projects = PROJECTS.map((p) => ({
+    project: p.name,
+    dir: p.dir,
+    track: p.track || null,
+    sources: withTracker.get(p.name) || [],
+    tracked: withTracker.has(p.name),
+  }));
+
+  // A project label appearing in SOURCES but not in projects.js is a vocabulary break, not a
+  // rounding error: it means the board is filing items under a name the workspace does not
+  // recognise, so they can never be joined to anything. Reported rather than dropped.
+  const declared = new Set(PROJECTS.map((p) => p.name));
+  const undeclared = [...withTracker.keys()].filter((n) => !declared.has(n));
+
+  return {
+    projects,
+    trackedCount: projects.filter((p) => p.tracked).length,
+    totalCount: projects.length,
+    untracked: projects.filter((p) => !p.tracked).map((p) => p.project),
+    undeclared,
+  };
+}
+
 // ------------------------------------------------------------------------------ import
 
 function importAll(db) {
@@ -341,4 +397,4 @@ function importAll(db) {
   return { at, sources: out };
 }
 
-module.exports = { SOURCES, importAll, parseBugsMd, parseRequestsJsonl };
+module.exports = { SOURCES, importAll, coverage, parseBugsMd, parseRequestsJsonl };

@@ -28,7 +28,7 @@ const db = require('../db');
 const provenance = require('../provenance');
 const todo = require('./todo');
 const { dispatch } = require('../dispatch');
-const { SOURCES, importAll } = require('../trackers');
+const { SOURCES, importAll, coverage } = require('../trackers');
 
 const router = express.Router();
 
@@ -138,6 +138,12 @@ function summary() {
         lastRun: run && { at: run.at, ok: !!run.ok, parsed: run.parsed, skipped: run.skipped, conflicts: run.conflicts, note: run.note },
       };
     }),
+    // WHICH PROJECTS THIS BOARD CAN SEE AT ALL. `projects` below is built from the items
+    // that came back, so a project with no tracker and no backlog rows simply does not
+    // appear — and an absent row and a clean row are the same blank space to a reader.
+    // 12 of the 13 declared projects keep no tracker, so without this the board answers a
+    // question about HOLLOWMAST while looking like it answered one about the workspace.
+    coverage: coverage(),
     projects: Object.values(projects).sort((a, b) => a.project.localeCompare(b.project)),
     items: openItems,
     backlog,

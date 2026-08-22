@@ -68,9 +68,19 @@ if (!rows.length) {
   process.exit(1);
 }
 
+// THE THIRD COLUMN IS WHERE A SESSION IS STANDING, NOT A FENCE AROUND IT. Owner instruction,
+// 23 Aug 2026: every session works the whole workspace. This column has never constrained
+// anything — nothing in server/routes/team.js gates an assignment on it — but printed bare
+// beside a role it reads exactly like an assignment, and eight of these rows say HOLLOWMAST.
+// A column that looks like a rule IS a rule to whoever reads it next, so it is labelled.
+console.log('  role        session                            has context in');
+console.log('  ' + '-'.repeat(11) + ' ' + '-'.repeat(34) + ' ' + '-'.repeat(14));
 for (const r of rows) {
-  console.log(`  ${r.role.padEnd(11)} ${r.title.padEnd(34)} ${r.project || ''}`);
+  console.log(`  ${r.role.padEnd(11)} ${r.title.padEnd(34)} ${r.project || '(not recorded)'}`);
 }
+console.log('');
+console.log('  Context, not territory: any session may take work on any project. See TEAM.md,');
+console.log('  "Every session works the whole workspace".');
 
 // THE MISSING ROLE IS THE INTERESTING OUTPUT. A team with no manager is not a smaller team —
 // it is a team in which nothing can be confirmed and nobody may reach the owner, so the whole

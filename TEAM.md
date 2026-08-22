@@ -8,6 +8,20 @@ idea.
 
 ---
 
+## CLOSED, 23 August 2026 — the Codex manager exception has expired
+
+**It expired on its own terms and the roster had already reverted ahead of it.** Checked
+23 Aug: `team_sessions` carries `Codex Worker` at role `worker`, and `Team Manager` holds the
+manager seat. So the self-approval loop described below is not open, and nothing needs
+undoing. The section is kept rather than deleted because the *reasoning* is the useful part —
+it is the record of what the exception cost and what would make it necessary again.
+
+**Read the paragraphs below as history.** If a future outage empties the Claude roles again,
+this is the shape the exception took and the conditions on it, not a standing permission.
+
+<details>
+<summary>The exception as it stood, 20–23 August 2026</summary>
+
 ## A temporary exception — Codex is also a manager, until Sunday 23 August
 
 Owner instruction, 20 August 2026 (`team_decisions` #27). Every Claude-driven role except the
@@ -28,6 +42,8 @@ explicitly**, and anything reviewable by a different engine should still go thro
 **Revert to worker on Sunday 23 August**, when the owner is back, unless explicitly continued —
 or sooner, if a genuine second Claude manager session appears before then. `node
 tools/team-roster.cjs --set "Codex Worker" worker`.
+
+</details>
 
 ---
 
@@ -191,6 +207,45 @@ worker wants asked gets asked.
 
 Answers are kept forever. The reason a decision was taken is the thing that gets lost, and a
 decision that cannot be justified later is just a mood.
+
+---
+
+## Every session works the whole workspace — owner instruction, 23 August 2026
+
+*"Make all agents work in the whole workspace, not just Hollowmast."*
+
+**A session's project is where it is standing, not a fence around it.** The roster records one
+because it is useful to know where someone has context, and for no other reason. It has never
+constrained anything — `team_sessions.project` is written by `POST /api/team/session` and read
+back by the roster and the silence report, and **nothing in `server/routes/team.js` has ever
+gated an assignment on it.** So this instruction did not require a permission to be granted.
+It required the two things that were actually in the way to be removed.
+
+**The first was vocabulary.** `todo_items` held 103 rows under `Mission Control` and 27 under
+`mission-control`, 7 under `PrintProfit` and 4 under `income-portfolio`, 3 under `Print Shop`
+and 1 under `print-shop`. To every query those were six projects. "Show me the open work on
+Mission Control" answered with four fifths of it and looked complete, which is the failure
+this workspace names one-owner-per-figure — a vocabulary has one owner too. Normalised 23 Aug
+against the names `server/routes/projects.js` declares, mapping through its own `dir` field so
+the mapping is derived rather than invented: 33 rows, 0 unmatched.
+`tools/normalise-projects.cjs` re-runs it and reports what it skipped.
+
+**The second was that the board could only see one project and did not say so.** `SOURCES` in
+`server/trackers.js` holds two parsers and both are HOLLOWMAST. Every parser in that file
+reports its residue; the SOURCES LIST ITSELF did not, so the residue it dropped was **twelve
+whole projects**. The board answered "11 open" and read as the state of the workspace.
+`coverage()` now says 1 of 13 projects keeps a tracker, and the board carries it.
+
+**So the honest position is this, and a worker should not be told otherwise:** you may take
+work anywhere in the workspace, and outside HOLLOWMAST there is mostly no tracker to take it
+from. The backlog inside Focus is workspace-wide and is where cross-project work actually
+lives — 169 open items across nine projects at the time of writing. The board's external
+column is HOLLOWMAST until another project keeps a tracker worth mirroring.
+
+**Do not answer that by starting twelve trackers.** A tracker per project is twelve surfaces
+to feed, which is the gate failing in the exact shape the workspace file warns about. A
+project gets a tracker when it has work being logged against it, and then it gets one parser
+in `server/trackers.js`.
 
 ---
 

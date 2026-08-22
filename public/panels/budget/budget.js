@@ -3,6 +3,7 @@
 // The wishlist is the approval gate: nothing here buys anything, and approving means you
 // have decided — not that a purchase happened.
 
+import { renderLede } from '/panels/lede/lede.js';
 const TEMPLATE = `
   <div class="panel panel-wide">
     <div class="panel-header">
@@ -330,6 +331,7 @@ export default {
   mount(el) {
     root = el;
     el.innerHTML = TEMPLATE;
+    renderLede('budget', el);
     el.querySelector('#bgAdd').addEventListener('submit', async (ev) => {
       ev.preventDefault();
       const name = el.querySelector('#bgName').value.trim();

@@ -1,0 +1,121 @@
+/* printprofit — integration panel for the PrintProfit project (income-portfolio/).
+   Every custom property used here is defined in shell.css, verified by reading
+   the definition: --card, --bg, --ink, --muted, --border, --border-strong,
+   --accent, --accent-soft, --accent-text, --mono, --r-card, --r-btn, --short-text
+   all carry :root definitions and dark-theme overrides. */
+
+.pp-panel { max-width: 720px; }
+
+/* Lede / summary line */
+.pp-summary { color: var(--muted); font-size: 13px; line-height: 1.5; margin: 0 0 18px; max-width: 72ch; }
+
+/* Loading / empty / missing / error states — each a different visual so absence
+   and failure never look the same (workspace standard). */
+.pp-loading { color: var(--muted); font-size: 13px; margin: 0; }
+.pp-empty { color: var(--muted); font-size: 13px; line-height: 1.5; margin: 0; max-width: 72ch; }
+.pp-hint { color: var(--muted); font-size: 12px; line-height: 1.5; margin: 6px 0 0; }
+.pp-missing { color: var(--ink); font-size: 13px; margin: 0; line-height: 1.5; }
+.pp-alarm { color: var(--ink); font-size: 13px; margin: 0; line-height: 1.5; }
+
+/* Inline code for paths — uses the mono token so it reads as a path, not prose. */
+.pp-hint code {
+  font-family: var(--mono);
+  font-size: 11px;
+  background: var(--bg);
+  border: 1px solid var(--border);
+  border-radius: var(--r-btn);
+  padding: 1px 6px;
+  word-break: break-all;
+}
+
+/* Dev server status: green when running, muted when not. --short-text is rated
+   for both --card and --bg, so the "running" label is safe on either ground. */
+.pp-up {
+  font-family: var(--mono);
+  font-size: 11px;
+  color: var(--short-text);
+  background: rgba(77, 139, 111, 0.10);
+  border: 1px solid var(--short-text);
+  border-radius: 3px;
+  padding: 1px 6px;
+}
+.pp-down {
+  font-family: var(--mono);
+  font-size: 11px;
+  color: var(--muted);
+  border: 1px solid var(--border-strong);
+  border-radius: 3px;
+  padding: 1px 6px;
+}
+
+/* File listing */
+.pp-file-list {
+  margin-top: 10px;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+.pp-file-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 5px 0;
+  border-bottom: 1px solid var(--border);
+  font-size: 13px;
+}
+.pp-file-row:last-child { border-bottom: none; }
+
+.pp-file-icon {
+  flex-shrink: 0;
+  font-size: 14px;
+  width: 18px;
+  text-align: center;
+}
+.pp-file-name {
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  color: var(--ink);
+}
+.pp-file-size {
+  flex-shrink: 0;
+  font-family: var(--mono);
+  font-size: 11px;
+  color: var(--muted);
+  font-variant-numeric: tabular-nums;
+}
+
+/* Commit display */
+.pp-mono { font-family: var(--mono); font-size: 12px; }
+.pp-commit-sha {
+  font-size: 11px;
+  color: var(--accent-text);
+  background: var(--accent-soft);
+  border-radius: 3px;
+  padding: 2px 8px;
+  display: inline-block;
+  margin: 0;
+  word-break: break-all;
+}
+
+/* External link — uses the accent so it reads as a link, not as body text. */
+.pp-link {
+  color: var(--accent-text);
+  text-decoration: none;
+  border-bottom: 1px solid var(--border-strong);
+  font-family: var(--mono);
+  font-size: 13px;
+  transition: color var(--t-fast) var(--ease), border-color var(--t-fast) var(--ease);
+}
+.pp-link:hover {
+  color: var(--accent);
+  border-bottom-color: var(--accent);
+  transition-duration: var(--t-slow);
+}
+
+@media (max-width: 560px) {
+  .pp-panel { max-width: 100%; }
+  .pp-file-name { white-space: normal; }
+}

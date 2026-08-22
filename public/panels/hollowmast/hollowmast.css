@@ -1,0 +1,43 @@
+/* hollowmast — build status for the HOLLOWMAST (Survive) project.
+   Every custom property used here is defined in shell.css. Verified by reading
+   the definition, not a mention: --accent, --accent-soft, --accent-text,
+   --accent-text-bg, --card, --bg, --ink, --muted, --border, --border-strong,
+   --mono, --r-card, --r-btn all have :root definitions in shell.css and carry
+   dark-theme overrides. */
+
+.hm-panel { max-width: 720px; }
+
+.hm-lede { color: var(--muted); font-size: 13px; line-height: 1.5; margin: 0 0 18px; max-width: 72ch; }
+.hm-loading { color: var(--muted); font-size: 13px; }
+.hm-alarm { color: var(--ink); font-size: 13px; margin: 0; }
+
+/* The stat grid: four blocks side by side, wrapping on narrow screens.
+   2x2 on wide, 1x4 on narrow. The gap matches the card padding rhythm. */
+.hm-grid { display: grid; grid-template-columns: repeat(2, 1fr); gap: 10px; margin-top: 4px; }
+@media (max-width: 560px) {
+  .hm-grid { grid-template-columns: 1fr; }
+  .hm-panel { max-width: 100%; }
+}
+
+/* ---- the stat block -------------------------------------------------------- */
+
+.hm-stat { background: var(--card); border: 1px solid var(--border); border-radius: var(--r-card);
+  padding: 14px 16px; margin-bottom: 0; position: relative;
+  border-left: 3px solid var(--border-strong); }
+
+.hm-label { margin: 0 0 6px; font-size: 10px; text-transform: uppercase; letter-spacing: .09em;
+  color: var(--muted); }
+
+/* The value is the headline of each block — larger, ink-weight, tabular for the
+   numbers so 0 KB and 999 KB align. */
+.hm-value { margin: 0 0 4px; font-size: 15px; line-height: 1.3; color: var(--ink);
+  font-variant-numeric: tabular-nums; max-width: 72ch; }
+
+/* The sub line is the path, the port, or the clarifying note. Mono so paths
+   and hashes read as data, not prose. */
+.hm-sub { font-family: var(--mono); font-size: 11px; color: var(--muted); margin: 0; }
+
+/* The dev-server block carries the accent left rule when it is running, so a
+   live server reads as the accent and a down server reads as neutral — the same
+   left-rule distinction decisions.css uses for due vs. neutral cards. */
+.hm-stat.hm-live { border-left-color: var(--accent); }

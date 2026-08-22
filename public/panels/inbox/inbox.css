@@ -1,0 +1,289 @@
+/* inbox — unified agent inbox.
+   Tokens are from shell.css. No custom properties defined here; the panel
+   uses the shared palette so it matches every other card. */
+
+.ib-panel { max-width: 720px; }
+
+/* The two-column layout: threads list on the left, main chat on the right.
+   On narrow screens the threads collapse to a horizontal scroll bar above the chat. */
+.ib-layout {
+  display: grid;
+  grid-template-columns: 180px 1fr;
+  gap: 16px;
+}
+
+@media (max-width: 640px) {
+  .ib-layout { grid-template-columns: 1fr; }
+  .ib-threads {
+    flex-direction: row;
+    overflow-x: auto;
+    -webkit-overflow-scrolling: touch;
+    max-height: none;
+  }
+}
+
+/* ---- Threads sidebar ---- */
+.ib-threads {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  max-height: 60vh;
+  overflow-y: auto;
+}
+
+.ib-thread {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  text-align: left;
+  background: var(--card);
+  border: 1px solid var(--border);
+  border-radius: var(--r-btn);
+  padding: 8px 10px;
+  cursor: pointer;
+  font: inherit;
+  transition:
+    border-color var(--t-fast) var(--ease),
+    background-color var(--t-fast) var(--ease);
+}
+
+.ib-thread:hover {
+  border-color: var(--border-strong);
+  background-color: var(--ring-bg);
+}
+
+.ib-thread-active {
+  border-color: var(--accent);
+  background: var(--accent-soft);
+}
+
+.ib-thread-name {
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--ink);
+  font-family: var(--mono);
+}
+
+.ib-thread-meta {
+  font-size: 10px;
+  color: var(--muted);
+  font-variant-numeric: tabular-nums;
+}
+
+.ib-thread-preview {
+  font-size: 11px;
+  color: var(--muted);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+/* ---- Main chat area ---- */
+.ib-main {
+  display: flex;
+  flex-direction: column;
+  min-height: 400px;
+}
+
+.ib-thread-head {
+  padding: 0 2px 10px;
+  border-bottom: 1px solid var(--border);
+  margin-bottom: 10px;
+}
+
+.ib-thread-title {
+  font-family: var(--mono);
+  font-size: 13px;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.07em;
+  color: var(--muted);
+}
+
+/* ---- Messages list ---- */
+.ib-messages {
+  flex: 1;
+  overflow-y: auto;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  padding: 4px 2px 12px;
+  min-height: 200px;
+}
+
+.ib-empty {
+  color: var(--muted);
+  font-size: 13px;
+  text-align: center;
+  padding: 40px 0;
+  margin: 0;
+}
+
+.ib-error {
+  color: var(--accent-text);
+  font-size: 13px;
+  padding: 8px 12px;
+  background: var(--accent-soft);
+  border-radius: var(--r-btn);
+  margin: 0;
+}
+
+/* A message row: full-width flex, with the bubble pushed left or right. */
+.ib-msg {
+  display: flex;
+}
+
+.ib-msg-you { justify-content: flex-end; }
+.ib-msg-agent { justify-content: flex-start; }
+
+/* The bubble itself. Your messages get the accent background; agent messages
+   get the card background. */
+.ib-bubble {
+  max-width: 80%;
+  padding: 10px 14px;
+  border-radius: var(--r-card);
+  font-size: 13.5px;
+  line-height: 1.5;
+}
+
+.ib-msg-you .ib-bubble {
+  background: var(--accent-soft);
+  border: 1px solid var(--accent);
+  border-bottom-right-radius: 2px;
+}
+
+.ib-msg-agent .ib-bubble {
+  background: var(--card);
+  border: 1px solid var(--border);
+  border-bottom-left-radius: 2px;
+}
+
+/* The head row inside a bubble: agent badge + timestamp. */
+.ib-msg-head {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-bottom: 4px;
+}
+
+/* ---- Agent badges — coloured by agent ---- */
+.ib-badge {
+  font-size: 10px;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  padding: 1px 7px;
+  border-radius: 3px;
+  border: 1px solid currentColor;
+  white-space: nowrap;
+}
+
+/* Claude and Hermes share the accent colour — the project's primary. */
+.ib-badge-accent {
+  color: var(--accent-text);
+}
+
+/* Codex is blue. Uses --long (a blue already in the palette) for ink, with a
+   translucent blue ground. */
+.ib-badge-blue {
+  color: var(--long);
+}
+
+/* Ollama is green — --short, the same green the finance charts use. */
+.ib-badge-green {
+  color: var(--short-text);
+}
+
+/* Scribe is muted — it is the local model and the quietest voice. */
+.ib-badge-muted {
+  color: var(--muted);
+}
+
+/* You is ink — the owner's messages are the strongest. */
+.ib-badge-ink {
+  color: var(--ink);
+}
+
+/* Timestamp: small, mono, muted. */
+.ib-time {
+  font-family: var(--mono);
+  font-size: 10px;
+  color: var(--muted);
+  white-space: nowrap;
+}
+
+/* The message text. Line breaks preserved via <br> in the HTML. */
+.ib-text {
+  color: var(--ink);
+  word-wrap: break-word;
+  overflow-wrap: break-word;
+}
+
+/* ---- Input area ---- */
+.ib-input-area {
+  border-top: 1px solid var(--border);
+  padding-top: 10px;
+}
+
+.ib-input-row {
+  display: flex;
+  gap: 8px;
+  align-items: flex-end;
+}
+
+.ib-to {
+  flex: 0 0 auto;
+  background: var(--card);
+  color: var(--ink);
+  border: 1px solid var(--border-strong);
+  border-radius: var(--r-btn);
+  padding: 8px 10px;
+  font: inherit;
+  font-size: 13px;
+}
+
+.ib-input {
+  flex: 1;
+  resize: none;
+  min-height: 38px;
+  max-height: 120px;
+  background: var(--bg);
+  color: var(--ink);
+  border: 1px solid var(--border-strong);
+  border-radius: var(--r-btn);
+  padding: 8px 10px;
+  font: inherit;
+  font-size: 13px;
+  line-height: 1.5;
+  overflow-y: auto;
+}
+
+.ib-input::placeholder {
+  color: var(--muted);
+}
+
+.ib-send {
+  flex: 0 0 auto;
+}
+
+/* ---- Read aloud button ---- */
+.ib-read-aloud {
+  background: var(--card);
+  color: var(--muted);
+  border: 1px solid var(--border-strong);
+  border-radius: var(--r-btn);
+  padding: 6px 13px;
+  font: inherit;
+  font-size: 12.5px;
+  cursor: pointer;
+}
+
+.ib-read-aloud:hover:not(:disabled) {
+  border-color: var(--accent);
+  color: var(--ink);
+}
+
+.ib-read-aloud:disabled {
+  opacity: 0.55;
+  cursor: default;
+}

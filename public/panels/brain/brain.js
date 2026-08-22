@@ -4,6 +4,7 @@
 //
 // Reads ONLY /api/brain. It never touches another module's route or tables.
 
+import { renderLede } from '/panels/lede/lede.js';
 const TEMPLATE = `
   <div class="panel panel-wide">
     <div class="panel-header">
@@ -304,6 +305,7 @@ export default {
   mount(el) {
     root = el;
     el.innerHTML = TEMPLATE;
+    renderLede('brain', el);
     const search = el.querySelector('#brainSearch');
     search.addEventListener('input', () => {
       clearTimeout(searchTimer);

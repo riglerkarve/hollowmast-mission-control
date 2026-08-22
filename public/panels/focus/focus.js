@@ -323,6 +323,14 @@ function createPanel() {
         } else if (cmd.api.includes('/prioritize')) {
           const items = data.items || [];
           spoken = items.length ? `${items.length} open items. Top: ${items[0].title.slice(0, 60)}.` : 'No open items.';
+        } else if (cmd.api.includes('/ventures')) {
+          const v = data.ventures || [];
+          spoken = v.length ? `${v.length} ventures.` : 'No ventures.';
+        } else if (cmd.api.includes('/serendipity')) {
+          spoken = data.connection ? data.connection.text : 'No connection today.';
+        } else if (cmd.api.includes('/journal')) {
+          const e = data.entries || [];
+          spoken = e.length ? `${e.length} journal entries.` : 'No journal entries.';
         } else if (cmd.api.includes('/sessions/active')) {
           const a = data.active || [];
           spoken = a.length ? `${a.length} agents active.` : 'No agents active.';

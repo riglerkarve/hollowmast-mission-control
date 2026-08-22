@@ -49,7 +49,13 @@ const TIMEOUT_MS = 10000;
 const PANELS = [
   'board', 'money', 'life', 'system', 'team', 'mail', 'browsing', 'safety', 'atlas',
   'goals', 'schedule', 'projects', 'brain', 'work',
-  'garage', 'sessions', 'alerts', 'todo', 'stats', 'voice',
+  'garage', 'sessions', 'alerts', 'todo', 'stats', 'voice', 'scribe',
+  'stale', 'health-check', 'time-allocation',
+  'timeline', 'api-explorer', 'workspace-overview',
+  'decision-radar', 'standup', 'hollowmast',
+  'weekly-metrics', 'git-heatmap',
+  'bulk-import', 'printprofit', 'search', 'dependency-graph', 'health-score',
+  'recurring-costs', 'goal-staleness', 'browsing-recall', 'safety-retro', 'claude-timeline',
 ];
 
 // Old standalone panel name -> the consolidated panel that now hosts it. 'cash' and
@@ -163,6 +169,9 @@ function voiceShortcut(text) {
     'ideas':     { intent: 'query', api: '/api/creative/ideas?limit=5', speak: true, shortcut: true },
     'serendipity': { intent: 'query', api: '/api/serendipity', speak: true, shortcut: true },
     'connect':   { intent: 'query', api: '/api/serendipity', speak: true, shortcut: true },
+    'journal':   { intent: 'query', api: '/api/journal/entries?limit=5', speak: true, shortcut: true },
+    'ventures':  { intent: 'query', api: '/api/ventures', speak: true, shortcut: true },
+    'digest':    { intent: 'query', api: '/api/digest', speak: true, shortcut: true },
   };
   return SHORTCUTS[t] || null;
 }
@@ -358,4 +367,52 @@ router.get('/command/status', async (req, res) => {
   }
 });
 
+// -- OpenMind OS routes (new) ----------------------------------------------------------
+// Commands that map to panels + voice panel logic, plus actions like "go" or
+// specific API queries. The existing shortcut table already covers most
+// cases, but these fill gaps for cross-project commands like /api/prioritize.
+router.post('/command/openmind', async (req, res) => {
+  const text = req.body && req.body.text;
+  if (!text || typeof text !== 'string' || !text.trim()) {
+    return res.status(400).json({ error: 'Missing "text" in body.' });
+  }
+
+  // Check shortcuts first (same logic as main command endpoint)
+  const shortcut = voiceShortcut(text);
+  if (shortcut) {
+    return res.json({ ok: true, action: { intent: shortcut.intent,
+      panel: shortcut.panel, api: shortcut.api, action: shortcut.action,
+      speak: shortcut.speak !== false, shortcut: true } });
+  }
+
+  // Full model/classified fallback (same as main)
+  const avail = await ollama.available();
+  if (avail.up && avail.local && avail.local.length) {
+    const model = pickModel(avail.local);
+    const result = await classifyWithModel(text, model);
+    if (result.ok) return res.json(result.action);
+    console.log(`[command] model classification failed: ${result.why}`);
+  }
+
+  // Keyword fallback
+  return res.json(keywordFallback(text));
+});
+
+// GET /status/command — is Ollama up, which models?
+router.get('/status/command', async (req, res) => {
+  try {
+    const avail = await ollama.available();
+    if (avail.up) {
+      const model = pickModel(avail.local);
+      return res.json({ ollama: 'available', model });
+    }
+    return res.json({ ollama: 'down', model: PREFERRED_MODEL, why: avail.why });
+  } catch (e) {
+    return res.json({ ollama: 'down', model: PREFERRED_MODEL, why: String((e && e.message) || e).slice(0, 120) });
+  }
+});
+
+// Restored 20 Aug 2026: an in-flight edit appended past this line and lost it, which
+// left the module exporting {} and took the server down at app.use(/api/voice).
+// This line is byte-identical to HEAD:server/routes/command.js:361. Nothing else touched.
 module.exports = router;

@@ -8,6 +8,7 @@
 //
 // Nothing on this panel applies a result anywhere. There is no "apply" button to add later
 // without someone noticing it was added.
+import { renderLede } from '/panels/lede/lede.js';
 let root = null;
 let timer = null;
 let loadToken = 0;
@@ -177,6 +178,7 @@ export default {
   mount(el) {
     root = el;
     el.innerHTML = TEMPLATE;
+    renderLede('work', el);
     el.addEventListener('click', onClick);
     load();
     // A queue you have to refresh by hand is a queue you stop watching. Cleared in unmount,

@@ -254,6 +254,26 @@ body {
 .brand:hover { background-color: var(--sidebar-hover); transition-duration: var(--t-slow); }
 .brand:focus-visible { outline: 2px solid var(--sidebar-ink); outline-offset: 2px; }
 
+/* MVOS command bar trigger */
+.mvos-trigger {
+  flex-shrink: 0;
+  margin-left: 8px;
+  padding: 4px 10px;
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  background: transparent;
+  color: var(--muted);
+  font: 700 11px/1 var(--mono, ui-monospace, monospace);
+  cursor: pointer;
+  letter-spacing: 0.04em;
+  transition: border-color var(--t-fast), color var(--t-fast), background var(--t-fast);
+}
+.mvos-trigger:hover {
+  border-color: var(--accent);
+  color: var(--accent-text);
+  background: var(--accent-soft);
+}
+
 .brand-mark {
   flex-shrink: 0;
   width: 34px;

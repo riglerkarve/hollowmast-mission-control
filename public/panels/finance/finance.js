@@ -5,6 +5,7 @@
 //   - present Cash withdrawn as a category of spending (the ledger does not know)
 //   - compare a partial month against a whole one
 
+import { renderLede } from '/panels/lede/lede.js';
 const TEMPLATE = `
   <div class="panel panel-wide">
     <div class="panel-header">
@@ -804,6 +805,7 @@ export default {
     root = el;
     const gen = ++generation;
     el.innerHTML = TEMPLATE;
+    renderLede('finance', el);
 
     let months;
     let monthsError;

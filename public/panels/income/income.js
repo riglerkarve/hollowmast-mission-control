@@ -10,6 +10,7 @@
 // total. Where a figure cannot be computed the cell says why — it is never left blank and
 // never filled with a guess.
 
+import { renderLede } from '/panels/lede/lede.js';
 const TEMPLATE = `
   <div class="panel panel-wide">
     <div class="panel-header">
@@ -297,6 +298,7 @@ export default {
     root = el;
     token += 1;
     el.innerHTML = TEMPLATE;
+    renderLede('income', el);
 
     // Local month, not toISOString().slice(0,7) — on the 1st of the month before 01:00 BST
     // that returns the previous month and files the entry against the wrong one.

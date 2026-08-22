@@ -1,0 +1,92 @@
+/* changes — log of what shipped, with unsigned changes highlighted.
+
+   Every token used here is defined in shell.css. The badge colours for Codex (blue) and
+   Ollama (green) do not exist in the palette, so they are defined HERE with both schemes
+   rather than invented as if they came from the shared sheet — the same pattern
+   activity.css uses. An undefined custom property renders as nothing, silently, and a
+   coloured badge that loses its colour in dark mode is exactly that failure. */
+.ch-panel {
+  --ch-blue: #3b82f6;
+  --ch-green: #22c55e;
+}
+@media (prefers-color-scheme: dark) {
+  .ch-panel { --ch-blue: #60a5fa; --ch-green: #4ade80; }
+}
+
+.ch-header { display: flex; align-items: baseline; gap: 12px; margin-bottom: 16px; }
+.ch-header h1 { font-size: 18px; font-weight: 600; color: var(--ink); margin: 0; }
+.ch-count { font-size: 13px; color: var(--muted); font-variant-numeric: tabular-nums; }
+
+.ch-filters { display: flex; flex-wrap: wrap; gap: 8px; margin-bottom: 18px; }
+.ch-tab { background: var(--card); border: 1px solid var(--border); border-radius: var(--r-btn);
+  padding: 6px 12px; color: var(--ink); cursor: pointer; font: inherit; font-size: 13px; }
+.ch-tab span { color: var(--muted); font-variant-numeric: tabular-nums; margin-left: 4px; }
+.ch-tab.on { border-color: var(--accent); color: var(--accent-text); background: var(--accent-soft); }
+.ch-tab.on span { color: inherit; }
+
+/* Source-failure notes sit above the list — warnings, not fatal errors. */
+.ch-notes { margin-bottom: 14px; }
+.ch-note { font-size: 12px; color: var(--muted); background: var(--card);
+  border: 1px solid var(--border); border-radius: var(--r-card); padding: 8px 12px; margin-bottom: 6px; }
+
+/* Alert — the count of unsigned changes, with a jump link. Only rendered when > 0. */
+.ch-alert { font-size: 13px; color: var(--ink); background: var(--accent-soft);
+  border: 1px solid var(--border); border-radius: var(--r-card); padding: 10px 14px;
+  margin-bottom: 14px; display: flex; align-items: center; gap: 8px; }
+.ch-alert-link { background: none; border: none; color: var(--accent-text); cursor: pointer;
+  font: inherit; text-decoration: underline; padding: 0; }
+
+.ch-list { display: flex; flex-direction: column; gap: 2px; }
+
+.ch-item { display: grid; grid-template-columns: auto auto auto auto 1fr auto auto;
+  align-items: center; gap: 10px; padding: 9px 10px; border-bottom: 1px solid var(--border);
+  font-size: 13px; }
+.ch-item:hover { background: var(--card); }
+
+/* Sign-off flag — a small glyph that tells the reader at a glance whether the change was
+   approved. Signed = check, unsigned = exclamation, with colour to match. */
+.ch-flag { font-size: 13px; font-weight: 700; width: 18px; text-align: center; }
+.ch-flag-signed { color: var(--ch-green); }
+.ch-flag-unsigned { color: var(--danger, #ef4444); }
+
+/* Unsigned changes get a left border so they stand out when scanning the full list. The
+   border is structural (not a style attribute) so it survives re-render. */
+.ch-item.ch-unsigned { border-left: 3px solid var(--danger, #ef4444); padding-left: 7px; }
+
+.ch-kind { font-size: 11px; text-transform: uppercase; letter-spacing: .05em;
+  color: var(--muted); min-width: 56px; }
+
+.ch-time { font-size: 12px; color: var(--muted); font-variant-numeric: tabular-nums;
+  white-space: nowrap; }
+
+.ch-badge { font-size: 11px; font-weight: 600; padding: 2px 8px; border-radius: var(--r-btn);
+  white-space: nowrap; text-transform: capitalize; }
+.ch-badge-accent { background: var(--accent-soft); color: var(--accent-text); }
+.ch-badge-blue { background: var(--ch-blue); color: #fff; }
+.ch-badge-green { background: var(--ch-green); color: #fff; }
+.ch-badge-ink { background: var(--card); color: var(--ink); border: 1px solid var(--border); }
+
+.ch-what { color: var(--ink); min-width: 0; overflow: hidden; text-overflow: ellipsis;
+  white-space: nowrap; }
+
+.ch-ref { font-family: var(--mono); font-size: 11px; color: var(--muted); white-space: nowrap; }
+.ch-where { font-size: 12px; color: var(--muted); white-space: nowrap; }
+
+/* Stale items are muted, not hidden — the row dims together so it reads as "still here,
+   but not recent". */
+.ch-item.ch-stale .ch-time,
+.ch-item.ch-stale .ch-badge,
+.ch-item.ch-stale .ch-what,
+.ch-item.ch-stale .ch-where,
+.ch-item.ch-stale .ch-ref,
+.ch-item.ch-stale .ch-kind { opacity: .5; }
+
+.ch-empty { color: var(--muted); font-size: 13px; padding: 24px 10px; max-width: 62ch; }
+.ch-alarm { color: var(--muted); font-size: 13px; padding: 16px 0; max-width: 62ch; }
+
+@media (max-width: 560px) {
+  .ch-item { grid-template-columns: auto auto 1fr; grid-template-rows: auto auto;
+    gap: 4px 8px; }
+  .ch-what { grid-column: 1 / -1; white-space: normal; }
+  .ch-where, .ch-ref { font-size: 11px; }
+}

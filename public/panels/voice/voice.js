@@ -84,8 +84,10 @@ const TEMPLATE = `
         <button class="vc-qa" data-cmd="today">Today</button>
         <button class="vc-qa" data-cmd="stuck">Stuck</button>
         <button class="vc-qa" data-cmd="who">Who's working</button>
+        <button class="vc-qa" data-cmd="spark">Spark</button>
+        <button class="vc-qa" data-cmd="connect">Connect</button>
+        <button class="vc-qa" data-cmd="journal">Journal</button>
         <button class="vc-qa" data-cmd="go">Start focus</button>
-        <button class="vc-qa" data-cmd="inbox">Inbox</button>
       </div>
     </section>
 
@@ -343,6 +345,24 @@ function formatForSpeech(data, apiUrl) {
     const c = data.connection;
     if (!c) return 'No connection today.';
     return `Today's serendipity: ${c.text}`;
+  }
+  // Journal
+  if (apiUrl.includes('/journal')) {
+    const entries = data.entries || [];
+    if (!entries.length) return 'No journal entries yet.';
+    return `${entries.length} entries. Latest: ${entries[0].text.slice(0, 80)}.`;
+  }
+  // Ventures
+  if (apiUrl.includes('/ventures')) {
+    const v = data.ventures || [];
+    if (!v.length) return 'No ventures found.';
+    const active = v.filter((x) => x.momentum === 'active').length;
+    const stalled = v.filter((x) => x.momentum === 'stalled').length;
+    return `${v.length} ventures: ${active} active, ${stalled} stalled.`;
+  }
+  // Digest
+  if (apiUrl.includes('/digest')) {
+    return data.summary || 'No digest available.';
   }
   // Creative ideas
   if (apiUrl.includes('/creative/ideas')) {

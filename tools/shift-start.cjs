@@ -6,9 +6,9 @@
 //   node tools/shift-start.cjs --peek       the same, without marking anything read
 //   node tools/shift-start.cjs --shift 2026-08-19-morning
 //
-// This is the first step of the chain the owner specified: every session hands over, the
-// supervisor reads them all here, drafts a plan, the manager scrutinises and confirms it, and
-// only then is anything delegated.
+// This is the first step of the chain: every session hands over, the
+// supervisor reads them all here, picks work, and delegates through the board.
+// (The old plan/confirm/assign cycle was retired 20 Aug 2026 — see M244.)
 //
 // IT REPORTS SILENCE AS LOUDLY AS IT REPORTS WORK. A session that handed nothing over and a
 // session that had nothing to say produce the same empty space in an inbox, and the second is
@@ -63,7 +63,13 @@ if (!view.handovers.length) {
 }
 
 // ---- 3. silence
-console.log(rule(`SILENT — ${view.silent.length} of ${(have.worker || 0) + (have.supervisor || 0) + (have.manager || 0)} on the roster`));
+// M243: The denominator was worker+supervisor+manager, but the roster can hold
+// other roles (architect, scribe, etc). That made the count read "12 of 11"
+// when 13 people were on the roster and 12 were silent. The fix: count ALL
+// non-retired sessions for the denominator, which is what view.silent is
+// measured against.
+const rosterTotal = roster.reduce((sum, r) => sum + r.n, 0);
+console.log(rule(`SILENT — ${view.silent.length} of ${rosterTotal} on the roster`));
 if (!view.silent.length) console.log('  Everyone on the roster reported.');
 for (const s of view.silent) {
   console.log(`  ${s.title.padEnd(34)} ${s.role.padEnd(11)} last seen ${String(s.lastSeen).slice(0, 16).replace('T', ' ')}`);
@@ -126,6 +132,12 @@ if (!PEEK && view.handovers.length) {
   console.log(`\n  ${n} handover(s) marked read. Run with --peek to look without marking.`);
 }
 
-console.log('\n  NEXT: draft a plan against the above, then have the manager confirm it.');
-console.log('  Nothing can be delegated until it is — the API refuses an assignment whose plan');
-console.log('  is unconfirmed, which is the one step of the chain a schema can actually enforce.\n');
+// M244: The plan/confirm/assign cycle was retired by owner decision on 20 Aug
+// 2026. The API returns 410 RETIRED_CYCLE for all those endpoints. The shift-start
+// tool was still instructing the supervisor to draft a plan and have the manager
+// confirm it — an impossible instruction against retired endpoints. Replaced with
+// the stage-gated workflow that actually runs: pick from the handovers above,
+// write a markdown plan, and delegate via the board.
+console.log('\\n  NEXT: pick work from the handovers above and write a markdown plan.');
+console.log('  Delegate through the board — the plan/confirm/assign cycle was retired');
+console.log('  20 Aug 2026. The API refuses those endpoints with 410 RETIRED_CYCLE.\n');

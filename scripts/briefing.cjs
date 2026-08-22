@@ -51,9 +51,13 @@ const DRY = args.includes('--dry');
 const dateIdx = args.indexOf('--date');
 const TODAY = dateIdx >= 0 ? args[dateIdx + 1] : new Date().toISOString().slice(0, 10);
 
-// db.js normally records reads of sensitive tables. That is a persistent write, so turn it
-// off before loading the database for a genuinely read-only preview.
-if (DRY) process.env.MC_DISABLE_ACCESS_LOG = '1';
+// M76: The --dry flag no longer silences the access log. A dry briefing genuinely
+// reads the ledger, and logging that read IS the log working — silencing it means
+// "schedule read your finance data" becomes invisible, which is the exact gap the
+// access log exists to prevent. The flag remains available for verification tools
+// that use a temp DB (verify-checkers, verify-suite, etc.), but a real-database
+// reader must never use it.
+// Removed: if (DRY) process.env.MC_DISABLE_ACCESS_LOG = '1';
 
 const db = require('../server/db');
 // Provenance: this runs from Task Scheduler with no human and no request, so without

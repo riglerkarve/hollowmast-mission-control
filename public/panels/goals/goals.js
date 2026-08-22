@@ -19,6 +19,7 @@
 //
 // No timers, no polling, no badge. The panel says what is true when you open it.
 
+import { renderLede } from '/panels/lede/lede.js';
 const TEMPLATE = `
   <div class="panel panel-wide gl-panel">
     <div class="panel-header">
@@ -293,6 +294,7 @@ export default {
     root = el;
     token += 1;
     el.innerHTML = TEMPLATE;
+    renderLede('goals', el);
 
     onClick = (ev) => {
       // <details> does not bubble its toggle event, so which lists you had open is tracked

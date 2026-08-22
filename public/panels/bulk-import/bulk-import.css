@@ -1,0 +1,68 @@
+/* bulk-import — paste-and-import panel for the board.
+
+   Every custom property used here is defined in shell.css. Verified by reading the
+   definition, not a mention: --accent, --accent-soft, --accent-fill, --accent-text,
+   --card, --bg, --ink, --muted, --border, --border-strong, --mono, --r-card, --r-btn,
+   --t-fast, --t-slow, --ease all have :root definitions in shell.css and carry
+   dark-theme overrides. No new tokens are defined here. */
+
+.bi-panel { max-width: 720px; }
+
+.bi-lede { color: var(--muted); font-size: 13px; line-height: 1.5; margin: 0 0 18px; max-width: 72ch; }
+
+/* EMPTY STATE — muted, no border. This is an invitation, not an error. */
+.bi-empty { color: var(--muted); font-size: 13px; padding: 10px 0; line-height: 1.5; max-width: 72ch; }
+
+/* ERROR STATE — the accent border makes a failure unmistakable against the empty state.
+   A failure that looks like good news is the failure this workspace keeps meeting. */
+.bi-alarm { border: 1px solid var(--accent); background: var(--card); color: var(--ink);
+  border-radius: var(--r-card); padding: 12px 14px; margin: 0 0 14px; font-size: 13px; }
+
+/* RESULT STATE — the accent-soft ground says "done" without the alarm weight. */
+.bi-result { color: var(--ink); font-size: 13px; margin: 0 0 14px; padding: 10px 14px;
+  background: var(--accent-soft); border-radius: var(--r-card); }
+
+.bi-input { width: 100%; font-family: var(--mono); font-size: 12px; line-height: 1.5;
+  background: var(--card); border: 1px solid var(--border); border-radius: var(--r-card);
+  padding: 12px 14px; color: var(--ink); resize: vertical; min-height: 120px;
+  margin-bottom: 14px; }
+.bi-input:focus { outline: none; border-color: var(--accent); }
+.bi-input::placeholder { color: var(--muted); opacity: 0.7; }
+
+.bi-actions { display: flex; gap: 10px; margin-bottom: 18px; flex-wrap: wrap; }
+.bi-btn { background: var(--card); border: 1px solid var(--border); border-radius: var(--r-btn);
+  padding: 8px 16px; color: var(--ink); cursor: pointer; font: inherit; font-size: 13px;
+  transition: border-color var(--t-fast) var(--ease); }
+.bi-btn:hover { border-color: var(--accent); }
+.bi-btn:disabled { color: var(--muted); cursor: default; }
+.bi-btn:disabled:hover { border-color: var(--border); }
+
+/* The primary button uses --accent-fill with white text, the pair that token exists
+   for. Disabled reverts to the neutral card style so it never looks "active but stuck". */
+.bi-btn-primary { background: var(--accent-fill); color: #fff; border-color: var(--accent-fill); }
+.bi-btn-primary:hover { border-color: var(--accent); }
+.bi-btn-primary:disabled { background: var(--card); color: var(--muted); border-color: var(--border); }
+.bi-btn-primary:disabled:hover { border-color: var(--border); }
+
+.bi-h2 { font-size: 13px; text-transform: uppercase; letter-spacing: .07em; color: var(--muted);
+  margin: 24px 0 10px; padding-bottom: 6px; border-bottom: 1px solid var(--border); }
+.bi-n { font-variant-numeric: tabular-nums; color: var(--accent-text); background: var(--accent-soft);
+  border-radius: 10px; padding: 1px 8px; font-size: 13px; margin-left: 6px; }
+
+/* Preview table. Wide content scrolls inside its own box; the page body must never
+   scroll sideways — same rule as the board's table. */
+.bi-table { width: 100%; border-collapse: collapse; display: block; overflow-x: auto;
+  margin-bottom: 14px; }
+.bi-table th { text-align: left; font-size: 11px; text-transform: uppercase;
+  letter-spacing: .05em; color: var(--muted); padding: 6px 10px;
+  border-bottom: 1px solid var(--border); }
+.bi-table td { border-top: 1px solid var(--border); padding: 8px 10px; vertical-align: top;
+  font-size: 13px; }
+.bi-ref { font-family: var(--mono); color: var(--muted); white-space: nowrap; }
+.bi-title { color: var(--ink); }
+.bi-proj { color: var(--muted); white-space: nowrap; font-size: 12px; }
+.bi-kind { font-size: 11px; color: var(--muted); text-transform: uppercase; letter-spacing: .04em; }
+
+@media (max-width: 560px) {
+  .bi-panel { max-width: 100%; }
+}

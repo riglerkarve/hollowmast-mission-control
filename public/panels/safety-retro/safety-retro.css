@@ -1,0 +1,106 @@
+/* safety-retro — a spending retrospective over the safety_decisions table.
+   Every custom property used here is defined in shell.css. Verified by reading the
+   definition, not a mention: --accent, --accent-soft, --accent-text, --accent-text-bg,
+   --card, --bg, --ink, --muted, --border, --border-strong, --mono, --r-card, --r-btn
+   all have :root definitions in shell.css and carry dark-theme overrides. */
+
+.sr-panel { max-width: 720px; }
+
+.sr-lede { color: var(--muted); font-size: 13px; line-height: 1.5; margin: 0 0 18px; max-width: 72ch; }
+.sr-loading { color: var(--muted); font-size: 13px; }
+.sr-alarm { color: var(--ink); font-size: 13px; margin: 0; }
+.sr-empty { color: var(--muted); font-size: 13px; padding: 8px 0; line-height: 1.5; max-width: 72ch; }
+
+.sr-summary { font-size: 13px; color: var(--muted); margin: 0 0 14px; }
+.sr-summary-n { font-variant-numeric: tabular-nums; color: var(--ink); font-weight: 600; }
+
+.sr-h2 { font-size: 13px; text-transform: uppercase; letter-spacing: .07em; color: var(--muted);
+  margin: 28px 0 10px; padding-bottom: 6px; border-bottom: 1px solid var(--border); }
+/* The first section's heading sits closer to the lede; the second has the full margin. */
+.sr-panel > .sr-h2:first-of-type { margin-top: 10px; }
+
+.sr-n { font-variant-numeric: tabular-nums; color: var(--accent-text); background: var(--accent-soft);
+  border-radius: 10px; padding: 1px 8px; font-size: 13px; margin-left: 6px; }
+
+/* ---- Section 1: Quietest vs busiest month ---------------------------------- */
+
+.sr-month-pair { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; margin-bottom: 4px; }
+
+.sr-month { background: var(--card); border: 1px solid var(--border); border-radius: var(--r-card);
+  padding: 14px 16px; border-left: 3px solid var(--border-strong); }
+.sr-month-none { border-left-color: var(--border); }
+
+.sr-month h3 { margin: 0 0 6px; font-size: 10px; text-transform: uppercase; letter-spacing: .09em;
+  color: var(--muted); }
+.sr-month-label { margin: 0 0 8px; font-size: 15px; font-weight: 600; color: var(--ink); }
+.sr-month-stat { margin: 0; font-size: 13px; color: var(--ink); font-variant-numeric: tabular-nums; }
+.sr-month-empty { margin: 0; font-size: 13px; color: var(--muted); }
+.sr-stat-n { font-weight: 600; color: var(--ink); }
+
+/* The busiest month gets the accent left rule, matching decisions.css's dc-due treatment:
+   the accent draws the eye to the surge without turning the card into an alarm. */
+.sr-month-pair > .sr-month:last-child { border-left-color: var(--accent); }
+@media (prefers-color-scheme: dark) {
+  .sr-month-pair > .sr-month:last-child { background: var(--card); }
+}
+
+/* ---- Shared table styles (Sections 2 & 3) ---------------------------------- */
+
+.sr-table { width: 100%; border-collapse: collapse; font-size: 13px; }
+.sr-table th { text-align: left; font-size: 10px; text-transform: uppercase; letter-spacing: .09em;
+  color: var(--muted); padding: 6px 8px 6px 0; border-bottom: 1px solid var(--border); font-weight: 400; }
+.sr-table td { padding: 8px 8px 8px 0; border-bottom: 1px solid var(--border);
+  color: var(--ink); font-variant-numeric: tabular-nums; vertical-align: top; }
+.sr-table tbody tr:last-child td { border-bottom: none; }
+
+/* ---- Section 2: Top payees ------------------------------------------------- */
+
+.sr-payee-name { color: var(--ink); }
+.sr-payee-total { font-weight: 600; text-align: right; white-space: nowrap; }
+.sr-payee-count { color: var(--muted); text-align: right; }
+
+/* ---- Section 3: Active limits ---------------------------------------------- */
+
+.sr-limit-key { color: var(--ink); font-weight: 500; }
+.sr-limit-value { font-weight: 600; text-align: right; white-space: nowrap; }
+.sr-limit-meta { font-family: var(--mono); font-size: 11px; color: var(--muted); white-space: nowrap; }
+
+/* ---- Section 4: Recent decisions ------------------------------------------- */
+
+.sr-card { background: var(--card); border: 1px solid var(--border); border-radius: var(--r-card);
+  padding: 12px 14px; margin-bottom: 8px; border-left: 3px solid var(--border-strong); }
+
+/* Allowed decisions get a neutral left rule; refused decisions get the accent, matching
+   the decisions panel's convention: the accent marks something worth looking at. */
+.sr-card.sr-outcome-refused { border-left-color: var(--accent); }
+@media (prefers-color-scheme: dark) {
+  .sr-card.sr-outcome-refused { background: var(--card); }
+}
+
+.sr-card-head { display: flex; justify-content: space-between; align-items: center; margin-bottom: 6px; }
+
+.sr-outcome { font-family: var(--mono); font-size: 10px; text-transform: uppercase; letter-spacing: .06em;
+  border: 1px solid var(--border); border-radius: 3px; padding: 1px 6px; }
+.sr-outcome-allowed { color: var(--muted); border-color: var(--border); }
+.sr-outcome-refused { color: var(--accent-text); background: var(--accent-soft); border-color: var(--accent); }
+
+.sr-amount { font-size: 14px; font-weight: 600; font-variant-numeric: tabular-nums; color: var(--ink); }
+
+.sr-payee-line { margin: 0 0 4px; font-size: 13px; color: var(--ink); }
+.sr-action { margin: 0 0 6px; font-size: 13px; line-height: 1.45; color: var(--muted); max-width: 72ch; }
+
+.sr-meta { font-family: var(--mono); font-size: 11px; margin: 0 0 6px;
+  display: flex; gap: 8px; align-items: center; }
+.sr-who { color: var(--ink); font-weight: 600; }
+.sr-when { color: var(--muted); }
+
+.sr-reasons { display: flex; flex-wrap: wrap; gap: 4px; }
+.sr-reason { font-family: var(--mono); font-size: 10px; text-transform: uppercase; letter-spacing: .05em;
+  color: var(--muted); border: 1px solid var(--border-strong); padding: 1px 5px; border-radius: 3px; }
+
+.sr-null { color: var(--muted); font-style: italic; }
+
+@media (max-width: 560px) {
+  .sr-panel { max-width: 100%; }
+  .sr-month-pair { grid-template-columns: 1fr; }
+}

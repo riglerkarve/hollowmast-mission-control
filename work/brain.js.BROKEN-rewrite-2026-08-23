@@ -1,0 +1,121 @@
+const express = require('express');
+const { database } = require('../db');
+const router = express.Router();
+
+// ---------------------------------------------------------------------------------------
+// Brain routes — the second brain, owner entries only, no inference here.
+// Each note is a human decision, recorded in sqlite. GET endpoints now expose
+// notes and flags for the panel to render.
+// ---------------------------------------------------------------------------------------
+
+// Read a single note by ID — returns note + backlinks derived on read
+router.get('/notes/:id', (req, res) => {
+  const id = Number(req.params.id);
+  if (!Number.isInteger(id)) return res.status(400).json({ error: 'bad id' });
+
+  const note = database.db.prepare('SELECT * FROM brain_notes WHERE id = ?')
+    .get(id);
+  if (!note) return res.status(404).json({ error: 'no such note' });
+
+  // Derive backlinks on read — this panel changes what the other shows
+  const backlinks = database.db.prepare(
+    `SELECT DISTINCT linked_from FROM brain_backlinks WHERE linked_to = ?`
+  ).all(id);
+
+  res.json(note, { backlinks });
+});
+
+// List notes with optional type filter — backed by the same query in the panel
+router.get('/notes', (req, res) => {
+  const limit = Math.min(100, Math.max(1, Number(req.query.limit) || 50));
+  const types = (req.query.type || '')
+    .toString()
+    .split(',')
+    .filter(String);
+
+  const filterCondition = types.length > 0 ? `type IN (${types.map(t => '?' + t).join(',')})` : '';
+
+  const rows = database.db.prepare(
+    `SELECT * FROM brain_notes ${filterCondition} ORDER BY date DESC LIMIT ?`
+  ).all(...(types.concat([limit])));
+
+  res.json(rows);
+});
+
+// Get flags — the memory store, read-only from this module
+router.get('/flag', (req, res) => {
+  const types = (req.query.type || '')
+    .toString()
+    .split(',')
+    .filter(String);
+
+  const filterCondition = types.length > 0 ? `type IN (${types.map(t => '?' + t).join(',')})` : '';
+
+  const rows = database.db.prepare(
+    `SELECT * FROM brain_flags ${filterCondition} ORDER BY date DESC`
+  ).all(...(types));
+
+  res.json(rows);
+});
+
+// Delete a note by ID — deletes note AND its backlinks. A deleted note
+// clears the other panel, so backlinks must go too.
+router.delete('/notes/:id', (req, res) => {
+  const id = Number(req.params.id);
+  if (!Number.isInteger(id)) return res.status(400).json({ error: 'bad id' });
+
+  database.db.prepare('DELETE FROM brain_backlinks WHERE linked_to = ?')
+    .run(id);
+
+  const row = database.db.prepare('DELETE FROM brain_notes WHERE id = ?')
+    .run(id);
+
+  if (!row.changes) return res.status(404).json({ error: 'no such note' });
+
+  res.json({ deleted: id });
+});
+
+// Delete a flag by ID
+router.delete('/flag/:id', (req, res) => {
+  const id = Number(req.params.id);
+  if (!Number.isInteger(id)) return res.status(400).json({ error: 'bad id' });
+
+  database.db.prepare('DELETE FROM brain_flags WHERE id = ?')
+    .run(id);
+
+  const row = database.db.prepare('SELECT COUNT(*) FROM brain_flags WHERE id = ?')
+    .get(id);
+
+  if (!row.count) return res.status(404).json({ error: 'no such flag' });
+
+  res.json({ deleted: id });
+});
+
+// ---------------------------------------------------------------------------------------
+// POST /flag — minting entries. The only write path in the module, so every
+// entry is a lesson I wrote after getting it wrong. User entries live in SQLite,
+// not as .md files, because the store is hand-maintained across sessions with
+// no merge. The panel exports generated file paths via panel.js, not from here.
+// ---------------------------------------------------------------------------------------
+
+router.post('/flag', (req, res) => {
+  const { source, content } = req.body || {};
+  if (!source || typeof source !== 'string') {
+    return res.status(400).json({ error: 'missing or invalid source' });
+  }
+  const owner = (source.startsWith('user:') && source.length > 6) ? source.slice(6) : 'unknown';
+
+  // Escape content for JSON storage
+  const escapedContent = (content || '').toString().replace(/"/g, '\\"');
+
+  const rowNum = database.db.prepare('SELECT COALESCE(MAX(id), 0) + 1 FROM brain_flags')
+    .get().id;
+
+  database.db.prepare(`INSERT INTO brain_flags (id, content, source) VALUES (?, ?, ?)`).run(
+    rowNum, escapedContent, owner
+  );
+
+  res.json({ created: rowNum });
+});
+
+module.exports = router;

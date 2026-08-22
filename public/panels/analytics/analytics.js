@@ -12,6 +12,7 @@
 // A GREEN ROW IS NOT AN AUDIENCE, and the panel says that out loud. Everything above the import
 // section measures what the URL serves, not whether anyone asked for it — which is exactly the
 // distinction PrintProfit's £0 has been hiding behind all week.
+import { renderLede } from '/panels/lede/lede.js';
 let root = null;
 let timer = null;
 let signal = null;   // from the shell, aborted when this panel is torn down
@@ -124,6 +125,7 @@ export default {
     root = el;
     signal = (opts && opts.signal) || null;
     el.innerHTML = TEMPLATE;
+    renderLede('analytics', el);
     el.querySelector('#anProbe').addEventListener('click', async (ev) => {
       const b = ev.currentTarget;
       b.disabled = true; b.textContent = 'Checking…';

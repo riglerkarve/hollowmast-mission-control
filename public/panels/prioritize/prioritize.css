@@ -1,0 +1,84 @@
+/* prioritize — ranked "what should I do today?" list (M254).
+   Every custom property used here is defined in shell.css. Verified by reading the
+   definition, not a mention: --accent, --accent-soft, --accent-text, --accent-text-bg,
+   --card, --bg, --ink, --muted, --border, --border-strong, --mono, --r-card, --r-btn
+   all have :root definitions in shell.css and carry dark-theme overrides. */
+
+.pz-panel { max-width: 720px; }
+
+.pz-lede { color: var(--muted); font-size: 13px; line-height: 1.5; margin: 0 0 18px; max-width: 72ch; }
+.pz-loading { color: var(--muted); font-size: 13px; }
+.pz-alarm { color: var(--ink); font-size: 13px; margin: 0; }
+.pz-empty { color: var(--muted); font-size: 13px; padding: 8px 0; line-height: 1.5; max-width: 72ch; }
+.pz-asof { font-family: var(--mono); font-size: 11px; color: var(--muted); margin: 0 0 14px; }
+.pz-more { font-family: var(--mono); font-size: 11px; color: var(--muted); margin: 14px 0 0; }
+
+/* ---- the row --------------------------------------------------------------- */
+
+.pz-row { display: flex; gap: 14px; background: var(--card); border: 1px solid var(--border);
+  border-left: 3px solid var(--border-strong); border-radius: var(--r-card);
+  padding: 12px 14px; margin-bottom: 8px; }
+
+/* Top three items carry the accent left rule and a soft accent tint — the same emphasis
+   decisions.css gives a due-for-revisit call. The tint is --accent-soft, the same ground
+   --accent-text is rated for. */
+.pz-top { border-left-color: var(--accent); background: var(--accent-soft); }
+@media (prefers-color-scheme: dark) {
+  /* --accent-soft is very dark in the dark theme (a near-black ember tint). The accent
+     rule alone carries the emphasis there; keep the ground as --card so the row does not
+     disappear into the page. */
+  .pz-top { background: var(--card); }
+}
+
+/* The score column. Tabular-nums so two-digit scores line up under three-digit ones;
+   the number is the first thing the eye should read after the accent rule. */
+.pz-score { flex: 0 0 44px; text-align: right; }
+.pz-score-n { font-family: var(--mono); font-variant-numeric: tabular-nums;
+  font-size: 18px; font-weight: 600; color: var(--ink); }
+.pz-top .pz-score-n { color: var(--accent-text); }
+
+.pz-body { flex: 1 1 auto; min-width: 0; }
+
+.pz-head { display: flex; flex-wrap: wrap; align-items: baseline; gap: 8px; margin-bottom: 6px; }
+
+.pz-title { margin: 0; font-size: 14px; line-height: 1.42; color: var(--ink);
+  max-width: 64ch; font-weight: 600; }
+
+/* Priority badge. P1 carries the accent fill so it reads as urgency; P2 and P3 are
+   outlined in descending weight so the eye can rank them without reading the label. */
+.pz-badge { font-family: var(--mono); font-size: 10px; text-transform: uppercase;
+  letter-spacing: .06em; border-radius: 3px; padding: 2px 6px; white-space: nowrap; }
+.pz-p1 { color: var(--card); background: var(--accent); border: 1px solid var(--accent); }
+.pz-p2 { color: var(--accent-text); background: var(--accent-soft);
+  border: 1px solid var(--accent); }
+.pz-p3 { color: var(--muted); background: transparent; border: 1px solid var(--border-strong); }
+.pz-pother { color: var(--muted); background: transparent; border: 1px solid var(--border-strong); }
+
+/* On the top-three rows the P2 badge sits on the same --accent-soft ground; invert it
+   so it does not vanish into the tint, matching decisions.css's due-badge inversion. */
+.pz-top .pz-p2 { color: var(--card); background: var(--accent); border-color: var(--accent); }
+
+/* Kind tag — bug, question, etc. Lighter than the priority badge so it reads as
+   context, not urgency. */
+.pz-kind { font-family: var(--mono); font-size: 10px; text-transform: uppercase;
+  letter-spacing: .05em; color: var(--muted); border: 1px solid var(--border);
+  border-radius: 3px; padding: 1px 5px; }
+
+/* Attribution line: ref, project, owner, staleness. Mono because these are identifiers
+   and counts, not prose. */
+.pz-attr { font-family: var(--mono); font-size: 11px; margin: 0 0 8px;
+  display: flex; flex-wrap: wrap; gap: 9px; align-items: center; }
+.pz-ref { color: var(--ink); font-weight: 600; }
+.pz-proj { color: var(--muted); }
+.pz-owner { color: var(--muted); }
+.pz-stale { color: var(--muted); }
+
+/* The reason line — the arithmetic behind the score, in the route's own words.
+   Muted so it explains without competing with the title. */
+.pz-reason { margin: 0; font-size: 12px; line-height: 1.5; color: var(--muted); max-width: 64ch; }
+
+@media (max-width: 560px) {
+  .pz-panel { max-width: 100%; }
+  .pz-score { flex: 0 0 36px; }
+  .pz-score-n { font-size: 16px; }
+}

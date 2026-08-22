@@ -49,6 +49,7 @@
 // convenience; the tab is the escape, and it is never the thing that gets removed.
 // ---------------------------------------------------------------------------------------
 
+import { renderLede } from '/panels/lede/lede.js';
 const TEMPLATE = `
   <div class="panel panel-wide prj-panel">
     <div class="panel-header">
@@ -291,6 +292,7 @@ async function load(gen) {
 export default {
   async mount(el) {
     el.innerHTML = TEMPLATE;
+    renderLede('projects', el);
     root = el;
 
     // Width is the variable that decides whether a page fits, so a resize re-measures as

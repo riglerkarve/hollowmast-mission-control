@@ -1,0 +1,86 @@
+/* git-heatmap — cross-project git activity heatmap for the workspace root.
+   Every custom property used here is defined in shell.css. Verified by reading the
+   definition, not a mention: --accent, --accent-soft, --accent-text, --accent-text-bg,
+   --card, --bg, --ink, --muted, --border, --border-strong, --mono, --r-card, --r-btn
+   all have :root definitions in shell.css and carry dark-theme overrides. */
+
+.gh-panel { max-width: 900px; }
+
+.gh-lede { color: var(--muted); font-size: 13px; line-height: 1.5; margin: 0 0 18px; max-width: 72ch; }
+.gh-loading { color: var(--muted); font-size: 13px; }
+.gh-alarm { color: var(--ink); font-size: 13px; margin: 0; }
+.gh-empty { color: var(--muted); font-size: 13px; padding: 8px 0; line-height: 1.5; max-width: 72ch; }
+.gh-asof { font-family: var(--mono); font-size: 11px; color: var(--muted); margin: 0 0 10px; }
+
+.gh-h2 { font-size: 13px; text-transform: uppercase; letter-spacing: .07em; color: var(--muted);
+  margin: 28px 0 10px; padding-bottom: 6px; border-bottom: 1px solid var(--border); }
+/* The first section's heading sits closer to the lede; the second has the full margin. */
+.gh-panel > .gh-h2:first-of-type { margin-top: 10px; }
+
+.gh-n { font-variant-numeric: tabular-nums; color: var(--accent-text); background: var(--accent-soft);
+  border-radius: 10px; padding: 1px 8px; font-size: 13px; margin-left: 6px; }
+
+/* ---- Section 1: Activity heatmap grid -------------------------------------- */
+
+.gh-scroll { overflow-x: auto; margin-bottom: 4px; }
+
+.gh-grid { border-collapse: collapse; width: 100%; table-layout: fixed;
+  font-family: var(--mono); font-size: 11px; }
+
+.gh-corner { width: 120px; min-width: 80px; }
+
+.gh-head-row th { padding: 4px 0; text-align: center; font-size: 9px; color: var(--muted);
+  font-weight: 400; letter-spacing: .02em; }
+.gh-th { width: 16px; min-width: 14px; max-width: 22px; }
+
+.gh-row-label { text-align: left; padding: 2px 8px 2px 0; color: var(--ink); font-size: 11px;
+  white-space: nowrap; overflow: hidden; text-overflow: ellipsis; max-width: 120px; }
+
+/* The three cell states. 0 is empty/muted; 1-2 is a light accent tint; 3+ is full accent.
+   Each cell is a small square so the grid reads as a heatmap, not a table of numbers. */
+.gh-cell { width: 16px; min-width: 14px; max-width: 22px; height: 22px; text-align: center;
+  border: 1px solid transparent; border-radius: 2px; font-size: 9px; color: var(--muted);
+  vertical-align: middle; }
+.gh-cell-0 { background: transparent; border-color: var(--border); }
+.gh-cell-1 { background: var(--accent-soft); color: var(--accent-text); border-color: var(--accent-soft); }
+.gh-cell-3 { background: var(--accent); color: var(--card); border-color: var(--accent); }
+
+@media (prefers-color-scheme: dark) {
+  .gh-cell-0 { border-color: var(--border); }
+  .gh-cell-1 { background: var(--accent-soft); color: var(--accent-text); border-color: var(--accent-soft); }
+  .gh-cell-3 { background: var(--accent); color: var(--card); }
+}
+
+/* ---- Section 2: Project totals --------------------------------------------- */
+
+.gh-totals { list-style: none; margin: 0; padding: 0; }
+
+.gh-total-row { display: flex; align-items: center; gap: 10px; padding: 4px 0;
+  border-bottom: 1px solid var(--border); font-size: 13px; }
+.gh-total-name { font-family: var(--mono); font-size: 11px; color: var(--ink);
+  width: 180px; max-width: 40vw; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; flex-shrink: 0; }
+.gh-total-count { font-variant-numeric: tabular-nums; color: var(--accent-text);
+  font-size: 13px; margin-left: auto; min-width: 28px; text-align: right; }
+
+/* The bar is a flex-grow strip whose width is clamped by the --gh-bar custom prop (0-20). */
+.gh-bar { display: block; height: 8px; border-radius: 2px; background: var(--accent);
+  width: calc(var(--gh-bar, 1) * 14px); max-width: 280px; flex-shrink: 1; }
+
+/* ---- Section 3: Daily totals ----------------------------------------------- */
+
+.gh-daily { list-style: none; margin: 0; padding: 0; }
+
+.gh-day-row { display: flex; align-items: center; gap: 10px; padding: 3px 0;
+  border-bottom: 1px solid var(--border); font-size: 12px; }
+.gh-day-date { font-family: var(--mono); font-size: 11px; color: var(--muted); width: 88px; flex-shrink: 0; }
+.gh-day-count { font-variant-numeric: tabular-nums; color: var(--accent-text);
+  font-size: 13px; margin-left: auto; min-width: 24px; text-align: right; }
+
+.gh-day-bar { display: block; height: 10px; border-radius: 2px; background: var(--accent);
+  width: calc(var(--gh-day-bar, 1) * 24px); max-width: 240px; flex-shrink: 1; }
+.gh-day-bar-0 { background: var(--border); width: 2px; }
+
+@media (max-width: 560px) {
+  .gh-panel { max-width: 100%; }
+  .gh-total-name { width: 100px; max-width: 30vw; }
+}

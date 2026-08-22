@@ -42,6 +42,9 @@ const LOCAL = 'http://127.0.0.1:11434';
 // cloud answer must be parsed defensively rather than assumed to be JSON. `null` means
 // UNMEASURED, which is not the same as false and must not be read as either.
 const CLOUD_MODELS = ['gpt-oss:120b-cloud', 'gpt-oss:20b-cloud'];
+// A caller chooses a tier, never a model name. Keeping the selected cloud default beside the
+// capability list prevents individual tools drifting as measured models are replaced.
+const CLOUD_DEFAULT = 'gpt-oss:20b-cloud';
 const SCHEMA_HONOURED = { 'qwen3.5:4b': true, 'qwen3.5:9b': true, 'gpt-oss:20b-cloud': false, 'gpt-oss:120b-cloud': null };
 // MEASURED 19 Aug: THE SMALLEST MODEL IS THE BEST ONE HERE, because it is the only one that
 // fits. On an 8151 MiB card with 7841 MiB free when idle:
@@ -202,5 +205,5 @@ async function available() {
 }
 
 module.exports = {
-  ask, warm, available, isCloud, SENSITIVE, CLOUD_MODELS, LOCAL_MODELS, LOCAL_DEFAULT, SCHEMA_HONOURED, Refused,
+  ask, warm, available, isCloud, SENSITIVE, CLOUD_MODELS, CLOUD_DEFAULT, LOCAL_MODELS, LOCAL_DEFAULT, SCHEMA_HONOURED, Refused,
 };

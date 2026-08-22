@@ -8,6 +8,7 @@
 // that reads /attention carries it too. 93% of this mailbox is unread, which is the clearest
 // possible evidence that the flag is not being used to track anything — presenting 64,204 as
 // a backlog would be inventing a debt out of an unused label.
+import { renderLede } from '/panels/lede/lede.js';
 let root = null;
 
 const esc = (s) => String(s == null ? '' : s).replace(/[&<>"]/g,
@@ -118,6 +119,7 @@ async function load() {
 }
 
 export default {
-  mount(el) { root = el; el.innerHTML = TEMPLATE; load(); },
+  mount(el) { root = el; el.innerHTML = TEMPLATE;
+  renderLede('mail', el); load(); },
   unmount() { root = null; },
 };

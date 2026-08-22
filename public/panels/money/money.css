@@ -1,0 +1,11 @@
+/* money — merged Finance + Budget + Income panel.
+   Only the tab bar styling is new. Each sub-panel's CSS is loaded by the
+   shell's panelStyles loader, so nothing here styles sub-panel content. */
+.mny-tabs { display: flex; gap: 0; border-bottom: 1px solid var(--border);
+  margin-bottom: 16px; }
+.mny-tab { flex: 1; padding: 10px 4px; text-align: center; background: none;
+  border: none; color: var(--muted); font: inherit; font-size: 13px;
+  cursor: pointer; border-bottom: 2px solid transparent;
+  transition: color var(--t-fast) var(--ease), border-color var(--t-fast) var(--ease); }
+.mny-tab:hover { color: var(--ink); }
+.mny-tab.active { color: var(--accent-text); border-bottom-color: var(--accent); }

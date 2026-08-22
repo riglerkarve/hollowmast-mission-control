@@ -1,0 +1,60 @@
+/* standup — a plain-text daily standup derived from the shift digest.
+   Every custom property used here is defined in shell.css. Verified by reading the
+   definition, not a mention: --accent, --accent-soft, --accent-text, --accent-text-bg,
+   --card, --bg, --ink, --muted, --border, --border-strong, --mono, --r-card, --r-btn
+   all have :root definitions in shell.css and carry dark-theme overrides. */
+
+.su-panel { max-width: 720px; }
+
+.su-lede { color: var(--muted); font-size: 13px; line-height: 1.5; margin: 0 0 18px; max-width: 72ch; }
+.su-loading { color: var(--muted); font-size: 13px; }
+.su-alarm { color: var(--ink); font-size: 13px; margin: 0; }
+.su-empty { color: var(--muted); font-size: 13px; padding: 8px 0; line-height: 1.5; max-width: 72ch; }
+.su-asof { font-family: var(--mono); font-size: 11px; color: var(--muted); margin: 0 0 10px; }
+
+.su-h2 { font-size: 13px; text-transform: uppercase; letter-spacing: .07em; color: var(--muted);
+  margin: 28px 0 10px; padding-bottom: 6px; border-bottom: 1px solid var(--border); }
+/* The first section's heading sits closer to the summary; later ones have the full margin. */
+.su-panel > .su-h2:first-of-type { margin-top: 10px; }
+
+/* ---- summary line --------------------------------------------------------- */
+
+.su-summary { font-size: 17px; line-height: 1.45; color: var(--ink); margin: 0 0 20px; max-width: 72ch; }
+
+/* ---- toolbar + copy button ------------------------------------------------ */
+
+.su-toolbar { margin: 0 0 16px; }
+
+.su-copy { font-family: var(--mono); font-size: 12px;
+  color: var(--ink); background: var(--card);
+  border: 1px solid var(--border-strong); border-radius: var(--r-btn);
+  padding: 5px 14px; cursor: pointer;
+  transition: border-color var(--t-fast) var(--ease), background var(--t-fast) var(--ease); }
+.su-copy:hover { border-color: var(--accent); background: var(--accent-soft); }
+.su-copied { color: var(--accent-text); border-color: var(--accent); }
+
+/* ---- items (highlights, working, concerns) ------------------------------- */
+
+.su-item { background: var(--card); border: 1px solid var(--border); border-radius: var(--r-card);
+  padding: 14px 16px; margin-bottom: 10px; border-left: 3px solid var(--border-strong); }
+
+.su-text { margin: 0; font-size: 15px; line-height: 1.42; color: var(--ink); max-width: 72ch; }
+.su-task { margin: 6px 0 0; font-size: 13px; line-height: 1.5; color: var(--muted); max-width: 72ch; }
+
+.su-attr { font-family: var(--mono); font-size: 11px; margin: 6px 0 0;
+  display: flex; flex-wrap: wrap; gap: 9px; align-items: center; }
+.su-who { color: var(--ink); font-weight: 600; }
+.su-when { color: var(--muted); }
+
+/* The working section: agent name is the lead, status is a labelled chip. */
+.su-work .su-agent { margin: 0 0 4px; font-size: 15px; font-weight: 600; color: var(--ink); }
+
+.su-status { font-size: 10px; text-transform: uppercase; letter-spacing: .06em; color: var(--muted);
+  border: 1px solid var(--border); border-radius: 3px; padding: 1px 6px; }
+/* 'not reporting' is highlighted so a silent agent is not mistaken for a busy one. */
+.su-status-missing { color: var(--accent-text); border-color: var(--accent); background: var(--accent-soft); }
+
+@media (max-width: 560px) {
+  .su-panel { max-width: 100%; }
+  .su-text { padding-right: 0; }
+}

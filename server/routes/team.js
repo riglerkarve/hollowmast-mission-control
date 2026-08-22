@@ -632,17 +632,37 @@ router.post('/handover', express.json(), (req, res) => {
 
   let info;
   let ownerItems;
+  let amended = false;
   db.withTransaction(() => {
-    info = db.prepare(`
-      INSERT INTO team_handovers (session_id, title, role, project, shift, at, done, blocked,
-                                  candidates, needs_owner, next)
-      VALUES (?,?,?,?,?,?,?,?,?,?,?)`)
-      .run(b.session_id || (known && known.id) || b.title, b.title, role,
-        b.project || (known && known.project) || null, shift, now,
-        b.done || null, b.blocked || null, b.candidates || null, b.needs_owner || null, b.next || null);
-    // Keep the submitted block verbatim on team_handovers, then derive addressable items.
-    // The transaction means a session never gets a successful handover while losing its asks.
-    ownerItems = recordOwnerItems({ id: info.lastInsertRowid, title: b.title, needs_owner: b.needs_owner }, now);
+    // M245: If this session already filed a handover for this shift, amend it
+    // instead of inserting a second row. The old code always INSERTed, so a
+    // session that filed twice (common when a shift is interrupted and resumed)
+    // created two rows — the supervisor saw both, and the shift report counted
+    // double. Amending keeps the original row id and updates the content, so
+    // references to the handover id elsewhere stay valid.
+    const existing = db.prepare('SELECT id FROM team_handovers WHERE title = ? AND shift = ? ORDER BY at DESC LIMIT 1')
+      .get(b.title, shift);
+    if (existing) {
+      db.prepare(`UPDATE team_handovers SET done = ?, blocked = ?, candidates = ?, needs_owner = ?, next = ?, at = ?
+                  WHERE id = ?`)
+        .run(b.done || null, b.blocked || null, b.candidates || null, b.needs_owner || null, b.next || null, now, existing.id);
+      info = { lastInsertRowid: existing.id, changes: db.prepare('SELECT changes()').get()['changes()'] };
+      amended = true;
+      // Remove old owner item filings and re-derive, so a re-file with different
+      // needs_owner stays in sync. The filings table links handovers to items;
+      // the items themselves persist (they may be referenced by other handovers).
+      db.prepare('DELETE FROM team_owner_item_filings WHERE handover_id = ?').run(existing.id);
+      ownerItems = recordOwnerItems({ id: existing.id, title: b.title, needs_owner: b.needs_owner }, now);
+    } else {
+      info = db.prepare(`
+        INSERT INTO team_handovers (session_id, title, role, project, shift, at, done, blocked,
+                                    candidates, needs_owner, next)
+        VALUES (?,?,?,?,?,?,?,?,?,?,?)`)
+        .run(b.session_id || (known && known.id) || b.title, b.title, role,
+          b.project || (known && known.project) || null, shift, now,
+          b.done || null, b.blocked || null, b.candidates || null, b.needs_owner || null, b.next || null);
+      ownerItems = recordOwnerItems({ id: info.lastInsertRowid, title: b.title, needs_owner: b.needs_owner }, now);
+    }
   });
 
   // AN UNREGISTERED SESSION IS A FINDING ON ITS OWN, independent of what its own needs_owner
@@ -665,6 +685,7 @@ router.post('/handover', express.json(), (req, res) => {
     id: info.lastInsertRowid,
     shift,
     role,
+    amended,
     inRoster: !!known,
     missing,
     ownerItems: { state: ownerItems.state, count: ownerItems.items.length },

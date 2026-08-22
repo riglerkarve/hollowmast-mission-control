@@ -15,6 +15,7 @@
 // markdown from. A panel that recomputed "what the process missed" would agree with the tool
 // until one of them was edited, and then disagree without either erroring.
 import { responderHTML, wireResponders } from '/panels/team/respond.js';
+import { renderLede } from '/panels/lede/lede.js';
 
 const api = async (p, opts) => {
   const r = await fetch(`/api/team${p}`, {
@@ -318,6 +319,7 @@ export default {
     root = el;
     state = { cardOnly: !!(opts && opts.card === 'steering'), shifts: [], data: null, error: null };
     load();
+    renderLede('team', el);
   },
   unmount() { root = null; state = null; },
 };

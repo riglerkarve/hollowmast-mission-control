@@ -1,0 +1,73 @@
+/* timeline — session activity over the last 30 days, from the session ledger and the
+   live heartbeat. Every custom property used here is defined in shell.css. Verified by
+   reading the definition, not a mention: --accent, --accent-soft, --accent-text,
+   --card, --ink, --muted, --border, --border-strong, --ring-bg, --mono, --r-card all
+   have :root definitions in shell.css and carry dark-theme overrides. */
+
+.tl-panel { max-width: 720px; }
+
+.tl-lede { color: var(--muted); font-size: 13px; line-height: 1.5; margin: 0 0 18px; max-width: 72ch; }
+.tl-loading { color: var(--muted); font-size: 13px; }
+.tl-alarm { color: var(--ink); font-size: 13px; margin: 0; }
+.tl-empty { color: var(--muted); font-size: 13px; padding: 8px 0; line-height: 1.5; max-width: 72ch; }
+
+.tl-h2 { font-size: 13px; text-transform: uppercase; letter-spacing: .07em; color: var(--muted);
+  margin: 28px 0 10px; padding-bottom: 6px; border-bottom: 1px solid var(--border); }
+/* The first section heading sits closer to the lede; later ones have the full margin. */
+.tl-panel > .tl-h2:first-of-type { margin-top: 10px; }
+
+.tl-n { font-variant-numeric: tabular-nums; color: var(--accent-text); background: var(--accent-soft);
+  border-radius: 10px; padding: 1px 8px; font-size: 13px; margin-left: 6px; }
+
+/* ---- Active now -------------------------------------------------------------- */
+
+.tl-act-card { background: var(--card); border: 1px solid var(--border); border-radius: var(--r-card);
+  padding: 10px 14px; margin-bottom: 8px; border-left: 3px solid var(--accent); }
+.tl-attr { font-family: var(--mono); font-size: 12px; margin: 0;
+  display: flex; flex-wrap: wrap; gap: 9px; align-items: center; }
+.tl-act-who { color: var(--ink); font-weight: 600; }
+.tl-act-model { font-size: 10px; text-transform: uppercase; letter-spacing: .06em; color: var(--muted);
+  border: 1px solid var(--border); border-radius: 3px; padding: 1px 6px; }
+.tl-act-min { color: var(--muted); }
+
+/* ---- Activity by day chart -------------------------------------------------- */
+
+.tl-chart { display: flex; flex-direction: column; gap: 3px; }
+.tl-day-row { display: flex; align-items: center; gap: 10px; height: 20px; }
+.tl-day-label { width: 54px; flex-shrink: 0; font-family: var(--mono); font-size: 11px;
+  color: var(--muted); text-align: right; font-variant-numeric: tabular-nums; }
+/* The bar track is --ring-bg, the same neutral ground the ring chart uses, so an empty
+   day reads as "nothing" against a visible rail rather than against --card alone. */
+.tl-day-bar-wrap { flex: 1; min-width: 0; height: 14px; background: var(--ring-bg);
+  border-radius: 2px; overflow: hidden; }
+.tl-day-bar { height: 100%; display: flex; border-radius: 2px; overflow: hidden; min-width: 0; }
+/* Each segment is --accent at an opacity tier set inline by the JS. The flex layout
+   inside .tl-day-bar distributes segments proportionally without gaps. */
+.tl-bar-seg { height: 100%; background: var(--accent); }
+.tl-day-min { width: 52px; flex-shrink: 0; font-family: var(--mono); font-size: 11px;
+  color: var(--ink); text-align: right; font-variant-numeric: tabular-nums; }
+
+/* ---- By agent ---------------------------------------------------------------- */
+
+.tl-agent-card { background: var(--card); border: 1px solid var(--border); border-radius: var(--r-card);
+  padding: 14px 16px; margin-bottom: 10px; border-left: 3px solid var(--border-strong); }
+.tl-agent-head { display: flex; justify-content: space-between; align-items: baseline; margin-bottom: 4px; }
+.tl-agent-name { font-family: var(--mono); font-size: 12px; font-weight: 600; color: var(--ink); }
+.tl-agent-total { font-family: var(--mono); font-size: 14px; font-weight: 700; color: var(--accent-text);
+  font-variant-numeric: tabular-nums; }
+.tl-agent-sessions { font-size: 12px; color: var(--muted); margin: 0 0 8px; }
+.tl-agent-models { display: flex; flex-wrap: wrap; gap: 6px 8px; align-items: center; }
+.tl-agent-model { font-family: var(--mono); font-size: 10px; text-transform: uppercase; letter-spacing: .05em;
+  color: var(--ink); border: 1px solid var(--border); border-radius: 3px; padding: 1px 6px; }
+.tl-agent-model-n { font-family: var(--mono); font-size: 11px; color: var(--muted); }
+.tl-agent-model-none { font-size: 12px; color: var(--muted); font-style: italic; }
+
+/* ---- Narrow ------------------------------------------------------------------ */
+
+@media (max-width: 560px) {
+  .tl-panel { max-width: 100%; }
+  .tl-day-label { width: 48px; font-size: 10px; }
+  .tl-day-min { width: 44px; font-size: 10px; }
+  /* The chart is 30 rows of fixed-height bars; on a phone it is fine without a scroll
+     wrapper because the rows are narrow and the bars flex to fit. */
+}

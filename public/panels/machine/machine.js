@@ -14,6 +14,7 @@
 // NOTHING HERE IS A SCORE. Load, temperature and memory are shown as measured values against
 // their own ceilings, which is arithmetic the reader can check. There is no composite "health"
 // number, because it would be built from weights I chose — the one figure nobody can audit.
+import { renderLede } from '/panels/lede/lede.js';
 let root = null;
 let timer = null;
 let signal = null;   // from the shell, aborted when this panel is torn down
@@ -187,6 +188,7 @@ export default {
     root = el;
     signal = (opts && opts.signal) || null;
     el.innerHTML = TEMPLATE;
+    renderLede('machine', el);
     load();
     // Matches the route's own cadence. Polling faster would only re-read the same sample and
     // show a rising age counter, which reads as a stall.

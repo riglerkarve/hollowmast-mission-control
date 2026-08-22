@@ -1,0 +1,20 @@
+.ws-loading, .ws-error { padding: 20px; color: var(--muted); }
+.ws-head { margin-bottom: 16px; }
+.ws-summary { display: flex; gap: 16px; flex-wrap: wrap; margin-top: 10px; }
+.ws-stat { font-size: 13px; color: var(--muted); }
+.ws-stat b { color: var(--ink); font-size: 15px; }
+.ws-active b { color: var(--accent-text); }
+.ws-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(260px, 1fr)); gap: 12px; }
+.ws-card { background: var(--card); border: 1px solid var(--border); border-radius: var(--r-card); padding: 14px; }
+.ws-active { border-color: var(--accent); }
+.ws-card-head { display: flex; justify-content: space-between; align-items: center; margin-bottom: 10px; }
+.ws-name { font-weight: 700; font-size: 14px; color: var(--ink); }
+.ws-badge { font-size: 10px; text-transform: uppercase; letter-spacing: 0.05em; padding: 2px 8px; border-radius: 4px; }
+.ws-badge-active { background: var(--accent-soft); color: var(--accent-text); }
+.ws-badge-dormant { color: var(--muted); }
+.ws-badge-parked { color: var(--muted); opacity: 0.6; }
+.ws-card-body { display: flex; flex-direction: column; gap: 4px; }
+.ws-row { display: flex; justify-content: space-between; font-size: 12px; color: var(--muted); }
+.ws-row b { color: var(--ink); font-weight: 600; }
+.ws-subject { color: var(--muted); font-size: 11px; padding-left: 0; opacity: 0.7; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.ws-none { font-style: italic; opacity: 0.5; }

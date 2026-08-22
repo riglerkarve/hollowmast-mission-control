@@ -1,0 +1,62 @@
+/* ventures — cross-venture momentum and staleness view.
+   Every custom property used here is defined in shell.css. Verified by reading
+   the definition, not a mention: --accent, --accent-soft, --accent-text,
+   --card, --bg, --ink, --muted, --border, --border-strong, --mono, --r-card,
+   --r-btn all have :root definitions in shell.css and carry dark-theme overrides.
+   Codex owns all Mission Control CSS (AGENTS.md §4b) — review requested. */
+
+.vn-panel { max-width: 760px; }
+
+.vn-lede { color: var(--muted); font-size: 13px; line-height: 1.5; margin: 0 0 18px; max-width: 72ch; }
+.vn-loading { color: var(--muted); font-size: 13px; }
+.vn-alarm { color: var(--ink); font-size: 13px; margin: 0; }
+.vn-empty { color: var(--muted); font-size: 13px; padding: 8px 0; line-height: 1.5; max-width: 72ch; }
+
+.vn-h2 { font-size: 13px; text-transform: uppercase; letter-spacing: .07em; color: var(--muted);
+  margin: 28px 0 10px; padding-bottom: 6px; border-bottom: 1px solid var(--border); }
+.vn-panel > .vn-h2:first-of-type { margin-top: 10px; }
+
+.vn-n { font-variant-numeric: tabular-nums; color: var(--accent-text); background: var(--accent-soft);
+  border-radius: 10px; padding: 1px 8px; font-size: 13px; margin-left: 6px; }
+
+.vn-list { display: flex; flex-direction: column; gap: 8px; }
+
+.vn-row { background: var(--card); border: 1px solid var(--border); border-radius: var(--r-card);
+  padding: 14px 16px; border-left: 3px solid var(--border-strong); }
+
+.vn-main { display: flex; align-items: baseline; gap: 10px; margin-bottom: 8px; }
+.vn-name { margin: 0; font-size: 15px; color: var(--ink); }
+.vn-track { font-family: var(--mono); font-size: 11px; text-transform: uppercase; letter-spacing: .05em;
+  color: var(--muted); border: 1px solid var(--border); border-radius: 3px; padding: 1px 6px; }
+
+.vn-stats { display: flex; flex-wrap: wrap; gap: 12px; align-items: center; }
+.vn-stats > * { font-size: 12px; }
+
+.vn-status { font-family: var(--mono); font-size: 11px; text-transform: uppercase; letter-spacing: .05em;
+  color: var(--muted); border: 1px solid var(--border-strong); padding: 1px 6px; border-radius: 3px; }
+
+.vn-mom { display: inline-flex; align-items: center; gap: 5px;
+  font-family: var(--mono); font-size: 11px; color: var(--muted); }
+.vn-mom-dot { width: 7px; height: 7px; border-radius: 50%; background: var(--muted); display: inline-block; }
+.vn-mom[data-momentum="active"] .vn-mom-dot { background: var(--accent); }
+.vn-mom[data-momentum="slowing"] .vn-mom-dot { background: var(--accent); opacity: .6; }
+.vn-mom[data-momentum="stalled"] .vn-mom-dot { background: var(--border-strong); }
+.vn-mom[data-momentum="parked"] .vn-mom-dot { background: var(--border); }
+
+.vn-days { font-family: var(--mono); font-size: 11px; color: var(--muted); }
+.vn-days-fresh { color: var(--accent-text); }
+.vn-days-fade { color: var(--muted); }
+.vn-days-stale { color: var(--muted); opacity: .7; }
+.vn-days-na { color: var(--muted); opacity: .5; }
+
+.vn-open { font-family: var(--mono); font-size: 11px; color: var(--ink); }
+.vn-open-zero { color: var(--muted); }
+.vn-open-stale { font-size: 10px; color: var(--accent-text); background: var(--accent-soft);
+  border-radius: 3px; padding: 1px 5px; margin-left: 4px; }
+
+.vn-note { margin: 8px 0 0; font-size: 12px; line-height: 1.5; color: var(--muted); max-width: 72ch; }
+
+@media (max-width: 560px) {
+  .vn-panel { max-width: 100%; }
+  .vn-stats { flex-direction: column; align-items: flex-start; gap: 6px; }
+}

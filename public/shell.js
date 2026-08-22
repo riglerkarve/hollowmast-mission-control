@@ -1,4 +1,6 @@
 const PANELS = {
+  crm: () => import('/panels/crm/crm.js'),
+  inventory: () => import('/panels/inventory/inventory.js'),
   focus: () => import('/panels/focus/focus.js'),
   reports: () => import('/panels/reports/reports.js'),
   finance: () => import('/panels/finance/finance.js'),
@@ -20,6 +22,45 @@ const PANELS = {
   projects: () => import('/panels/projects/projects.js'),
   machine: () => import('/panels/machine/machine.js'),
   analytics: () => import('/panels/analytics/analytics.js'),
+  voice: () => import('/panels/voice/voice.js'),
+  briefing: () => import('/panels/briefing/briefing.js'),
+  activity: () => import('/panels/activity/activity.js'),
+  inbox: () => import('/panels/inbox/inbox.js'),
+  money: () => import('/panels/money/money.js'),
+  life: () => import('/panels/life/life.js'),
+  system: () => import('/panels/system/system.js'),
+  creative: () => import('/panels/creative/creative.js'),
+  journal: () => import('/panels/journal/journal.js'),
+  digest: () => import('/panels/digest/digest.js'),
+  decisions: () => import('/panels/decisions/decisions.js'),
+  changes: () => import('/panels/changes/changes.js'),
+  workspace: () => import('/panels/workspace/workspace.js'),
+  alerts: () => import('/panels/alerts/alerts.js'),
+  ventures: () => import('/panels/ventures/ventures.js'),
+  agents: () => import('/panels/agents/agents.js'),
+  prioritize: () => import('/panels/prioritize/prioritize.js'),
+  scribe: () => import('/panels/scribe/scribe.js'),
+  stale: () => import('/panels/stale/stale.js'),
+  'health-check': () => import('/panels/health-check/health-check.js'),
+  'time-allocation': () => import('/panels/time-allocation/time-allocation.js'),
+  timeline: () => import('/panels/timeline/timeline.js'),
+  'api-explorer': () => import('/panels/api-explorer/api-explorer.js'),
+  'workspace-overview': () => import('/panels/workspace-overview/workspace-overview.js'),
+  'decision-radar': () => import('/panels/decision-radar/decision-radar.js'),
+  standup: () => import('/panels/standup/standup.js'),
+  hollowmast: () => import('/panels/hollowmast/hollowmast.js'),
+  'weekly-metrics': () => import('/panels/weekly-metrics/weekly-metrics.js'),
+  'git-heatmap': () => import('/panels/git-heatmap/git-heatmap.js'),
+  'bulk-import': () => import('/panels/bulk-import/bulk-import.js'),
+  printprofit: () => import('/panels/printprofit/printprofit.js'),
+  search: () => import('/panels/search/search.js'),
+  'dependency-graph': () => import('/panels/dependency-graph/dependency-graph.js'),
+  'health-score': () => import('/panels/health-score/health-score.js'),
+  'recurring-costs': () => import('/panels/recurring-costs/recurring-costs.js'),
+  'goal-staleness': () => import('/panels/goal-staleness/goal-staleness.js'),
+  'browsing-recall': () => import('/panels/browsing-recall/browsing-recall.js'),
+  'safety-retro': () => import('/panels/safety-retro/safety-retro.js'),
+  'claude-timeline': () => import('/panels/claude-timeline/claude-timeline.js'),
 };
 
 const panelRoot = document.getElementById('panelRoot');
@@ -135,9 +176,17 @@ async function mountPanel(name) {
   history.replaceState(null, '', `#${name}`);
 }
 
+// MindVirus OS command bar — import and wire Ctrl+K
+import { toggle as toggleCmdBar } from '/mvos/commandbar.js';
+
+// Wire the ⌘K trigger button in the sidebar header
+const mvosBtn = document.getElementById('mvosTrigger');
+if (mvosBtn) mvosBtn.addEventListener('click', () => toggleCmdBar());
+
 navItems.forEach((btn) => {
   btn.addEventListener('click', () => mountPanel(btn.dataset.panel));
 });
+
 
 // QUIET HOURS — backlog #29. A limit you set and can always open.
 //
@@ -177,10 +226,44 @@ async function quietCurtain() {
     </div>`;
   panelRoot.querySelector('#quietGo').addEventListener('click', () => {
     quietOverridden = true;
-    mountPanel(window.location.hash.replace('#', '') || 'focus');
+    mountPanel(window.location.hash.replace('#', '') || 'workspace-overview');
   });
   return true;
 }
 
-const initial = window.location.hash.replace('#', '') || 'focus';
-quietCurtain().then((gated) => { if (!gated) mountPanel(PANELS[initial] ? initial : 'focus'); });
+const initial = window.location.hash.replace('#', '') || 'workspace-overview';
+quietCurtain().then((gated) => { if (!gated) mountPanel(PANELS[initial] ? initial : 'workspace-overview'); });
+
+// ZEN MODE — strip the dashboard to briefing + voice only.
+// Activated by #zen in the URL or by a keyboard shortcut (Z then E).
+// The sidebar hides, the content goes full-width, and only the briefing
+// panel is shown. Voice quick-actions are available via the voice panel.
+// This is the "I want to think" view — not the control room.
+let zenActive = false;
+function toggleZen() {
+  zenActive = !zenActive;
+  const sidebar = document.querySelector('.sidebar');
+  const content = document.querySelector('.content');
+  if (!sidebar || !content) return;
+  if (zenActive) {
+    sidebar.style.display = 'none';
+    content.style.marginLeft = '0';
+    mountPanel('briefing');
+  } else {
+    sidebar.style.display = '';
+    content.style.marginLeft = '';
+  }
+}
+// Check for #zen on load
+if (window.location.hash === '#zen') toggleZen();
+// Keyboard shortcut: press Z then E quickly
+let zenKeyTimer = null;
+document.addEventListener('keydown', (e) => {
+  if (e.key === 'z' && !e.target.matches('input, textarea, select')) {
+    zenKeyTimer = setTimeout(() => { zenKeyTimer = null; }, 600);
+  } else if (e.key === 'e' && zenKeyTimer && !e.target.matches('input, textarea, select')) {
+    clearTimeout(zenKeyTimer);
+    zenKeyTimer = null;
+    toggleZen();
+  }
+});

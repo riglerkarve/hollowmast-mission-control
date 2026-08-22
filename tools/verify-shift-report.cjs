@@ -22,44 +22,37 @@ function localShift(now = new Date()) {
   return `${date}-${now.getHours() < 12 ? 'morning' : now.getHours() < 18 ? 'afternoon' : 'evening'}`;
 }
 
-function count(db, sql, ...params) { return Number(db.prepare(sql).get(...params).n); }
 function rows(db, sql, ...params) { return db.prepare(sql).all(...params); }
 
 function recompute(db, shift) {
-  // Each definition names the table predicate rather than borrowing a route helper. Names are
-  // IDs only: gap comparison does not need handover prose, and reports no private content.
+  // Every predicate is expressed here against base tables. No route helpers are imported.
+  const handovers = rows(db, 'SELECT id, title, read_at FROM team_handovers WHERE shift = ? ORDER BY at', shift);
+  const plans = rows(db, 'SELECT id, confirmed_at, returned_at, superseded_by FROM team_plans WHERE shift = ? ORDER BY id', shift);
+  const assignments = rows(db, 'SELECT plan_id FROM team_assignments WHERE shift = ? ORDER BY id', shift);
+  const steering = rows(db, 'SELECT answer, by_whom FROM team_steering WHERE shift = ? ORDER BY id', shift);
+  const roster = rows(db, 'SELECT title FROM team_sessions WHERE retired_at IS NULL');
+  const ownerItems = rows(db, `SELECT DISTINCT o.id, o.title, o.resolved_at
+                               FROM team_owner_items o
+                               JOIN team_owner_item_filings f ON f.item_id = o.id
+                               JOIN team_handovers h ON h.id = f.handover_id
+                               WHERE h.shift = ? ORDER BY o.id`, shift);
+  const responses = rows(db, 'SELECT kind, ref FROM team_responses WHERE actioned_at IS NULL ORDER BY id');
+  const reported = new Set(handovers.map((row) => row.title));
+  const drafts = plans.filter((row) => !row.confirmed_at && !row.returned_at && !row.superseded_by);
+  const later = (plan) => plans.some((other) => other.id > plan.id);
+  const untriaged = ownerItems.filter((row) => !row.resolved_at);
+
+  const make = (rule, names, n = names.length) => ({ rule, n, names });
   return new Map([
-    ['unread-handovers', {
-      rule: 'team_handovers for this shift with read_at IS NULL',
-      n: count(db, 'SELECT COUNT(*) AS n FROM team_handovers WHERE shift = ? AND read_at IS NULL', shift),
-    }],
-    ['unconfirmed-plans', {
-      rule: 'plans neither confirmed nor returned nor superseded',
-      n: count(db, `SELECT COUNT(*) AS n FROM team_plans
-                    WHERE shift = ? AND confirmed_at IS NULL AND returned_at IS NULL AND superseded_by IS NULL`, shift),
-    }],
-    ['unanswered-steering', {
-      rule: 'steering questions for this shift with answer IS NULL',
-      n: count(db, 'SELECT COUNT(*) AS n FROM team_steering WHERE shift = ? AND answer IS NULL', shift),
-    }],
-    ['unresolved-owner-items', {
-      rule: 'canonical owner items with resolved_at IS NULL',
-      n: count(db, 'SELECT COUNT(*) AS n FROM team_owner_items WHERE resolved_at IS NULL'),
-    }],
-    ['unactioned-responses', {
-      rule: 'owner responses for this shift with actioned_at IS NULL',
-      n: count(db, 'SELECT COUNT(*) AS n FROM team_responses WHERE shift = ? AND actioned_at IS NULL', shift),
-    }],
-    ['assignment-use-not-recorded', {
-      rule: 'assignment has neither a recorded model/effort pair nor an override reason',
-      n: count(db, `SELECT COUNT(*) AS n FROM team_assignments
-                    WHERE shift = ? AND (used_model IS NULL OR used_effort IS NULL) AND override_reason IS NULL`, shift),
-    }],
-    ['unreviewed-assignments', {
-      rule: 'assignment refs with no review targeting the same ref',
-      n: count(db, `SELECT COUNT(*) AS n FROM team_assignments a
-                    WHERE a.shift = ? AND NOT EXISTS (SELECT 1 FROM team_reviews r WHERE r.target = a.ref)`, shift),
-    }],
+    ['unread', make('handover has no read_at', handovers.filter((row) => !row.read_at).map((row) => row.title))],
+    ['hanging', make('draft plan has no later plan in shift', drafts.filter((row) => !later(row)).map((row) => `#${row.id}`))],
+    ['unresolved', make('draft plan has a later plan but no superseded_by', drafts.filter(later).map((row) => `#${row.id}`))],
+    ['undelegated', make('confirmed plan has no assignment referencing it', plans.filter((row) => row.confirmed_at && !assignments.some((a) => a.plan_id === row.id)).map((row) => `#${row.id}`))],
+    ['untriaged', make('distinct unresolved canonical owner items filed in this shift', untriaged.map((row) => `${row.title} #${row.id}`))],
+    ['unanswered', make('steering question has no answer', steering.filter((row) => !row.answer).map(() => ''))],
+    ['silent', make('active roster member did not file, only after this shift has a handover', handovers.length ? roster.filter((row) => !reported.has(row.title)).map((row) => row.title) : [])],
+    ['unattributed', make('answered steering question has no known by_whom', steering.filter((row) => row.answer && (!row.by_whom || row.by_whom === 'unknown')).map(() => ''))],
+    ['unactioned', make('owner response remains unactioned across all shifts', responses.slice(0, 8).map((row) => `${row.kind} ${row.ref}`), responses.length)],
   ]);
 }
 
@@ -83,28 +76,24 @@ function recompute(db, shift) {
   });
   if (!response.ok) throw new Error(`/api/team/report answered ${response.status}`);
   const report = await response.json();
-  const actual = new Map((report.gaps || []).map((gap) => [gap.kind, Number(gap.n)]));
-  const aliases = new Map([
-    ['unread-handovers', ['unread-handovers']],
-    ['unconfirmed-plans', ['unconfirmed-plans']],
-    ['unanswered-steering', ['unanswered-steering']],
-    ['unresolved-owner-items', ['unresolved-owner-items']],
-    ['unactioned-responses', ['unactioned-responses']],
-    ['assignment-use-not-recorded', ['assignment-use-not-recorded']],
-    ['unreviewed-assignments', ['unreviewed-assignments']],
-  ]);
+  const actual = new Map((report.gaps || []).map((gap) => [gap.kind, {
+    n: Number(gap.n), names: Array.isArray(gap.names) ? gap.names : [],
+  }]));
   let failures = 0;
   console.log('\nROUTE COMPARISON');
   for (const [kind, gap] of expected) {
-    const routeKinds = aliases.get(kind) || [];
-    const present = routeKinds.find((name) => actual.has(name));
-    const seen = present ? actual.get(present) : 0;
-    if (seen === gap.n) console.log(`  PASS ${kind}: ${gap.n}`);
-    else { console.log(`  FAIL ${kind}: independent ${gap.n}, report ${seen}`); failures += 1; }
-    if (present) actual.delete(present);
+    const seen = actual.get(kind) || { n: 0, names: [] };
+    const sameCount = seen.n === gap.n;
+    const sameNames = [...seen.names].sort().join('\n') === [...gap.names].sort().join('\n');
+    if (sameCount && sameNames) console.log(`  PASS ${kind}: ${gap.n}`);
+    else {
+      console.log(`  FAIL ${kind}: independent ${gap.n}, report ${seen.n}${sameNames ? '' : '; identities differ'}`);
+      failures += 1;
+    }
+    actual.delete(kind);
   }
-  for (const [kind, n] of actual) {
-    console.log(`  FAIL unmodelled report gap: ${kind} = ${n}`);
+  for (const [kind, gap] of actual) {
+    console.log(`  FAIL unmodelled report gap: ${kind} = ${gap.n}`);
     failures += 1;
   }
   console.log(`\n${failures ? `REPORT DISAGREEMENTS: ${failures}` : 'PASS shift report gaps match the independent recomputation.'}`);

@@ -44,6 +44,7 @@
 // to dismiss is worse than no alert, so this panel says what is true when you open it and
 // is silent the rest of the time.
 
+import { renderLede } from '/panels/lede/lede.js';
 const TEMPLATE = `
   <div class="panel panel-wide">
     <div class="panel-header">
@@ -788,6 +789,7 @@ export default {
     root = el;
     token += 1;
     el.innerHTML = TEMPLATE;
+    renderLede('lifestyle', el);
 
     el.querySelector('#lfAdd').addEventListener('submit', async (ev) => {
       ev.preventDefault();

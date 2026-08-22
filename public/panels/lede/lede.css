@@ -1,0 +1,23 @@
+/*
+ * lede.css — the one-line summary that sits between a panel header and its first card.
+ *
+ * This is a utility, not a nav panel. Other panels import lede.js and call renderLede(),
+ * which inserts a <p class="panel-lede"> at the top of their container. The style below
+ * is what that paragraph looks like: small, muted, one line, no interaction.
+ *
+ * Uses shell.css tokens so it matches both light and dark themes automatically.
+ */
+
+.panel-lede {
+  margin: 0 0 12px 0;
+  padding: 0;
+  font-size: 0.8125rem;       /* 13px — small enough to be secondary, readable enough to be text */
+  line-height: 1.4;
+  color: var(--muted);
+  font-weight: 400;
+  /* One line: clip rather than wrap, so a long lede never pushes the first card down. */
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  /* No border, no background — it is a label, not a card. */
+}

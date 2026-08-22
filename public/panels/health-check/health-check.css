@@ -1,0 +1,62 @@
+/* health-check — the dashboard's self-diagnostic panel.
+   Every custom property used here is defined in shell.css. Verified by reading
+   the definition, not a mention: --card, --bg, --ink, --muted, --border,
+   --border-strong, --accent, --accent-soft, --accent-text, --mono, --r-card,
+   --r-btn all have :root definitions in shell.css and carry dark-theme overrides. */
+
+.hc-panel { max-width: 720px; }
+
+.hc-lede { color: var(--muted); font-size: 13px; line-height: 1.5; margin: 0 0 18px; max-width: 72ch; }
+.hc-loading { color: var(--muted); font-size: 13px; }
+.hc-alarm { color: var(--ink); font-size: 13px; margin: 0; }
+.hc-empty { color: var(--muted); font-size: 13px; padding: 8px 0; line-height: 1.5; max-width: 72ch; }
+
+.hc-h2 { font-size: 13px; text-transform: uppercase; letter-spacing: .07em; color: var(--muted);
+  margin: 28px 0 10px; padding-bottom: 6px; border-bottom: 1px solid var(--border); }
+.hc-panel > .hc-h2:first-of-type { margin-top: 10px; }
+
+.hc-n { font-variant-numeric: tabular-nums; border-radius: 10px; padding: 1px 8px;
+  font-size: 13px; margin-left: 6px; }
+.hc-n-ok { color: var(--muted); background: var(--bg); border: 1px solid var(--border); }
+.hc-n-bad { color: var(--accent-text); background: var(--accent-soft);
+  border: 1px solid var(--accent); }
+
+/* ---- summary line ---------------------------------------------------------- */
+
+.hc-summary { font-size: 14px; color: var(--ink); margin: 0 0 18px; }
+.hc-summary-ok { font-variant-numeric: tabular-nums; font-weight: 600; }
+.hc-summary-bad { font-variant-numeric: tabular-nums; font-weight: 600;
+  color: var(--accent-text); }
+
+/* ---- healthy (compact) ----------------------------------------------------- */
+
+.hc-healthy-list { margin: 0 0 10px; display: flex; flex-wrap: wrap; gap: 6px;
+  font-family: var(--mono); font-size: 12px; }
+.hc-healthy-name { color: var(--muted); background: var(--card);
+  border: 1px solid var(--border); border-radius: var(--r-btn);
+  padding: 2px 8px; }
+
+/* ---- broken (full detail) ------------------------------------------------- */
+
+.hc-card { background: var(--card); border: 1px solid var(--border); border-radius: var(--r-card);
+  padding: 14px 16px; margin-bottom: 10px; }
+
+/* A broken panel carries the accent left rule so it reads as "this needs
+   attention" the same way decisions.css marks a due item — a 3px accent
+   border-left, not a full accent border. */
+.hc-card-broken { border-left: 3px solid var(--accent); }
+
+.hc-name { margin: 0 0 10px; font-size: 15px; font-weight: 600; color: var(--ink);
+  font-family: var(--mono); }
+
+.hc-comps { display: flex; flex-wrap: wrap; gap: 10px; }
+.hc-comp { display: flex; align-items: center; gap: 6px;
+  font-family: var(--mono); font-size: 11px; }
+.hc-comp-label { text-transform: uppercase; letter-spacing: .06em; color: var(--muted);
+  border: 1px solid var(--border); border-radius: 3px; padding: 1px 6px; }
+.hc-comp-val { font-weight: 600; }
+.hc-comp-fail { color: var(--accent-text); }
+
+@media (max-width: 560px) {
+  .hc-panel { max-width: 100%; }
+}

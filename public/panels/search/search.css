@@ -1,0 +1,35 @@
+/* search — cross-project search across board items, handovers, and files.
+   Every custom property used here is defined in shell.css. Verified by reading
+   the definition, not a mention: --accent, --accent-soft, --accent-text,
+   --card, --bg, --ink, --muted, --border, --border-strong, --mono, --r-card,
+   --r-btn all have :root definitions in shell.css and carry dark-theme overrides.
+   Codex owns all Mission Control CSS (AGENTS.md §4b) — review requested. */
+
+.sr-panel { max-width: 760px; }
+
+.sr-lede { color: var(--muted); font-size: 13px; line-height: 1.5; margin: 0 0 18px; max-width: 72ch; }
+.sr-alarm { color: var(--ink); font-size: 13px; margin: 0; }
+.sr-empty { color: var(--muted); font-size: 13px; padding: 8px 0; line-height: 1.5; max-width: 72ch; }
+
+.sr-input-wrap { margin-bottom: 16px; }
+.sr-input { width: 100%; font-size: 14px; padding: 8px 12px; border: 1px solid var(--border);
+  border-radius: var(--r-btn); background: var(--bg); color: var(--ink); box-sizing: border-box; }
+.sr-input:focus { border-color: var(--accent); outline: none; }
+
+.sr-h2 { font-size: 13px; text-transform: uppercase; letter-spacing: .07em; color: var(--muted);
+  margin: 24px 0 8px; padding-bottom: 6px; border-bottom: 1px solid var(--border); }
+.sr-n { font-variant-numeric: tabular-nums; color: var(--accent-text); background: var(--accent-soft);
+  border-radius: 10px; padding: 1px 8px; font-size: 13px; margin-left: 6px; }
+
+.sr-card { background: var(--card); border: 1px solid var(--border); border-radius: var(--r-card);
+  padding: 10px 14px; margin-bottom: 6px; border-left: 3px solid var(--border-strong); }
+.sr-card:hover { border-left-color: var(--accent); }
+
+.sr-title { font-size: 14px; color: var(--ink); margin: 0 0 4px; line-height: 1.4; }
+.sr-meta { font-family: var(--mono); font-size: 11px; color: var(--muted); display: flex; flex-wrap: wrap; gap: 8px; }
+.sr-badge { font-size: 10px; text-transform: uppercase; letter-spacing: .05em; color: var(--muted);
+  border: 1px solid var(--border); border-radius: 3px; padding: 1px 5px; }
+.sr-badge-bug { color: var(--accent-text); border-color: var(--accent); background: var(--accent-soft); }
+.sr-path { font-family: var(--mono); font-size: 12px; color: var(--ink); word-break: break-all; }
+
+@media (max-width: 560px) { .sr-panel { max-width: 100%; } }

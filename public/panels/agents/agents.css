@@ -1,0 +1,79 @@
+/* agents — the team roster: who is registered, what they own, and their status.
+   Every custom property used here is defined in shell.css. Verified by reading the
+   definition, not a mention: --accent, --accent-soft, --accent-text, --accent-text-bg,
+   --card, --bg, --ink, --muted, --border, --border-strong, --mono, --r-card, --r-btn
+   all have :root definitions in shell.css and carry dark-theme overrides. */
+
+.ag-panel { max-width: 720px; }
+
+.ag-lede { color: var(--muted); font-size: 13px; line-height: 1.5; margin: 0 0 18px; max-width: 72ch; }
+.ag-loading { color: var(--muted); font-size: 13px; }
+.ag-alarm { color: var(--ink); font-size: 13px; margin: 0; }
+.ag-empty { color: var(--muted); font-size: 13px; padding: 8px 0; line-height: 1.5; max-width: 72ch; }
+
+.ag-h2 { font-size: 13px; text-transform: uppercase; letter-spacing: .07em; color: var(--muted);
+  margin: 28px 0 10px; padding-bottom: 6px; border-bottom: 1px solid var(--border); }
+.ag-panel > .ag-h2:first-of-type { margin-top: 10px; }
+
+.ag-n { font-variant-numeric: tabular-nums; color: var(--accent-text); background: var(--accent-soft);
+  border-radius: 10px; padding: 1px 8px; font-size: 13px; margin-left: 6px; }
+
+/* ---- the card -------------------------------------------------------------- */
+
+.ag-card { background: var(--card); border: 1px solid var(--border); border-radius: var(--r-card);
+  padding: 14px 16px; margin-bottom: 10px; position: relative; }
+
+/* The accent left rule marks an agent the way decisions.css marks its calls: a 3px
+   border-left, not a full accent border, so the card stays calm and the rule reads as
+   "this is a registered agent" rather than "this is an alert". */
+.ag-card { border-left: 3px solid var(--border-strong); }
+
+/* Active agents carry the accent rule so the eye finds them first in the list. */
+.ag-st-active { border-left-color: var(--accent); }
+
+/* Available agents get a green-ish rule, distinct from the accent but not shouting.
+   --border-strong is the neutral default; we tint it toward green using a soft
+   inline approach via a distinct border-left color. */
+.ag-st-available { border-left-color: var(--accent); border-left-color: #4a9; }
+
+/* Idle agents keep the neutral border-strong rule — present but not emphasized. */
+.ag-st-idle { border-left-color: var(--border-strong); }
+
+/* ---- header line: name, role, status -------------------------------------- */
+
+.ag-head { display: flex; flex-wrap: wrap; gap: 9px; align-items: center; margin-bottom: 8px; }
+
+.ag-name { margin: 0; font-size: 15px; font-weight: 600; color: var(--ink); }
+
+.ag-role { font-family: var(--mono); font-size: 10px; text-transform: uppercase; letter-spacing: .06em;
+  color: var(--muted); border: 1px solid var(--border); border-radius: 3px; padding: 1px 6px; }
+
+/* The status pill: a compact label in the accent for active, green-ish for available,
+   muted for idle. Sits at the right of the header line. */
+.ag-status { font-family: var(--mono); font-size: 10px; text-transform: uppercase; letter-spacing: .06em;
+  padding: 2px 7px; border-radius: 3px; margin-left: auto; border: 1px solid var(--border); color: var(--muted); }
+
+.ag-st-active .ag-status { color: var(--accent-text); background: var(--accent-soft);
+  border-color: var(--accent); }
+.ag-st-available .ag-status { color: #2a7; background: rgba(68, 170, 153, .12);
+  border-color: #4a9; }
+.ag-st-idle .ag-status { color: var(--muted); background: transparent; border-color: var(--border); }
+
+/* ---- meta line: engine, model, last seen --------------------------------- */
+
+.ag-meta { font-family: var(--mono); font-size: 11px; display: flex; flex-wrap: wrap; gap: 9px;
+  align-items: center; color: var(--muted); margin-bottom: 0; }
+
+.ag-engine { color: var(--ink); }
+.ag-model { color: var(--muted); }
+.ag-seen { color: var(--muted); }
+.ag-seen-none { color: var(--muted); opacity: .7; }
+
+.ag-owns { margin: 10px 0 0; font-size: 13px; line-height: 1.55; color: var(--ink); max-width: 72ch; }
+.ag-field-label { font-family: var(--mono); font-size: 10px; text-transform: uppercase; letter-spacing: .09em;
+  color: var(--muted); margin-right: 4px; }
+
+@media (max-width: 560px) {
+  .ag-panel { max-width: 100%; }
+  .ag-status { margin-left: 0; }
+}

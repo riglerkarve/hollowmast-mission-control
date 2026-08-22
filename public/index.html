@@ -27,17 +27,38 @@
           <span class="brand-sub"><span id="sideDate"></span><span class="brand-dot" aria-hidden="true">·</span><span id="sideClock">--:--</span></span>
         </span>
       </a>
+      <button id="mvosTrigger" class="mvos-trigger" aria-label="Open MindVirus OS command bar (Ctrl+K)" title="Ctrl+K">
+        <span aria-hidden="true">⌘K</span>
+      </button>
 
       <ul class="nav-list" id="navList">
         <li class="nav-group"><span class="nav-label">Today</span></li>
-        <li><button class="nav-item active" data-panel="focus">
+        <li><button class="nav-item" data-panel="workspace-overview">
+          <span class="nav-icon"><svg viewBox="0 0 16 16" aria-hidden="true"><rect x="1.5" y="2.5" width="5" height="5" rx="1"/><rect x="9.5" y="2.5" width="5" height="5" rx="1"/><rect x="1.5" y="9.5" width="5" height="4" rx="1"/><rect x="9.5" y="9.5" width="5" height="4" rx="1"/></svg></span>Workspace
+        </button></li>
+        <li><button class="nav-item" data-panel="focus">
           <span class="nav-icon"><svg viewBox="0 0 16 16" aria-hidden="true"><circle cx="8" cy="8.5" r="5.5"/><path d="M8 5.5v3l2 1.5M6 1.5h4"/></svg></span>Focus
+        </button></li>
+        <li><button class="nav-item active" data-panel="briefing">
+          <span class="nav-icon"><svg viewBox="0 0 16 16" aria-hidden="true"><path d="M3 2h10v12H3z"/><path d="M5.5 5h5M5.5 7h5M5.5 9h3"/></svg></span>Briefing
+        </button></li>
+        <li><button class="nav-item" data-panel="digest">
+          <span class="nav-icon"><svg viewBox="0 0 16 16" aria-hidden="true"><path d="M2 4h12M2 8h12M2 12h8"/></svg></span>Digest
         </button></li>
         <li><button class="nav-item" data-panel="board">
           <span class="nav-icon"><svg viewBox="0 0 16 16" aria-hidden="true"><path d="M2 2.5h12v11H2z"/><path d="M2 6h12M6 6v7.5M10 6v7.5"/></svg></span>The board
         </button></li>
+        <li><button class="nav-item" data-panel="bulk-import">
+          <span class="nav-icon"><svg viewBox="0 0 16 16" aria-hidden="true"><path d="M2 3h5v10H2zM9 3h5v10H9z"/><path d="M4 8l1.5 1.5L8 7M12 6l1.5 1.5L13 9.5"/></svg></span>Bulk import
+        </button></li>
         <li><button class="nav-item" data-panel="team">
           <span class="nav-icon"><svg viewBox="0 0 16 16" aria-hidden="true"><circle cx="5.5" cy="5" r="2.2"/><circle cx="11" cy="6" r="1.8"/><path d="M1.8 13c0-2 1.7-3.4 3.7-3.4S9.2 11 9.2 13"/><path d="M10.4 9.8c1.9 0 3.4 1.3 3.4 3.2"/></svg></span>Handovers
+        </button></li>
+        <li><button class="nav-item" data-panel="scribe">
+          <span class="nav-icon"><svg viewBox="0 0 16 16" aria-hidden="true"><path d="M3 2h10v12H3z"/><path d="M5.5 5h5M5.5 7h5M5.5 9h3"/><circle cx="11.5" cy="11" r="2.5" fill="none" stroke="currentColor" stroke-width="1.2"/></svg></span>Scribe
+        </button></li>
+        <li><button class="nav-item" data-panel="activity">
+          <span class="nav-icon"><svg viewBox="0 0 16 16" aria-hidden="true"><path d="M2 8h3l1.5-4 3 7 1.5-3h4"/></svg></span>Activity
         </button></li>
         <li><button class="nav-item" data-panel="schedule">
           <span class="nav-icon"><svg viewBox="0 0 16 16" aria-hidden="true"><rect x="2" y="3" width="12" height="11" rx="2"/><path d="M2 6.5h12M5.5 1.5v3M10.5 1.5v3"/></svg></span>Schedule
@@ -47,14 +68,8 @@
         </button></li>
 
         <li class="nav-group"><span class="nav-label">Money</span></li>
-        <li><button class="nav-item" data-panel="finance">
+        <li><button class="nav-item" data-panel="money">
           <span class="nav-icon"><svg viewBox="0 0 16 16" aria-hidden="true"><rect x="1.5" y="4" width="13" height="8.5" rx="1.8"/><circle cx="8" cy="8.25" r="1.9"/><path d="M4 8.25h.01M12 8.25h.01"/></svg></span>Money
-        </button></li>
-        <li><button class="nav-item" data-panel="budget">
-          <span class="nav-icon"><svg viewBox="0 0 16 16" aria-hidden="true"><circle cx="8" cy="8" r="6"/><path d="M8 2v6l4.2 4.2"/></svg></span>Budget
-        </button></li>
-        <li><button class="nav-item" data-panel="income">
-          <span class="nav-icon"><svg viewBox="0 0 16 16" aria-hidden="true"><path d="M2 12l4-4 3 3 5-5.5"/><path d="M10 5.5h4v4"/></svg></span>Income
         </button></li>
 
         <li class="nav-group"><span class="nav-label">Work</span></li>
@@ -70,19 +85,37 @@
         <li><button class="nav-item" data-panel="mail">
           <span class="nav-icon"><svg viewBox="0 0 16 16" aria-hidden="true"><rect x="1.5" y="3.5" width="13" height="9" rx="1.8"/><path d="M2 4.5l6 4.5 6-4.5"/></svg></span>Mail
         </button></li>
+        <li><button class="nav-item" data-panel="inbox">
+          <span class="nav-icon"><svg viewBox="0 0 16 16" aria-hidden="true"><path d="M2 4h12v8H2z"/><path d="M2 4l6 5 6-5"/></svg></span>Inbox
+        </button></li>
+        <li><button class="nav-item" data-panel="decisions">
+          <span class="nav-icon"><svg viewBox="0 0 16 16" aria-hidden="true"><path d="M8 2v8M4 6l4 4 4-4M3 14h10"/></svg></span>Decisions
+        </button></li>
+        <li><button class="nav-item" data-panel="changes">
+          <span class="nav-icon"><svg viewBox="0 0 16 16" aria-hidden="true"><path d="M2 3l4 4-4 4M14 3l-4 4 4 4M9 7H5"/></svg></span>Changes
+        </button></li>
+        <li><button class="nav-item" data-panel="prioritize">
+          <span class="nav-icon"><svg viewBox="0 0 16 16" aria-hidden="true"><path d="M8 2v12M3 7l5-5 5 5" fill="none" stroke="currentColor" stroke-width="1.2"/></svg></span>Priority
+        </button></li>
+        <li><button class="nav-item" data-panel="decision-radar">
+          <span class="nav-icon"><svg viewBox="0 0 16 16" aria-hidden="true"><circle cx="8" cy="8" r="6" fill="none" stroke="currentColor" stroke-width="1"/><circle cx="8" cy="8" r="3" fill="none" stroke="currentColor" stroke-width="1"/><circle cx="8" cy="8" r="1" fill="currentColor"/></svg></span>Radar
+        </button></li>
+        <li><button class="nav-item" data-panel="standup">
+          <span class="nav-icon"><svg viewBox="0 0 16 16" aria-hidden="true"><path d="M3 2h10v12H3z"/><path d="M5.5 5h5M5.5 7h5M5.5 9h3"/></svg></span>Standup
+        </button></li>
 
         <li class="nav-group"><span class="nav-label">Life</span></li>
-        <li><button class="nav-item" data-panel="lifestyle">
-          <span class="nav-icon"><svg viewBox="0 0 16 16" aria-hidden="true"><path d="M2 8l6-5.5L14 8"/><path d="M3.5 7v6.5h9V7"/><path d="M6.5 13.5V10h3v3.5"/></svg></span>Lifestyle
-        </button></li>
-        <li><button class="nav-item" data-panel="exercise">
-          <span class="nav-icon"><svg viewBox="0 0 16 16" aria-hidden="true"><path d="M1.5 8.5h3l1.5-4 3 7 1.5-3h4"/></svg></span>Exercise
-        </button></li>
-        <li><button class="nav-item" data-panel="wellbeing">
-          <span class="nav-icon"><svg viewBox="0 0 16 16" aria-hidden="true"><path d="M8 13.5S2 9.8 2 5.9A3 3 0 0 1 8 4.6a3 3 0 0 1 6 1.3c0 3.9-6 7.6-6 7.6z"/></svg></span>Wellbeing
+        <li><button class="nav-item" data-panel="life">
+          <span class="nav-icon"><svg viewBox="0 0 16 16" aria-hidden="true"><path d="M2 8l6-5.5L14 8"/><path d="M3.5 7v6.5h9V7"/><path d="M6.5 13.5V10h3v3.5"/></svg></span>Life
         </button></li>
         <li><button class="nav-item" data-panel="brain">
           <span class="nav-icon"><svg viewBox="0 0 16 16" aria-hidden="true"><path d="M8 3.5c-1.2-1-3-1.2-5-.8v9.6c2-.4 3.8-.2 5 .8 1.2-1 3-1.2 5-.8V2.7c-2-.4-3.8-.2-5 .8z"/><path d="M8 3.5v9.6"/></svg></span>Second brain
+        </button></li>
+        <li><button class="nav-item" data-panel="creative">
+          <span class="nav-icon"><svg viewBox="0 0 16 16" aria-hidden="true"><path d="M8 2l1.5 4.5L14 8l-4.5 1.5L8 14l-1.5-4.5L2 8l4.5-1.5z"/></svg></span>Creative
+        </button></li>
+        <li><button class="nav-item" data-panel="journal">
+          <span class="nav-icon"><svg viewBox="0 0 16 16" aria-hidden="true"><path d="M3 2h10v12H3z"/><path d="M5 5h6M5 7h6M5 9h4"/></svg></span>Journal
         </button></li>
 
         <li class="nav-group"><span class="nav-label">System</span></li>
@@ -95,11 +128,74 @@
         <li><button class="nav-item" data-panel="browsing">
           <span class="nav-icon"><svg viewBox="0 0 16 16" aria-hidden="true"><circle cx="8" cy="8" r="6"/><path d="M2 8h12M8 2c2 2 2 10 0 12M8 2c-2 2-2 10 0 12"/></svg></span>Browsing
         </button></li>
-        <li><button class="nav-item" data-panel="machine">
-          <span class="nav-icon"><svg viewBox="0 0 16 16" aria-hidden="true"><rect x="2.5" y="3.5" width="11" height="7" rx="1"/><path d="M5.5 13h5M8 10.5V13"/></svg></span>Machine
+        <li><button class="nav-item" data-panel="system">
+          <span class="nav-icon"><svg viewBox="0 0 16 16" aria-hidden="true"><rect x="2.5" y="3.5" width="11" height="7" rx="1"/><path d="M5.5 13h5M8 10.5V13"/></svg></span>System
         </button></li>
-        <li><button class="nav-item" data-panel="analytics">
-          <span class="nav-icon"><svg viewBox="0 0 16 16" aria-hidden="true"><path d="M2 13V7M6 13V4M10 13V9M14 13V6"/></svg></span>Analytics
+        <li><button class="nav-item" data-panel="alerts">
+          <span class="nav-icon"><svg viewBox="0 0 16 16" aria-hidden="true"><path d="M8 1.5l6 3v4.5c0 3.5-2.5 5.9-6 7-3.5-1.1-6-3.5-6-7V4.5z"/><path d="M6.5 8l1.2 1.2L10 6.8" fill="none" stroke="currentColor" stroke-width="1.2"/></svg></span>Alerts
+        </button></li>
+        <li><button class="nav-item" data-panel="stale">
+          <span class="nav-icon"><svg viewBox="0 0 16 16" aria-hidden="true"><circle cx="8" cy="8" r="6"/><path d="M8 4v4l2.5 2.5" fill="none" stroke="currentColor" stroke-width="1.2" stroke-linecap="round"/></svg></span>Stale
+        </button></li>
+        <li><button class="nav-item" data-panel="health-check">
+          <span class="nav-icon"><svg viewBox="0 0 16 16" aria-hidden="true"><path d="M3 8l2.5 2.5L8 8l2.5 2.5L13 8" fill="none" stroke="currentColor" stroke-width="1.2"/><path d="M3 11h10" stroke="currentColor" stroke-width="1"/></svg></span>Health
+        </button></li>
+        <li><button class="nav-item" data-panel="time-allocation">
+          <span class="nav-icon"><svg viewBox="0 0 16 16" aria-hidden="true"><circle cx="8" cy="8" r="6"/><path d="M8 4.5V8l2.5 1.5" fill="none" stroke="currentColor" stroke-width="1.2"/><path d="M5 2.5L3 4M11 2.5L13 4" stroke="currentColor" stroke-width="1"/></svg></span>Time
+        </button></li>
+        <li><button class="nav-item" data-panel="agents">
+          <span class="nav-icon"><svg viewBox="0 0 16 16" aria-hidden="true"><circle cx="5.5" cy="5" r="2.2"/><circle cx="11" cy="6" r="1.8"/><path d="M1.8 13c0-2 1.7-3.4 3.7-3.4S9.2 11 9.2 13"/><path d="M10.4 9.8c1.9 0 3.4 1.3 3.4 3.2"/></svg></span>Agents
+        </button></li>
+        <li><button class="nav-item" data-panel="timeline">
+          <span class="nav-icon"><svg viewBox="0 0 16 16" aria-hidden="true"><path d="M2 3v10M6 3v10M10 3v10M14 3v10" stroke="currentColor" stroke-width="1.2"/><path d="M1 8h14" stroke="currentColor" stroke-width="0.8" stroke-dasharray="2 1"/></svg></span>Timeline
+        </button></li>
+        <li><button class="nav-item" data-panel="api-explorer">
+          <span class="nav-icon"><svg viewBox="0 0 16 16" aria-hidden="true"><path d="M5 4L2 8l3 4M11 4l3 4-3 4" fill="none" stroke="currentColor" stroke-width="1.2"/><path d="M8 2v12" stroke="currentColor" stroke-width="1"/></svg></span>API
+        </button></li>
+        <li><button class="nav-item" data-panel="hollowmast">
+          <span class="nav-icon"><svg viewBox="0 0 16 16" aria-hidden="true"><path d="M8 1L4 8h2v6h4V8h2z" fill="currentColor"/></svg></span>HOLLOWMAST
+        </button></li>
+        <li><button class="nav-item" data-panel="weekly-metrics">
+          <span class="nav-icon"><svg viewBox="0 0 16 16" aria-hidden="true"><rect x="2" y="3" width="12" height="10" rx="1"/><path d="M5 6v6M8 4v8M11 8v4" fill="none" stroke="currentColor" stroke-width="1.2"/></svg></span>Metrics
+        </button></li>
+        <li><button class="nav-item" data-panel="git-heatmap">
+          <span class="nav-icon"><svg viewBox="0 0 16 16" aria-hidden="true"><rect x="2" y="2" width="3" height="3" rx=".5"/><rect x="6.5" y="2" width="3" height="3" rx=".5"/><rect x="11" y="2" width="3" height="3" rx=".5"/><rect x="2" y="6.5" width="3" height="3" rx=".5"/><rect x="6.5" y="6.5" width="3" height="3" rx=".5" fill="currentColor"/><rect x="11" y="6.5" width="3" height="3" rx=".5"/><rect x="2" y="11" width="3" height="3" rx=".5"/><rect x="6.5" y="11" width="3" height="3" rx=".5"/><rect x="11" y="11" width="3" height="3" rx=".5" fill="currentColor"/></svg></span>Gitmap
+        </button></li>
+        <li><button class="nav-item" data-panel="voice">
+          <span class="nav-icon"><svg viewBox="0 0 16 16" aria-hidden="true"><path d="M8 2a2 2 0 0 0-2 2v4a2 2 0 0 0 4 0V4a2 2 0 0 0-2-2z"/><path d="M4 8a4 4 0 0 0 8 0M8 12v2M6 14h4" fill="none" stroke="currentColor" stroke-width="1.2" stroke-linecap="round"/></svg></span>Voice
+        </button></li>
+        <li><button class="nav-item" data-panel="crm">
+          <span class="nav-icon"><svg viewBox="0 0 16 16" aria-hidden="true"><path d="M8 8a3 3 0 100-6 3 3 0 000 6zm-6 6a6 6 0 1112 0z"/></svg></span>Clients
+        </button></li>
+        <li><button class="nav-item" data-panel="inventory">
+          <span class="nav-icon"><svg viewBox="0 0 16 16" aria-hidden="true"><path d="M2 5l6-3 6 3v6l-6 3-6-3zm6-1.4L4.2 5.4 8 7.2l3.8-1.8z"/></svg></span>Inventory
+        </button></li>
+        <li><button class="nav-item" data-panel="printprofit">
+          <span class="nav-icon"><svg viewBox="0 0 16 16" aria-hidden="true"><path d="M2 4h9v2H2zM2 8h9v2H2zM2 12h9v2H2zM13 4h1v10h-1z" fill="currentColor"/></svg></span>PrintProfit
+        </button></li>
+        <li><button class="nav-item" data-panel="search">
+          <span class="nav-icon"><svg viewBox="0 0 16 16" aria-hidden="true"><circle cx="7" cy="7" r="4.5" fill="none" stroke="currentColor" stroke-width="1.2"/><path d="M10.5 10.5L14 14" stroke="currentColor" stroke-width="1.2"/></svg></span>Search
+        </button></li>
+        <li><button class="nav-item" data-panel="dependency-graph">
+          <span class="nav-icon"><svg viewBox="0 0 16 16" aria-hidden="true"><circle cx="4" cy="4" r="2" fill="none" stroke="currentColor" stroke-width="1"/><circle cx="12" cy="4" r="2" fill="none" stroke="currentColor" stroke-width="1"/><circle cx="8" cy="12" r="2" fill="none" stroke="currentColor" stroke-width="1"/><path d="M4 6v2M12 6v2M6 12h4" stroke="currentColor" stroke-width="1"/></svg></span>Deps
+        </button></li>
+        <li><button class="nav-item" data-panel="health-score">
+          <span class="nav-icon"><svg viewBox="0 0 16 16" aria-hidden="true"><path d="M8 2v6l4 2" fill="none" stroke="currentColor" stroke-width="1.2"/><circle cx="8" cy="8" r="6" fill="none" stroke="currentColor" stroke-width="1"/></svg></span>Health %
+        </button></li>
+        <li><button class="nav-item" data-panel="recurring-costs">
+          <span class="nav-icon"><svg viewBox="0 0 16 16" aria-hidden="true"><path d="M2 4h12M2 8h12M2 12h12" stroke="currentColor" stroke-width="1"/><circle cx="5" cy="4" r=".8" fill="currentColor"/><circle cx="5" cy="8" r=".8" fill="currentColor"/><circle cx="5" cy="12" r=".8" fill="currentColor"/></svg></span>Recurring
+        </button></li>
+        <li><button class="nav-item" data-panel="goal-staleness">
+          <span class="nav-icon"><svg viewBox="0 0 16 16" aria-hidden="true"><circle cx="8" cy="8" r="6" fill="none" stroke="currentColor" stroke-width="1"/><path d="M8 4v4l3 2" fill="none" stroke="currentColor" stroke-width="1.2"/></svg></span>Goal staleness
+        </button></li>
+        <li><button class="nav-item" data-panel="browsing-recall">
+          <span class="nav-icon"><svg viewBox="0 0 16 16" aria-hidden="true"><circle cx="8" cy="8" r="6" fill="none" stroke="currentColor" stroke-width="1"/><path d="M2 8h12M8 2c2 2 2 10 0 12M8 2c-2 2-2 10 0 12" fill="none" stroke="currentColor" stroke-width="1"/></svg></span>Browsing
+        </button></li>
+        <li><button class="nav-item" data-panel="safety-retro">
+          <span class="nav-icon"><svg viewBox="0 0 16 16" aria-hidden="true"><path d="M8 1.8l5.5 2v4.4c0 3.2-2.3 5.4-5.5 6.5-3.2-1.1-5.5-3.3-5.5-6.5V3.8z"/><path d="M5.7 8.2l1.6 1.6 3.1-3.3" fill="none" stroke="currentColor" stroke-width="1.2"/></svg></span>Safety retro
+        </button></li>
+        <li><button class="nav-item" data-panel="claude-timeline">
+          <span class="nav-icon"><svg viewBox="0 0 16 16" aria-hidden="true"><path d="M2 3v10M6 3v10M10 3v10M14 3v10" stroke="currentColor" stroke-width="1.2"/><path d="M3 6h2M7 8h2M11 5h2" stroke="currentColor" stroke-width="1.2"/></svg></span>CLAUDE.md
         </button></li>
 
         <li class="nav-group nav-group-last"><a class="nav-item nav-link" href="/garage/">

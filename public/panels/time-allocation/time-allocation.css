@@ -1,0 +1,62 @@
+/* time-allocation — where time has been spent across agents and projects.
+   Every custom property used here is defined in shell.css. Verified by reading the
+   definition, not a mention: --accent, --accent-soft, --accent-text, --card, --bg,
+   --ink, --muted, --border, --border-strong, --mono, --r-card, --r-btn
+   all have :root definitions in shell.css and carry dark-theme overrides. */
+
+.ta-panel { max-width: 720px; }
+
+.ta-lede { color: var(--muted); font-size: 13px; line-height: 1.5; margin: 0 0 18px; max-width: 72ch; }
+.ta-loading { color: var(--muted); font-size: 13px; }
+.ta-alarm { color: var(--ink); font-size: 13px; margin: 0; }
+.ta-empty { color: var(--muted); font-size: 13px; padding: 8px 0; line-height: 1.5; max-width: 72ch; }
+
+/* Days selector — a row of toggle buttons, matching activity.css's filter tabs. */
+.ta-days { display: flex; flex-wrap: wrap; gap: 8px; margin-bottom: 18px; }
+.ta-day { background: var(--card); border: 1px solid var(--border); border-radius: var(--r-btn);
+  padding: 6px 12px; color: var(--ink); cursor: pointer; font: inherit; font-size: 13px; }
+.ta-day.on { border-color: var(--accent); color: var(--accent-text); background: var(--accent-soft); }
+
+/* Total — prominent, one line. The accent left rule carries emphasis the way
+   decisions.css marks a due card: a 3px accent border, not a full accent border. */
+.ta-total { display: flex; align-items: baseline; gap: 10px; margin-bottom: 6px;
+  padding: 12px 16px; background: var(--card); border: 1px solid var(--border);
+  border-radius: var(--r-card); border-left: 3px solid var(--accent); }
+.ta-total-num { font-family: var(--mono); font-size: 22px; font-weight: 600; color: var(--accent-text); }
+.ta-total-label { font-size: 12px; text-transform: uppercase; letter-spacing: .07em; color: var(--muted); }
+
+.ta-h2 { font-size: 13px; text-transform: uppercase; letter-spacing: .07em; color: var(--muted);
+  margin: 28px 0 10px; padding-bottom: 6px; border-bottom: 1px solid var(--border); }
+/* The first section heading sits closer to the total; the second has the full margin. */
+.ta-panel > .ta-h2:first-of-type { margin-top: 14px; }
+
+.ta-n { font-variant-numeric: tabular-nums; color: var(--accent-text); background: var(--accent-soft);
+  border-radius: 10px; padding: 1px 8px; font-size: 13px; margin-left: 6px; }
+
+/* ---- breakdown rows -------------------------------------------------------- */
+
+.ta-rows { display: flex; flex-direction: column; }
+
+.ta-row { padding: 10px 0; border-bottom: 1px solid var(--border); }
+.ta-row:last-child { border-bottom: none; }
+
+.ta-row-top { display: flex; align-items: baseline; gap: 12px; }
+.ta-label { color: var(--ink); font-weight: 500; font-size: 13px; min-width: 0; flex: 1;
+  overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.ta-time { font-family: var(--mono); font-size: 13px; color: var(--ink);
+  font-variant-numeric: tabular-nums; white-space: nowrap; }
+.ta-sessions { font-size: 11px; color: var(--muted); white-space: nowrap; }
+.ta-pct { font-family: var(--mono); font-size: 12px; color: var(--muted);
+  font-variant-numeric: tabular-nums; white-space: nowrap; min-width: 48px; text-align: right; }
+
+/* The bar — a thin accent fill on a neutral track. It shows the share at a glance
+   without the numbers needing to be read. The track is --border, not a new token. */
+.ta-bar { height: 4px; background: var(--border); border-radius: 2px;
+  margin-top: 6px; overflow: hidden; }
+.ta-bar-fill { height: 100%; background: var(--accent); border-radius: 2px; }
+
+@media (max-width: 560px) {
+  .ta-panel { max-width: 100%; }
+  .ta-row-top { gap: 8px; }
+  .ta-sessions { display: none; }
+}

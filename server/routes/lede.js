@@ -56,6 +56,7 @@ const TITLES = {
   browsing: 'Browsing',
   atlas: 'Atlas',
   voice: 'Voice',
+  'bulk-import': 'Bulk import',
 };
 
 // --- static fallback ledes (what the panel IS, not what it shows right now) -----
@@ -81,6 +82,7 @@ const FALLBACKS = {
   browsing: 'Where your attention goes, by domain. Imported from Edge.',
   atlas: 'A grid of the world. Mark countries you have visited.',
   voice: 'Click-to-talk and talk-back via local TTS and STT.',
+  'bulk-import': 'Paste a JSON or CSV list to import items into the board.',
 };
 
 // --- helpers --------------------------------------------------------------------

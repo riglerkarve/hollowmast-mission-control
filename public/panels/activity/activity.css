@@ -1,0 +1,78 @@
+/* activity — reverse-chronological feed of everything that happened.
+
+   Every token used here is defined in shell.css. The badge colours for Codex (blue) and
+   Ollama (green) do not exist in the palette, so they are defined HERE with both schemes
+   rather than invented as if they came from the shared sheet — the same pattern board.css
+   uses for its danger token. An undefined custom property renders as nothing, silently,
+   and a coloured badge that loses its colour in dark mode is exactly that failure. */
+.ac-panel {
+  --ac-blue: #3b82f6;
+  --ac-green: #22c55e;
+}
+@media (prefers-color-scheme: dark) {
+  .ac-panel { --ac-blue: #60a5fa; --ac-green: #4ade80; }
+}
+
+.ac-header { display: flex; align-items: baseline; gap: 12px; margin-bottom: 16px; }
+.ac-header h1 { font-size: 18px; font-weight: 600; color: var(--ink); margin: 0; }
+.ac-count { font-size: 13px; color: var(--muted); font-variant-numeric: tabular-nums; }
+
+.ac-filters { display: flex; flex-wrap: wrap; gap: 8px; margin-bottom: 18px; }
+.ac-tab { background: var(--card); border: 1px solid var(--border); border-radius: var(--r-btn);
+  padding: 6px 12px; color: var(--ink); cursor: pointer; font: inherit; font-size: 13px; }
+.ac-tab span { color: var(--muted); font-variant-numeric: tabular-nums; margin-left: 4px; }
+.ac-tab.on { border-color: var(--accent); color: var(--accent-text); background: var(--accent-soft); }
+.ac-tab.on span { color: inherit; }
+
+/* Source-failure notes sit above the list. They are warnings, not fatal errors — the stream
+   still renders whatever the other sources contributed. */
+.ac-notes { margin-bottom: 14px; }
+.ac-note { font-size: 12px; color: var(--muted); background: var(--card);
+  border: 1px solid var(--border); border-radius: var(--r-card); padding: 8px 12px; margin-bottom: 6px; }
+
+.ac-list { display: flex; flex-direction: column; gap: 2px; }
+
+.ac-item { display: grid; grid-template-columns: auto auto auto 1fr auto auto;
+  align-items: center; gap: 10px; padding: 9px 10px; border-bottom: 1px solid var(--border);
+  font-size: 13px; }
+.ac-item:hover { background: var(--card); }
+
+/* Kind label — a small uppercase tag that identifies the source at a glance. */
+.ac-kind { font-size: 11px; text-transform: uppercase; letter-spacing: .05em;
+  color: var(--muted); min-width: 56px; }
+
+.ac-time { font-size: 12px; color: var(--muted); font-variant-numeric: tabular-nums;
+  white-space: nowrap; }
+
+/* Agent badge — coloured by who. The class is applied directly so the colour is structural,
+   not a style attribute that gets lost on re-render. */
+.ac-badge { font-size: 11px; font-weight: 600; padding: 2px 8px; border-radius: var(--r-btn);
+  white-space: nowrap; text-transform: capitalize; }
+.ac-badge-accent { background: var(--accent-soft); color: var(--accent-text); }
+.ac-badge-blue { background: var(--ac-blue); color: #fff; }
+.ac-badge-green { background: var(--ac-green); color: #fff; }
+.ac-badge-ink { background: var(--card); color: var(--ink); border: 1px solid var(--border); }
+
+.ac-what { color: var(--ink); min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+
+.ac-where { font-size: 12px; color: var(--muted); white-space: nowrap; }
+.ac-link { font-family: var(--mono); font-size: 11px; color: var(--muted); white-space: nowrap; }
+
+/* Stale items are muted, not hidden. The timestamp, badge and text all dim together so the
+   row reads as "still here, but not recent" rather than "broken". */
+.ac-item.ac-stale .ac-time,
+.ac-item.ac-stale .ac-badge,
+.ac-item.ac-stale .ac-what,
+.ac-item.ac-stale .ac-where,
+.ac-item.ac-stale .ac-link,
+.ac-item.ac-stale .ac-kind { opacity: .5; }
+
+.ac-empty { color: var(--muted); font-size: 13px; padding: 24px 10px; max-width: 62ch; }
+.ac-alarm { color: var(--muted); font-size: 13px; padding: 16px 0; max-width: 62ch; }
+
+@media (max-width: 560px) {
+  .ac-item { grid-template-columns: auto auto 1fr; grid-template-rows: auto auto;
+    gap: 4px 8px; }
+  .ac-what { grid-column: 1 / -1; white-space: normal; }
+  .ac-where, .ac-link { font-size: 11px; }
+}

@@ -127,6 +127,7 @@ if (!body.title) {
   }
 
   console.log(`\n  Recorded handover #${j.id} for ${body.title} — shift ${j.shift}, role ${j.role}.`);
+  if (j.amended) console.log('  (Amended an existing handover for this shift — no duplicate created.)');
   if (!j.inRoster) {
     console.log('  NOT ON THE ROSTER. It was recorded anyway rather than refused, but the');
     console.log('  supervisor will not miss you if you go silent, because nothing knows you');

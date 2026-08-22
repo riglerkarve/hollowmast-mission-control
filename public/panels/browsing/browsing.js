@@ -6,6 +6,7 @@
 // It does not judge what is on the list. There is no "wasted time" figure and there will
 // not be one: that would be a weighting I invented, presented back as a measurement.
 
+import { renderLede } from '/panels/lede/lede.js';
 let root = null;
 let loadToken = 0;
 
@@ -178,6 +179,7 @@ async function load() {
 }
 
 export default {
-  mount(el) { root = el; el.innerHTML = TEMPLATE; load(); },
+  mount(el) { root = el; el.innerHTML = TEMPLATE;
+  renderLede('browsing', el); load(); },
   unmount() { loadToken++; root = null; },
 };

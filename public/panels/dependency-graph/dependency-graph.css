@@ -1,0 +1,70 @@
+/* dependency-graph — cross-project dependency graph panel.
+   Every custom property used here is defined in shell.css. Verified by reading
+   the definition, not a mention: --accent, --accent-soft, --accent-text,
+   --accent-text-bg, --card, --bg, --ink, --muted, --border, --border-strong,
+   --mono, --r-card, --r-btn all have :root definitions in shell.css and carry
+   dark-theme overrides. */
+
+.dg-panel { max-width: 720px; }
+
+.dg-lede { color: var(--muted); font-size: 13px; line-height: 1.5; margin: 0 0 18px; max-width: 72ch; }
+.dg-loading { color: var(--muted); font-size: 13px; }
+.dg-alarm { color: var(--ink); font-size: 13px; margin: 0; }
+.dg-empty { color: var(--muted); font-size: 13px; padding: 8px 0; line-height: 1.5; max-width: 72ch; }
+
+.dg-h2 { font-size: 13px; text-transform: uppercase; letter-spacing: .07em; color: var(--muted);
+  margin: 28px 0 10px; padding-bottom: 6px; border-bottom: 1px solid var(--border); }
+.dg-panel > .dg-h2:first-of-type { margin-top: 10px; }
+
+.dg-n { font-variant-numeric: tabular-nums; color: var(--accent-text); background: var(--accent-soft);
+  border-radius: 10px; padding: 1px 8px; font-size: 13px; margin-left: 6px; }
+
+/* ---- summary line ---------------------------------------------------------- */
+
+.dg-summary { font-size: 14px; color: var(--ink); margin: 0 0 18px; }
+.dg-summary-n { font-variant-numeric: tabular-nums; font-weight: 600; }
+
+/* ---- errors ---------------------------------------------------------------- */
+
+.dg-errors { margin: 0 0 14px; }
+.dg-error { font-family: var(--mono); font-size: 11px; color: var(--accent-text);
+  background: var(--accent-soft); border: 1px solid var(--accent);
+  border-radius: var(--r-btn); padding: 4px 10px; margin-bottom: 4px; }
+
+/* ---- node row ------------------------------------------------------------- */
+
+.dg-node { display: flex; flex-wrap: wrap; align-items: center; gap: 8px;
+  padding: 6px 10px; border-bottom: 1px solid var(--border); font-size: 13px; }
+
+.dg-id { font-family: var(--mono); font-size: 12px; color: var(--ink); font-weight: 600; }
+.dg-path { font-family: var(--mono); font-size: 10px; color: var(--muted); }
+.dg-count { font-family: var(--mono); font-size: 10px; color: var(--muted);
+  border: 1px solid var(--border); border-radius: 3px; padding: 1px 5px; }
+
+.dg-missing { font-family: var(--mono); font-size: 10px; text-transform: uppercase;
+  letter-spacing: .06em; color: var(--accent-text);
+  border: 1px solid var(--accent); border-radius: 3px; padding: 1px 6px; }
+
+/* ---- children (indented edges) -------------------------------------------- */
+
+.dg-children { list-style: none; margin: 4px 0 0 26px; padding: 0;
+  border-left: 2px solid var(--border); }
+.dg-child { display: flex; flex-wrap: wrap; align-items: center; gap: 8px;
+  padding: 4px 10px; font-size: 12px; }
+.dg-shared-by { font-family: var(--mono); font-size: 10px; color: var(--muted); }
+
+/* ---- type badges ---------------------------------------------------------- */
+
+.dg-badge { font-family: var(--mono); font-size: 9px; text-transform: uppercase;
+  letter-spacing: .06em; border-radius: 3px; padding: 1px 6px;
+  border: 1px solid var(--border); color: var(--muted); flex-shrink: 0; }
+
+.dg-badge-route { color: var(--muted); }
+.dg-badge-panel { color: var(--accent-text); border-color: var(--accent-soft); background: var(--accent-soft); }
+.dg-badge-project { color: var(--ink); border-color: var(--border-strong); }
+.dg-badge-dep { color: var(--muted); border-color: var(--border-strong); }
+
+@media (max-width: 560px) {
+  .dg-panel { max-width: 100%; }
+  .dg-children { margin-left: 14px; }
+}

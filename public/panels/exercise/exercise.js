@@ -8,6 +8,7 @@
 // the route. No goal field, no progress bar against a number, no streak, no colour meaning
 // bad. The per-week row is a bare count of days with anything recorded — a count cannot say
 // you fell short, whereas a percentage always implies a denominator someone chose.
+import { renderLede } from '/panels/lede/lede.js';
 let root = null;
 let loadToken = 0;
 
@@ -162,6 +163,7 @@ export default {
   mount(el) {
     root = el;
     el.innerHTML = TEMPLATE;
+    renderLede('exercise', el);
     el.addEventListener('click', onClick);
     el.addEventListener('keydown', onKey);
     load();

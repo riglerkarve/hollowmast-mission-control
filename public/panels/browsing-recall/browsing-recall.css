@@ -1,0 +1,40 @@
+/* browsing-recall — weekly domain visit recall.
+   Every custom property used here is defined in shell.css. Verified by reading the
+   definition, not a mention: --accent, --accent-soft, --accent-text, --card, --bg,
+   --ink, --muted, --border, --border-strong, --mono, --r-card all have :root
+   definitions in shell.css and carry dark-theme overrides. */
+
+.br-panel { max-width: 720px; }
+
+.br-lede { color: var(--muted); font-size: 13px; line-height: 1.5; margin: 0 0 18px; max-width: 72ch; }
+.br-loading { color: var(--muted); font-size: 13px; }
+.br-alarm { color: var(--ink); font-size: 13px; margin: 0; }
+.br-empty { color: var(--muted); font-size: 13px; padding: 8px 0; line-height: 1.5; max-width: 72ch; }
+
+/* ---- summary bar ----------------------------------------------------------- */
+
+.br-summary { display: flex; flex-wrap: wrap; gap: 18px; margin: 0 0 20px;
+  padding-bottom: 14px; border-bottom: 1px solid var(--border); }
+.br-stat { font-size: 13px; color: var(--muted); }
+.br-stat-n { font-family: var(--mono); font-variant-numeric: tabular-nums;
+  color: var(--accent-text); background: var(--accent-soft);
+  border-radius: 10px; padding: 1px 8px; font-size: 13px; margin-right: 5px; }
+
+/* ---- the card -------------------------------------------------------------- */
+
+.br-card { background: var(--card); border: 1px solid var(--border); border-radius: var(--r-card);
+  padding: 12px 16px; margin-bottom: 8px; }
+
+.br-card-head { display: flex; justify-content: space-between; align-items: center; gap: 12px; }
+.br-domain { margin: 0; font-size: 14px; line-height: 1.4; color: var(--ink);
+  word-break: break-all; flex: 1 1 auto; }
+.br-visits { font-family: var(--mono); font-variant-numeric: tabular-nums;
+  color: var(--accent-text); background: var(--accent-soft);
+  border-radius: 10px; padding: 1px 9px; font-size: 13px; flex: 0 0 auto; }
+
+.br-last { font-family: var(--mono); font-size: 11px; color: var(--muted); margin: 4px 0 0; }
+
+@media (max-width: 560px) {
+  .br-panel { max-width: 100%; }
+  .br-summary { gap: 12px; }
+}

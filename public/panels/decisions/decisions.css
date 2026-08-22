@@ -1,0 +1,85 @@
+/* decisions — the owner's own decision log (M149) and revisit-due decisions (M146).
+   Every custom property used here is defined in shell.css. Verified by reading the
+   definition, not a mention: --accent, --accent-soft, --accent-text, --accent-text-bg,
+   --card, --bg, --ink, --muted, --border, --border-strong, --mono, --r-card, --r-btn
+   all have :root definitions in shell.css and carry dark-theme overrides. */
+
+.dc-panel { max-width: 720px; }
+
+.dc-lede { color: var(--muted); font-size: 13px; line-height: 1.5; margin: 0 0 18px; max-width: 72ch; }
+.dc-loading { color: var(--muted); font-size: 13px; }
+.dc-alarm { color: var(--ink); font-size: 13px; margin: 0; }
+.dc-empty { color: var(--muted); font-size: 13px; padding: 8px 0; line-height: 1.5; max-width: 72ch; }
+.dc-asof { font-family: var(--mono); font-size: 11px; color: var(--muted); margin: 0 0 10px; }
+
+.dc-h2 { font-size: 13px; text-transform: uppercase; letter-spacing: .07em; color: var(--muted);
+  margin: 28px 0 10px; padding-bottom: 6px; border-bottom: 1px solid var(--border); }
+/* The first section's heading sits closer to the lede; the second has the full margin. */
+.dc-panel > .dc-h2:first-of-type { margin-top: 10px; }
+
+.dc-n { font-variant-numeric: tabular-nums; color: var(--accent-text); background: var(--accent-soft);
+  border-radius: 10px; padding: 1px 8px; font-size: 13px; margin-left: 6px; }
+
+/* ---- the card -------------------------------------------------------------- */
+
+.dc-card { background: var(--card); border: 1px solid var(--border); border-radius: var(--r-card);
+  padding: 14px 16px; margin-bottom: 10px; position: relative; }
+
+/* The accent left rule marks a decision the way team.css marks its records: a 3px accent
+   border-left, not a full accent border, so the card stays calm and the rule reads as
+   "this is a recorded call" rather than "this is an alert". */
+.dc-card { border-left: 3px solid var(--border-strong); }
+
+/* A decision that is DUE for revisit is highlighted in the accent. This is the section the
+   owner must not miss, so it carries the accent rule, a soft accent tint, and a badge.
+   The tint is --accent-soft, the same ground --accent-text is rated for. */
+.dc-due { border-left-color: var(--accent); background: var(--accent-soft); }
+@media (prefers-color-scheme: dark) {
+  /* --accent-soft is very dark in the dark theme (a near-black ember tint). The accent
+     rule alone carries the emphasis there; keep the ground as --card so the card does not
+     disappear into the page. */
+  .dc-due { background: var(--card); }
+}
+
+/* The owner's steering answers get a different left rule so the log reads at a glance: the
+   team's calls are neutral, the owner's calls are the accent, and due items are the accent
+   with the tint. Matches team.css's tm-rec-owner distinction. */
+.dc-steer { border-left-color: var(--accent); }
+
+.dc-text { margin: 0 0 8px; font-size: 15px; line-height: 1.42; color: var(--ink); max-width: 72ch; }
+
+/* The attribution line: who decided, in what role, when, and whether it was superseded.
+   Three classes because each is a different KIND of fact, read at different weights. */
+.dc-attr { font-family: var(--mono); font-size: 11px; margin: 0 0 12px;
+  display: flex; flex-wrap: wrap; gap: 9px; align-items: center; }
+.dc-who { color: var(--ink); font-weight: 600; }
+.dc-role { font-size: 10px; text-transform: uppercase; letter-spacing: .06em; color: var(--muted);
+  border: 1px solid var(--border); border-radius: 3px; padding: 1px 6px; }
+.dc-when { color: var(--muted); }
+
+/* The badge. Sits at the top-right of a due card, in the accent, so it is the first thing
+   the eye lands on. */
+.dc-badge { position: absolute; top: 12px; right: 14px;
+  font-family: var(--mono); font-size: 10px; text-transform: uppercase; letter-spacing: .06em;
+  color: var(--accent-text); background: var(--accent-soft);
+  border: 1px solid var(--accent); border-radius: 3px; padding: 2px 7px; }
+/* On the due card the badge sits on the same --accent-soft ground; invert it so it does not
+   vanish into the tint. */
+.dc-due .dc-badge { color: var(--card); background: var(--accent); border-color: var(--accent); }
+
+.dc-flag { font-family: var(--mono); font-size: 10px; text-transform: uppercase; letter-spacing: .05em;
+  color: var(--muted); border: 1px solid var(--border-strong); padding: 1px 5px; border-radius: 3px; }
+.dc-flag-sup { color: var(--muted); }
+
+/* The detail fields: Because, If this is wrong, Revisit when, etc. */
+.dc-field { margin-top: 10px; }
+.dc-field h5 { margin: 0 0 4px; font-size: 10px; text-transform: uppercase; letter-spacing: .09em;
+  color: var(--muted); }
+.dc-field p { margin: 0; font-size: 13px; line-height: 1.55; color: var(--ink); max-width: 72ch; }
+.dc-mono { font-family: var(--mono); font-size: 12px; }
+
+@media (max-width: 560px) {
+  .dc-panel { max-width: 100%; }
+  /* The badge stays put; on a narrow screen it still needs to be the first thing seen. */
+  .dc-text { padding-right: 0; }
+}

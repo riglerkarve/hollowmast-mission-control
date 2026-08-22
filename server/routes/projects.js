@@ -45,6 +45,8 @@ const PROJECTS = [
     track: 'Income', note: 'Live to the public, £0 earned. Blocked on distribution.' },
   { id: 'dropshipping', name: 'Dropshipping', dir: 'dropshipping', dash: null, entry: null,
     track: 'Dropshipping', note: 'Registered 18 Aug 2026 as its own track. Nothing built: niche, platform, supplier and budget ceiling are all undecided. First project here that cannot run on zero.' },
+  { id: 'print-shop', name: 'Print Shop', dir: 'print-shop', dash: null, entry: null,
+    track: 'Print Shop', note: 'Registered 20 Aug 2026 as its own track, explicitly not a PrintProfit replacement. Nothing built: equipment, niche, storefront and budget ceiling are all undecided; own cost model waits on M125 research validation.' },
   { id: 'mission-control', name: 'Mission Control', dir: 'mission-control', dash: null, entry: null,
     track: 'Ops', note: 'This. Its control centre is the thing you are looking at.' },
   { id: 'garage', name: 'The Garage', dir: '.garage', dash: null, entry: null,

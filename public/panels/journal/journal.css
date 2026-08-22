@@ -1,0 +1,54 @@
+/* journal — voice journal panel. */
+.jr-card { margin-bottom: 16px; }
+.jr-h2 { font-size: 13px; text-transform: uppercase; letter-spacing: .07em;
+  color: var(--muted); margin: 0 0 10px; padding-bottom: 6px;
+  border-bottom: 1px solid var(--border); }
+.jr-err { color: var(--accent-text); font-size: 13px; }
+.jr-empty { color: var(--muted); font-style: italic; font-size: 13px; }
+.jr-status { font-size: 12px; color: var(--muted); margin-top: 6px; min-height: 16px; }
+
+.jr-input-row { margin-bottom: 10px; }
+.jr-text { width: 100%; background: var(--bg); color: var(--ink);
+  border: 1px solid var(--border-strong); border-radius: var(--r-card);
+  padding: 10px 12px; font: inherit; font-size: 14px; resize: vertical; }
+.jr-text:focus { border-color: var(--accent); outline: none; }
+
+.jr-controls { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; }
+.jr-mic { display: flex; align-items: center; gap: 6px; background: var(--card);
+  border: 1px solid var(--border-strong); border-radius: var(--r-btn);
+  padding: 6px 12px; cursor: pointer; font: inherit; font-size: 13px; }
+.jr-mic:hover { border-color: var(--accent); }
+.jr-mic.recording { border-color: var(--accent); background: var(--accent-soft); }
+.jr-mic-icon { width: 18px; height: 18px; fill: var(--ink); }
+.jr-mic.recording .jr-mic-icon { fill: var(--accent-text); }
+.jr-mood { background: var(--bg); border: 1px solid var(--border-strong);
+  border-radius: var(--r-btn); padding: 6px 10px; font: inherit; font-size: 13px;
+  width: 140px; }
+
+.jr-search-row { margin-bottom: 10px; }
+.jr-search { width: 100%; background: var(--bg); border: 1px solid var(--border-strong);
+  border-radius: var(--r-btn); padding: 8px 10px; font: inherit; font-size: 13px; }
+.jr-search:focus { border-color: var(--accent); outline: none; }
+
+.jr-entry { padding: 10px 0; border-top: 1px solid var(--border); }
+.jr-entry:first-child { border-top: none; }
+.jr-entry-text { margin: 0 0 6px; font-size: 14px; color: var(--ink); line-height: 1.5; }
+.jr-entry-meta { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
+.jr-tag { background: var(--accent-soft); color: var(--accent-text);
+  border-radius: 3px; padding: 1px 6px; font-size: 10px;
+  text-transform: uppercase; letter-spacing: .05em; }
+.jr-mood-tag { background: var(--card); border: 1px solid var(--border-strong);
+  border-radius: 3px; padding: 1px 6px; font-size: 10px; color: var(--muted); }
+.jr-date { font-size: 11px; color: var(--muted); font-family: var(--mono); }
+.jr-del, .jr-read { background: none; border: 1px solid var(--border);
+  border-radius: var(--r-btn); padding: 2px 8px; font-size: 11px;
+  cursor: pointer; color: var(--muted); }
+.jr-del:hover { color: var(--accent-text); border-color: var(--accent); }
+.jr-read:hover { color: var(--ink); border-color: var(--accent); }
+
+.jr-stat-row { font-size: 13px; color: var(--muted); }
+.jr-stat-num { color: var(--ink); font-weight: 600; }
+.jr-tag-cloud { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 8px; }
+.jr-tag-stat { background: var(--bg); border: 1px solid var(--border);
+  border-radius: var(--r-btn); padding: 4px 8px; font-size: 12px; color: var(--muted); }
+.jr-tag-stat b { color: var(--ink); }

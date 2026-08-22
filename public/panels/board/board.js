@@ -9,6 +9,7 @@
 //   - a status the tracker asserted, versus one this dashboard inferred
 //   - the count of things open, versus the count of things held
 import { responderHTML, wireResponders } from '/panels/team/respond.js';
+import { renderLede } from '/panels/lede/lede.js';
 
 const api = async (p, opts) => {
   const r = await fetch(`/api/board${p}`, {
@@ -184,6 +185,6 @@ async function load() {
 }
 
 export default {
-  mount(el) { root = el; state = { filter: 'all', data: null }; load(); },
+  mount(el) { root = el; state = { filter: 'all', data: null }; load(); renderLede('board', el); },
   unmount() { root = null; state = { filter: 'all', data: null }; },
 };

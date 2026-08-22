@@ -1,0 +1,162 @@
+/* workspace-overview — all projects at a glance, dashboard health, venture momentum.
+   Every custom property used here is defined in shell.css. Verified by reading the
+   definition, not a mention: --accent, --accent-soft, --accent-text, --accent-text-bg,
+   --short, --short-text, --card, --bg, --ink, --muted, --border, --border-strong, --mono,
+   --shadow, --shadow-lift, --r-card, --r-btn all have :root definitions in shell.css and
+   carry dark-theme overrides. */
+
+.wo-panel { max-width: 760px; }
+
+.wo-lede { color: var(--muted); font-size: 13px; line-height: 1.5; margin: 0 0 18px; max-width: 72ch; }
+.wo-loading { color: var(--muted); font-size: 13px; }
+.wo-alarm { color: var(--ink); font-size: 13px; margin: 0; }
+.wo-empty { color: var(--muted); font-size: 13px; padding: 8px 0; line-height: 1.5; max-width: 72ch; }
+
+.wo-h2 { font-size: 13px; text-transform: uppercase; letter-spacing: .07em; color: var(--muted);
+  margin: 28px 0 10px; padding-bottom: 6px; border-bottom: 1px solid var(--border); }
+/* The first section heading sits closer to the lede; later ones get the full margin. */
+.wo-panel > .wo-h2:first-of-type { margin-top: 10px; }
+
+.wo-n { font-variant-numeric: tabular-nums; color: var(--accent-text); background: var(--accent-soft);
+  border-radius: 10px; padding: 1px 8px; font-size: 13px; margin-left: 6px; }
+
+/* ---- section 1: project cards --------------------------------------------- */
+
+.wo-card { background: var(--card); border: 1px solid var(--border); border-radius: var(--r-card);
+  padding: 12px 16px; margin-bottom: 8px; border-left: 3px solid var(--border-strong);
+  transition: box-shadow var(--t-fast) var(--ease); }
+.wo-card:hover { box-shadow: var(--shadow-lift); }
+
+/* A project with open bugs gets the accent left rule, like decisions.js's .dc-due — the
+   accent marks something that needs attention, not a decoration. */
+.wo-card-accent { border-left-color: var(--accent); }
+
+.wo-project { margin: 0 0 6px; font-size: 15px; line-height: 1.3; color: var(--ink); }
+
+.wo-status { font-family: var(--mono); font-size: 10px; text-transform: uppercase;
+  letter-spacing: .05em; color: var(--muted); border: 1px solid var(--border);
+  border-radius: 3px; padding: 1px 6px; margin-right: 6px; }
+
+.wo-momentum { font-family: var(--mono); font-size: 10px; text-transform: uppercase;
+  letter-spacing: .05em; padding: 1px 6px; border-radius: 3px; display: inline-block;
+  margin-bottom: 8px; }
+.wo-momentum-active { color: var(--short-text); border: 1px solid var(--short); }
+.wo-momentum-parked { color: var(--muted); border: 1px solid var(--border-strong); }
+.wo-momentum-unknown { color: var(--muted); border: 1px solid var(--border); }
+
+.wo-nums { display: flex; flex-wrap: wrap; gap: 14px; }
+.wo-num { font-family: var(--mono); font-size: 12px; color: var(--muted); }
+.wo-num b { color: var(--ink); font-weight: 600; font-size: 13px; }
+.wo-num-accent b { color: var(--accent-text); }
+.wo-num-muted { color: var(--muted); }
+
+/* ---- section 2: dashboard health ------------------------------------------ */
+
+.wo-health-line { font-size: 13px; color: var(--ink); margin: 0 0 6px; }
+.wo-health-line b { font-variant-numeric: tabular-nums; }
+
+.wo-broken { list-style: none; margin: 0; padding: 0; }
+.wo-broken li { font-family: var(--mono); font-size: 12px; color: var(--ink);
+  padding: 3px 0; display: flex; gap: 10px; align-items: baseline; }
+.wo-broken-name { color: var(--accent-text); font-weight: 600; min-width: 120px; }
+.wo-broken-detail { color: var(--muted); }
+
+/* ---- section 3: ventures momentum ----------------------------------------- */
+
+.wo-ventures { list-style: none; margin: 0; padding: 0; }
+.wo-venture { display: flex; flex-wrap: wrap; gap: 10px; align-items: baseline;
+  padding: 5px 0; border-bottom: 1px solid var(--border); font-size: 13px; }
+.wo-venture:last-child { border-bottom: none; }
+
+.wo-dot { width: 8px; height: 8px; border-radius: 50%; display: inline-block;
+  flex-shrink: 0; align-self: center; }
+.wo-dot-active { background: var(--short); }
+.wo-dot-parked { background: var(--border-strong); }
+.wo-dot-unknown { background: transparent; border: 1px solid var(--border-strong); }
+
+.wo-venture-name { color: var(--ink); font-weight: 600; min-width: 140px; }
+.wo-venture-track { font-family: var(--mono); font-size: 11px; color: var(--muted);
+  text-transform: uppercase; letter-spacing: .04em; }
+.wo-venture-days { font-family: var(--mono); font-size: 11px; color: var(--muted);
+  font-variant-numeric: tabular-nums; margin-left: auto; }
+.wo-venture-items { font-family: var(--mono); font-size: 11px; color: var(--muted);
+  font-variant-numeric: tabular-nums; }
+
+@media (max-width: 560px) {
+  .wo-panel { max-width: 100%; }
+  .wo-venture-name { min-width: 0; flex-basis: 100%; }
+  .wo-venture-days { margin-left: 0; }
+}
+
+/* Workspace home — project data remains owned by its existing APIs; this layer turns the
+   existing overview into an operational landing surface rather than a vertical report. */
+.wo-panel {
+  max-width: 1120px;
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 14px;
+}
+.wo-panel > :not(.wo-card) { grid-column: 1 / -1; }
+.wo-panel > h1 {
+  margin: 0;
+  font-family: var(--mono);
+  font-size: clamp(1.5rem, 1.2rem + 1.1vw, 2.15rem);
+  letter-spacing: 0.03em;
+  line-height: 1.1;
+}
+.wo-lede {
+  max-width: 68ch;
+  margin: -3px 0 8px;
+  font-size: 0.92rem;
+}
+.wo-h2 {
+  margin: 18px 0 0;
+  padding: 0 0 10px;
+  font-family: var(--mono);
+  font-size: 0.72rem;
+  letter-spacing: 0.12em;
+}
+.wo-panel > .wo-h2:first-of-type { margin-top: 4px; }
+.wo-card {
+  min-height: 150px;
+  margin: 0;
+  padding: 20px;
+  border: 1px solid var(--border);
+  border-left: 1px solid var(--border);
+  border-radius: var(--r-card);
+  background-image: linear-gradient(135deg, rgba(88, 214, 197, 0.05), transparent 54%);
+  box-shadow: var(--shadow);
+  position: relative;
+  overflow: hidden;
+}
+.wo-card::before {
+  content: '';
+  position: absolute;
+  left: 18px;
+  top: 0;
+  width: 44px;
+  height: 3px;
+  border-radius: 0 0 3px 3px;
+  background: var(--border-strong);
+}
+.wo-card-accent { border-color: rgba(229, 154, 58, 0.55); }
+.wo-card-accent::before { background: #e59a3a; }
+.wo-project { margin: 5px 0 auto; font-size: 1rem; }
+.wo-nums { gap: 12px; margin-top: 20px; }
+.wo-num { display: flex; flex-direction: column; gap: 2px; font-size: 0.67rem; }
+.wo-num b { font-size: 1.32rem; line-height: 1; }
+.wo-num-accent b { color: #e59a3a; }
+.wo-health-line, .wo-broken, .wo-ventures {
+  padding: 18px 20px;
+  border: 1px solid var(--border);
+  border-radius: var(--r-card);
+  background: var(--card);
+  box-shadow: var(--shadow);
+}
+.wo-health-line { margin: 0; }
+.wo-broken { border-top: 0; border-radius: 0 0 var(--r-card) var(--r-card); }
+.wo-ventures { margin: 0; }
+
+@media (max-width: 760px) {
+  .wo-panel { grid-template-columns: 1fr; }
+}

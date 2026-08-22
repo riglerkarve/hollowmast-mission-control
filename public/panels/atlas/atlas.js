@@ -4,6 +4,7 @@
 // drawing outlines from memory would be fabricating geography that looks authoritative.
 // A cell per country, grouped by region, is honest about being a schematic.
 
+import { renderLede } from '/panels/lede/lede.js';
 let root = null;
 
 const esc = (s) => String(s == null ? '' : s).replace(/[&<>"']/g, (c) => (
@@ -90,6 +91,7 @@ async function load() {
 }
 
 export default {
-  mount(el) { root = el; el.innerHTML = TEMPLATE; load(); },
+  mount(el) { root = el; el.innerHTML = TEMPLATE;
+  renderLede('atlas', el); load(); },
   unmount() { root = null; },
 };

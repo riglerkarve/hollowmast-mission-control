@@ -1,0 +1,81 @@
+/* health-score — a composite workspace health number from 8 checks.
+   Every custom property used here is defined in shell.css. Verified by reading
+   the definition, not a mention: --accent, --accent-soft, --accent-text,
+   --accent-text-bg, --card, --bg, --ink, --muted, --border, --border-strong,
+   --mono, --r-card, --r-btn all have :root definitions in shell.css and carry
+   dark-theme overrides. The pass/fail/cannot-check icons use fixed colours
+   (#6ade7a / #c4666a / var(--muted)) matching the .led convention in shared.css
+   so a green check is the same green as a healthy lamp. */
+
+.hs-panel { max-width: 720px; }
+
+.hs-lede { color: var(--muted); font-size: 13px; line-height: 1.5; margin: 0 0 18px; max-width: 72ch; }
+.hs-loading { color: var(--muted); font-size: 13px; }
+.hs-alarm { color: var(--ink); font-size: 13px; margin: 0; }
+.hs-empty { color: var(--muted); font-size: 13px; padding: 8px 0; line-height: 1.5; max-width: 72ch; }
+.hs-asof { font-family: var(--mono); font-size: 11px; color: var(--muted); margin: 20px 0 0; }
+
+/* ---- the big number -------------------------------------------------------- */
+
+.hs-score-block {
+  display: flex; align-items: baseline; gap: 14px;
+  margin-bottom: 24px; padding: 20px 24px;
+  background: var(--card); border: 1px solid var(--border);
+  border-radius: var(--r-card);
+}
+.hs-big {
+  font-family: var(--mono); font-size: 2.6rem; font-weight: 700;
+  letter-spacing: -0.03em; font-variant-numeric: tabular-nums;
+  color: var(--muted);
+}
+/* 100% is the accent — the only score that earns it. Anything less is muted so
+   the eye finds what failed, not what almost passed. --accent-text is rated
+   for --card (4.61:1 light, 6.82:1 dark), the ground it sits on here. */
+.hs-big-full { color: var(--accent-text); }
+.hs-score-frac { font-family: var(--mono); font-size: 13px; color: var(--muted); }
+
+/* ---- section heading ------------------------------------------------------- */
+
+.hs-h2 { font-size: 13px; text-transform: uppercase; letter-spacing: .07em; color: var(--muted);
+  margin: 28px 0 10px; padding-bottom: 6px; border-bottom: 1px solid var(--border); }
+.hs-panel > .hs-h2:first-of-type { margin-top: 10px; }
+.hs-n { font-variant-numeric: tabular-nums; color: var(--accent-text); background: var(--accent-soft);
+  border-radius: 10px; padding: 1px 8px; font-size: 13px; margin-left: 6px; }
+
+/* ---- the check row --------------------------------------------------------- */
+
+.hs-check { display: flex; gap: 12px; align-items: flex-start;
+  background: var(--card); border: 1px solid var(--border); border-radius: var(--r-card);
+  border-left: 3px solid var(--border-strong);
+  padding: 12px 14px; margin-bottom: 8px; }
+
+/* A failed check carries the accent left rule — the same convention as
+   health-check.css and decisions.css: a 3px accent border-left, not a full
+   accent border, so it reads as "this needs attention" not "this is on fire". */
+.hs-check-bad { border-left-color: var(--accent); }
+
+/* A passed check is calm: the neutral left rule from the base class stays. */
+.hs-check-ok { border-left-color: var(--border-strong); }
+
+/* A could-not-check is neutral but distinct: a dashed left rule, so the eye
+   sees "incomplete" rather than "ok" or "broken". */
+.hs-check-na { border-left-style: dashed; border-left-color: var(--border-strong); }
+
+.hs-check-icon { flex-shrink: 0; width: 18px; height: 18px; margin-top: 1px; display: grid; place-items: center; }
+
+.hs-icon { width: 16px; height: 16px; }
+/* Fixed colours, not currentColor: a pass/fail/cannot-check distinction must
+   survive a theme switch without re-derivation. The greens and reds match the
+   .led convention in shared.css. */
+.hs-icon-ok  { color: #6ade7a; }
+.hs-icon-bad { color: #c4666a; }
+.hs-icon-na  { color: var(--muted); }
+
+.hs-check-body { min-width: 0; flex: 1; }
+.hs-check-name { margin: 0 0 3px; font-size: 13px; font-weight: 600; color: var(--ink); }
+.hs-check-detail { margin: 0; font-size: 12px; line-height: 1.5; color: var(--muted); max-width: 72ch; }
+
+@media (max-width: 560px) {
+  .hs-panel { max-width: 100%; }
+  .hs-big { font-size: 2.2rem; }
+}

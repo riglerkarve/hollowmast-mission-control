@@ -1,0 +1,79 @@
+/* decision-radar — decisions whose revisit date is approaching, not just overdue.
+   Every custom property used here is defined in shell.css. Verified by reading the
+   definition, not a mention: --accent, --accent-soft, --accent-text, --accent-text-bg,
+   --card, --bg, --ink, --muted, --border, --border-strong, --mono, --r-card, --r-btn
+   all have :root definitions in shell.css and carry dark-theme overrides. */
+
+.dr-panel { max-width: 720px; }
+
+.dr-lede { color: var(--muted); font-size: 13px; line-height: 1.5; margin: 0 0 18px; max-width: 72ch; }
+.dr-loading { color: var(--muted); font-size: 13px; }
+.dr-alarm { color: var(--ink); font-size: 13px; margin: 0; }
+.dr-empty { color: var(--muted); font-size: 13px; padding: 8px 0; line-height: 1.5; max-width: 72ch; }
+
+.dr-h2 { font-size: 13px; text-transform: uppercase; letter-spacing: .07em; color: var(--muted);
+  margin: 28px 0 10px; padding-bottom: 6px; border-bottom: 1px solid var(--border); }
+/* The first section heading sits closer to the lede. */
+.dr-panel > .dr-h2:first-of-type { margin-top: 10px; }
+
+.dr-n { font-variant-numeric: tabular-nums; color: var(--accent-text); background: var(--accent-soft);
+  border-radius: 10px; padding: 1px 8px; font-size: 13px; margin-left: 6px; }
+/* The overdue count uses the accent fill so it reads as an alarm, not a count. */
+.dr-n-overdue { color: var(--card); background: var(--accent); }
+
+/* ---- approaching + overdue cards ------------------------------------------- */
+
+.dr-card { background: var(--card); border: 1px solid var(--border); border-radius: var(--r-card);
+  padding: 14px 16px; margin-bottom: 10px; position: relative; border-left: 3px solid var(--border-strong); }
+
+/* Approaching: the accent rule says "this is on the radar" without the tint — it is a
+   warning, not an alarm. */
+.dr-approaching { border-left-color: var(--accent); }
+
+/* Overdue: the accent rule AND the soft tint, the same emphasis decisions.css gives a
+   due card. The section the owner must not miss. */
+.dr-overdue { border-left-color: var(--accent); background: var(--accent-soft); }
+@media (prefers-color-scheme: dark) {
+  /* --accent-soft is very dark in the dark theme. The accent rule carries the emphasis;
+     keep the ground as --card so the card does not disappear into the page. */
+  .dr-overdue { background: var(--card); }
+}
+
+.dr-text { margin: 0 0 8px; font-size: 15px; line-height: 1.42; color: var(--ink); max-width: 72ch; }
+
+/* The attribution line: who decided and when the recheck falls. */
+.dr-attr { font-family: var(--mono); font-size: 11px; margin: 0;
+  display: flex; flex-wrap: wrap; gap: 9px; align-items: center; }
+.dr-who { color: var(--ink); font-weight: 600; }
+.dr-when { color: var(--muted); }
+
+/* The countdown chip. Sits inline on the attribution line in the accent text colour. */
+.dr-countdown { color: var(--accent-text); background: var(--accent-soft);
+  border-radius: 3px; padding: 1px 7px; font-size: 10px; text-transform: uppercase;
+  letter-spacing: .05em; }
+
+/* The overdue badge. Sits at the top-right, inverted on the tinted card. */
+.dr-badge { position: absolute; top: 12px; right: 14px;
+  font-family: var(--mono); font-size: 10px; text-transform: uppercase; letter-spacing: .06em;
+  color: var(--card); background: var(--accent); border: 1px solid var(--accent);
+  border-radius: 3px; padding: 2px 7px; }
+
+/* The revisit-when field on overdue cards. */
+.dr-field { margin-top: 10px; }
+.dr-field h5 { margin: 0 0 4px; font-size: 10px; text-transform: uppercase; letter-spacing: .09em;
+  color: var(--muted); }
+.dr-field p { margin: 0; font-size: 13px; line-height: 1.55; color: var(--ink); max-width: 72ch; }
+
+/* ---- no recheck date (compact list) ---------------------------------------- */
+
+.dr-compact-list { list-style: none; margin: 0; padding: 0; }
+.dr-compact { display: flex; flex-wrap: wrap; gap: 8px; align-items: baseline;
+  padding: 6px 0; border-bottom: 1px solid var(--border); }
+.dr-compact:last-child { border-bottom: none; }
+.dr-text-compact { font-size: 13px; line-height: 1.42; color: var(--ink); flex: 1; min-width: 200px; }
+.dr-who-compact { font-family: var(--mono); font-size: 11px; color: var(--muted); white-space: nowrap; }
+
+@media (max-width: 560px) {
+  .dr-panel { max-width: 100%; }
+  .dr-text { padding-right: 0; }
+}

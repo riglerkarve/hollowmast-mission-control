@@ -1,0 +1,95 @@
+/* team-digest — the plain-language shift summary for the owner.
+   Every custom property used here is defined in shell.css. Verified by reading
+   the definition, not a mention: --accent, --accent-soft, --accent-text,
+   --accent-text-bg, --card, --bg, --ink, --muted, --border, --border-strong,
+   --mono, --r-card, --r-btn, --t-fast, --t-slow, --ease all have :root
+   definitions in shell.css and carry dark-theme overrides. */
+
+.td-panel { max-width: 720px; }
+
+.td-header { display: flex; align-items: center; justify-content: space-between; gap: 12px; }
+
+.td-loading { color: var(--muted); font-size: 13px; }
+.td-alarm { color: var(--ink); font-size: 13px; margin: 0; }
+.td-empty { color: var(--muted); font-size: 13px; padding: 8px 0; line-height: 1.5; max-width: 72ch; }
+.td-asof { font-family: var(--mono); font-size: 11px; color: var(--muted); margin: 14px 0 0; }
+
+/* ---- headline summary -------------------------------------------------------- */
+
+.td-headline { font-size: 17px; line-height: 1.4; color: var(--ink); margin: 14px 0 0;
+  max-width: 72ch; font-weight: 600; }
+
+/* ---- section headings -------------------------------------------------------- */
+
+.td-h3 { font-size: 13px; text-transform: uppercase; letter-spacing: .07em; color: var(--muted);
+  margin: 24px 0 10px; padding-bottom: 6px; border-bottom: 1px solid var(--border); }
+.td-section:first-of-type .td-h3 { margin-top: 18px; }
+
+/* ---- highlights ------------------------------------------------------------- */
+
+.td-list { list-style: none; margin: 0; padding: 0; }
+.td-hl { font-size: 14px; line-height: 1.5; color: var(--ink); padding: 6px 0 6px 18px;
+  position: relative; max-width: 72ch; }
+.td-hl::before { content: '•'; position: absolute; left: 2px; top: 6px; color: var(--accent-text); }
+.td-who { font-family: var(--mono); font-size: 11px; color: var(--muted); margin-left: 4px; }
+
+/* ---- who is working --------------------------------------------------------- */
+
+.td-roster { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 6px; }
+.td-w { display: flex; flex-wrap: wrap; align-items: baseline; gap: 8px;
+  padding: 8px 12px; border: 1px solid var(--border); border-radius: var(--r-card);
+  background: var(--card); }
+.td-w-name { font-size: 14px; font-weight: 600; color: var(--ink); }
+.td-w-mark { font-family: var(--mono); font-size: 10px; text-transform: uppercase; letter-spacing: .06em;
+  border-radius: 3px; padding: 1px 7px; }
+.td-w-task { font-size: 13px; color: var(--muted); flex: 1; min-width: 0; }
+
+/* Active: a calm accent tint. The mark reads as "on the job" without shouting. */
+.td-w-active { border-left: 3px solid var(--accent); }
+.td-w-active .td-w-mark { color: var(--accent-text); background: var(--accent-soft); }
+
+/* Not reporting: a muted, recessive row. Absence and failure must never look
+   the same, so this is deliberately flat — no accent, no tint, a muted mark —
+   so a glance distinguishes "working" from "silent" without reading the text. */
+.td-w-silent { border-left: 3px solid var(--border-strong); background: var(--bg); }
+.td-w-silent .td-w-mark { color: var(--muted); border: 1px solid var(--border-strong); }
+.td-w-silent .td-w-name { color: var(--muted); }
+.td-w-silent .td-w-task { color: var(--muted); }
+
+/* ---- concerns --------------------------------------------------------------- */
+
+.td-concerns { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 6px; }
+.td-c { display: flex; align-items: flex-start; gap: 8px;
+  padding: 8px 12px; border: 1px solid var(--border); border-radius: var(--r-card);
+  background: var(--card); }
+.td-c-mark { flex-shrink: 0; font-family: var(--mono); font-size: 13px; font-weight: 700;
+  width: 18px; height: 18px; display: grid; place-items: center; border-radius: 50%;
+  line-height: 1; }
+.td-c-text { font-size: 13px; line-height: 1.5; color: var(--ink); max-width: 72ch; }
+
+/* Severe concerns: accent border-left and accent mark, so the eye lands on them
+   before it reads them. The tint stays off the card so a long list does not
+   turn the panel into a wall of alarm. */
+.td-c-severe { border-left: 3px solid var(--accent); }
+.td-c-severe .td-c-mark { color: var(--card); background: var(--accent); }
+
+/* Notes: muted, a soft border, so a low-severity line does not compete with a
+   severe one for attention. */
+.td-c-note { border-left: 3px solid var(--border-strong); }
+.td-c-note .td-c-mark { color: var(--muted); border: 1px solid var(--border-strong); }
+
+/* ---- copy button ------------------------------------------------------------ */
+
+.td-copy { flex-shrink: 0; font: inherit; font-size: 12px; font-weight: 600;
+  color: var(--muted); background: transparent; border: 1px solid var(--border);
+  border-radius: var(--r-btn); padding: 4px 12px; cursor: pointer;
+  transition: border-color var(--t-fast) var(--ease), color var(--t-fast) var(--ease),
+    background var(--t-fast) var(--ease); }
+.td-copy:hover { border-color: var(--accent); color: var(--accent-text); background: var(--accent-soft);
+  transition-duration: var(--t-slow); }
+.td-copy:disabled { opacity: 0.6; cursor: default; }
+
+@media (max-width: 560px) {
+  .td-panel { max-width: 100%; }
+  .td-w { flex-wrap: wrap; }
+}

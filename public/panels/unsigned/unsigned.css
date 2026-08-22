@@ -1,0 +1,56 @@
+/* unsigned — changes shipped without explicit owner sign-off.
+   Every custom property used here is defined in shell.css. Verified by reading the
+   definition, not a mention: --accent, --accent-soft, --accent-text, --accent-text-bg,
+   --card, --bg, --ink, --muted, --border, --border-strong, --mono, --r-card, --r-btn
+   all have :root definitions in shell.css and carry dark-theme overrides. */
+
+.un-panel { max-width: 720px; }
+
+.un-lede { color: var(--muted); font-size: 13px; line-height: 1.5; margin: 0 0 18px; max-width: 72ch; }
+.un-loading { color: var(--muted); font-size: 13px; }
+.un-alarm { color: var(--ink); font-size: 13px; margin: 0; }
+.un-empty { color: var(--muted); font-size: 13px; padding: 8px 0; line-height: 1.5; max-width: 72ch; }
+
+.un-h2 { font-size: 13px; text-transform: uppercase; letter-spacing: .07em; color: var(--muted);
+  margin: 28px 0 10px; padding-bottom: 6px; border-bottom: 1px solid var(--border); }
+.un-panel > .un-h2:first-of-type { margin-top: 10px; }
+
+.un-n { font-variant-numeric: tabular-nums; color: var(--accent-text); background: var(--accent-soft);
+  border-radius: 10px; padding: 1px 8px; font-size: 13px; margin-left: 6px; }
+
+/* ---- the card -------------------------------------------------------------- */
+
+.un-card { background: var(--card); border: 1px solid var(--border); border-radius: var(--r-card);
+  padding: 12px 16px; margin-bottom: 8px; position: relative; }
+
+/* The accent left rule marks an unsigned change the way the other panels mark
+   their records: a 3px accent border-left, not a full accent border, so the card
+   stays calm and the rule reads as "this is unreviewed" rather than "this is an alert". */
+.un-card { border-left: 3px solid var(--accent); }
+
+/* ---- meta line: kind, ref, project, who, when ------------------------------ */
+
+.un-meta { font-family: var(--mono); font-size: 11px; display: flex; flex-wrap: wrap; gap: 9px;
+  align-items: center; margin-bottom: 6px; }
+
+/* The kind label: a compact pill distinguishing a code commit from a handover filing.
+   Commit is the accent (the more common case), handover is muted so it reads as a
+   different kind of record, not a different priority. */
+.un-kind { font-size: 10px; text-transform: uppercase; letter-spacing: .06em;
+  padding: 1px 6px; border-radius: 3px; border: 1px solid var(--border); color: var(--muted); }
+.un-kind-commit { color: var(--accent-text); border-color: var(--accent); background: var(--accent-soft); }
+.un-kind-handover { color: var(--muted); border-color: var(--border); background: transparent; }
+
+.un-ref { color: var(--ink); font-weight: 600; }
+.un-project { color: var(--muted); }
+.un-who { color: var(--ink); }
+.un-when { color: var(--muted); margin-left: auto; }
+
+/* ---- the title / description ------------------------------------------------ */
+
+.un-text { margin: 0; font-size: 14px; line-height: 1.42; color: var(--ink); max-width: 72ch; }
+
+@media (max-width: 560px) {
+  .un-panel { max-width: 100%; }
+  .un-when { margin-left: 0; }
+}

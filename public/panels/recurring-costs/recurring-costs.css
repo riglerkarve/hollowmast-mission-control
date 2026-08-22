@@ -1,0 +1,47 @@
+/* recurring-costs — recurring/subscription costs grouped by description.
+   Every custom property used here is defined in shell.css. Verified by reading the
+   definition, not a mention: --accent, --accent-soft, --accent-text, --accent-text-bg,
+   --card, --bg, --ink, --muted, --border, --border-strong, --mono, --r-card, --r-btn
+   all have :root definitions in shell.css and carry dark-theme overrides. */
+
+.rc-panel { max-width: 720px; }
+
+.rc-lede { color: var(--muted); font-size: 13px; line-height: 1.5; margin: 0 0 18px; max-width: 72ch; }
+.rc-loading { color: var(--muted); font-size: 13px; }
+.rc-alarm { color: var(--ink); font-size: 13px; margin: 0; }
+.rc-empty { color: var(--muted); font-size: 13px; padding: 8px 0; line-height: 1.5; max-width: 72ch; }
+
+/* The prominent total monthly cost block. The accent left rule marks it the way
+   decisions.css marks a due card: a 3px accent border-left on a card, so it reads
+   as "this is the headline figure" rather than "this is an alert". */
+.rc-total { background: var(--card); border: 1px solid var(--border); border-radius: var(--r-card);
+  padding: 16px 18px; margin-bottom: 18px; display: flex; align-items: baseline; gap: 14px;
+  border-left: 3px solid var(--accent); }
+@media (prefers-color-scheme: dark) {
+  /* --accent-soft is very dark in the dark theme. Keep the ground as --card so the
+     block does not disappear into the page; the accent rule carries the emphasis. */
+  .rc-total { background: var(--card); }
+}
+
+.rc-total-label { font-size: 11px; text-transform: uppercase; letter-spacing: .07em; color: var(--muted); }
+.rc-total-value { font-size: 28px; font-weight: 700; color: var(--ink); font-variant-numeric: tabular-nums; }
+.rc-total-count { font-family: var(--mono); font-size: 11px; color: var(--muted); margin-left: auto; }
+
+/* The table. */
+.rc-table { width: 100%; border-collapse: collapse; font-size: 13px; }
+.rc-table th { text-align: left; font-size: 10px; text-transform: uppercase; letter-spacing: .09em;
+  color: var(--muted); padding: 6px 10px 6px 0; border-bottom: 1px solid var(--border); }
+.rc-table th.rc-num { text-align: right; }
+.rc-row { border-bottom: 1px solid var(--border); }
+.rc-row td { padding: 8px 10px 8px 0; color: var(--ink); }
+.rc-desc { max-width: 40ch; }
+.rc-num { text-align: right; font-variant-numeric: tabular-nums; font-family: var(--mono); }
+/* The avg/month column is the figure that drives the sort and the total, so it
+   carries the accent-text weight to read as the column that matters. */
+.rc-avg { font-weight: 600; color: var(--accent-text); }
+.rc-date { font-family: var(--mono); font-size: 12px; color: var(--muted); }
+
+@media (max-width: 560px) {
+  .rc-panel { max-width: 100%; }
+  .rc-total { flex-wrap: wrap; }
+}

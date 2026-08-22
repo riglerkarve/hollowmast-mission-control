@@ -1,0 +1,87 @@
+/* goal-staleness — flags goals whose steps have not moved in 30+ days.
+   Every custom property used here is defined in shell.css. Verified by reading
+   the definition, not a mention: --accent, --accent-soft, --accent-text,
+   --card, --bg, --ink, --muted, --border, --border-strong, --mono, --r-card
+   all have :root definitions in shell.css and carry dark-theme overrides. */
+
+.gs-panel { max-width: 720px; }
+
+.gs-lede { color: var(--muted); font-size: 13px; line-height: 1.5; margin: 0 0 18px; max-width: 72ch; }
+.gs-loading { color: var(--muted); font-size: 13px; }
+.gs-alarm { color: var(--ink); font-size: 13px; margin: 0; }
+.gs-empty { color: var(--muted); font-size: 13px; padding: 8px 0; line-height: 1.5; max-width: 72ch; }
+.gs-asof { font-family: var(--mono); font-size: 11px; color: var(--muted); margin: 0 0 10px; }
+
+/* ---- summary line ---------------------------------------------------------- */
+
+.gs-summary { display: flex; flex-wrap: wrap; gap: 12px; margin: 0 0 6px; }
+.gs-sum { font-family: var(--mono); font-size: 12px; font-variant-numeric: tabular-nums;
+  padding: 2px 10px; border-radius: 10px; }
+.gs-sum-stale { color: var(--accent-text); background: var(--accent-soft);
+  border: 1px solid var(--accent); }
+.gs-sum-slowing { color: var(--muted); background: var(--card);
+  border: 1px solid var(--border-strong); }
+.gs-sum-active { color: #4caf50; background: rgba(76, 175, 80, 0.08);
+  border: 1px solid rgba(76, 175, 80, 0.3); }
+
+/* ---- the card -------------------------------------------------------------- */
+
+.gs-card { background: var(--card); border: 1px solid var(--border); border-radius: var(--r-card);
+  padding: 14px 16px; margin-bottom: 10px; position: relative;
+  border-left: 3px solid var(--border-strong); }
+
+/* Stale (30+ days): accent left rule and soft accent tint, the same way
+   decisions.js marks a due card. This is the section the owner must not miss,
+   so it carries the accent rule and tint. */
+.gs-stale { border-left-color: var(--accent); background: var(--accent-soft); }
+@media (prefers-color-scheme: dark) {
+  /* --accent-soft is very dark in the dark theme. The accent rule alone
+     carries the emphasis there; keep the ground as --card so the card does
+     not disappear into the page. Same pattern as decisions.css .dc-due. */
+  .gs-stale { background: var(--card); }
+}
+
+/* Slowing (7+ days): muted left rule, no tint. A warning, not an alarm. */
+.gs-slowing { border-left-color: var(--muted); }
+
+/* Active (< 7 days): green-ish left rule. Movement is the good state. */
+.gs-active { border-left-color: #4caf50; }
+
+.gs-title { margin: 0 0 8px; font-size: 15px; line-height: 1.42; color: var(--ink);
+  max-width: 60ch; padding-right: 70px; }
+
+/* ---- the badge ------------------------------------------------------------- */
+/* Sits at the top-right, in the accent for stale, muted for slowing, green for
+   active. The first thing the eye lands on, the same way .dc-badge works. */
+
+.gs-badge { position: absolute; top: 12px; right: 14px;
+  font-family: var(--mono); font-size: 10px; text-transform: uppercase; letter-spacing: .06em;
+  border-radius: 3px; padding: 2px 7px; }
+.gs-badge-stale { color: var(--accent-text); background: var(--accent-soft);
+  border: 1px solid var(--accent); }
+/* On the stale card the badge sits on the same --accent-soft ground; invert it
+   so it does not vanish into the tint, same as .dc-due .dc-badge. */
+.gs-stale .gs-badge-stale { color: var(--card); background: var(--accent);
+  border-color: var(--accent); }
+.gs-badge-slowing { color: var(--muted); background: var(--card);
+  border: 1px solid var(--border-strong); }
+.gs-badge-active { color: #4caf50; background: rgba(76, 175, 80, 0.08);
+  border: 1px solid rgba(76, 175, 80, 0.3); }
+
+/* ---- progress + days ------------------------------------------------------- */
+
+.gs-progress { display: flex; align-items: center; gap: 10px; margin: 0 0 6px; }
+.gs-count { font-family: var(--mono); font-size: 12px; color: var(--muted);
+  font-variant-numeric: tabular-nums; white-space: nowrap; }
+.gs-bar { flex: 1; height: 4px; background: var(--border); border-radius: 2px;
+  overflow: hidden; max-width: 180px; }
+.gs-bar-fill { display: block; height: 100%; background: var(--accent); border-radius: 2px; }
+
+.gs-meta { font-family: var(--mono); font-size: 11px; color: var(--muted); margin: 0; }
+.gs-days { font-variant-numeric: tabular-nums; }
+.gs-days-null { color: var(--border-strong); }
+
+@media (max-width: 560px) {
+  .gs-panel { max-width: 100%; }
+  .gs-title { padding-right: 0; }
+}

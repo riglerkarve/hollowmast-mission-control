@@ -1,0 +1,423 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+<title>Mission Control — Mobile</title>
+<link rel="stylesheet" href="/shell.css">
+<style>
+  /* Mobile shell — text-first, no sidebar, one scroll.
+     The desktop dashboard has 22 panels in a sidebar layout. This page has
+     four sections in a single column, designed for a phone screen. */
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body { background: var(--bg); color: var(--ink);
+    font-family: -apple-system, system-ui, sans-serif; font-size: 15px;
+    line-height: 1.5; -webkit-text-size-adjust: 100%; }
+
+  .m-head { background: var(--sidebar-bg); color: var(--sidebar-ink);
+    padding: 12px 16px; display: flex; align-items: center; gap: 10px;
+    position: sticky; top: 0; z-index: 10; }
+  .m-head h1 { font-size: 16px; font-weight: 600; }
+  .m-head a { margin-left: auto; color: var(--sidebar-muted); font-size: 12px;
+    text-decoration: none; }
+
+  .m-tabs { display: flex; background: var(--card); border-bottom: 1px solid var(--border);
+    position: sticky; top: 44px; z-index: 9; }
+  .m-tab { flex: 1; padding: 10px 4px; text-align: center; background: none;
+    border: none; color: var(--muted); font: inherit; font-size: 12px;
+    cursor: pointer; border-bottom: 2px solid transparent; }
+  .m-tab.active { color: var(--accent-text); border-bottom-color: var(--accent); }
+
+  .m-body { padding: 12px 14px 80px; }
+  .m-section { display: none; }
+  .m-section.active { display: block; }
+
+  .m-card { background: var(--card); border: 1px solid var(--border);
+    border-radius: var(--r-card); padding: 12px 14px; margin-bottom: 10px; }
+  .m-card h2 { font-size: 13px; text-transform: uppercase; letter-spacing: .07em;
+    color: var(--muted); margin-bottom: 8px; }
+  .m-lede { font-size: 13px; color: var(--muted); margin-bottom: 8px; }
+
+  .m-list { list-style: none; }
+  .m-list li { padding: 6px 0; border-top: 1px solid var(--border); font-size: 14px; }
+  .m-list li:first-child { border-top: none; }
+  .m-urgency-p1 { color: var(--accent-text); font-weight: 500; }
+  .m-when { font-size: 11px; color: var(--muted); font-family: var(--mono); }
+  .m-who { font-size: 11px; color: var(--accent-text); font-weight: 500; }
+  .m-empty { color: var(--muted); font-style: italic; font-size: 13px; padding: 6px 0; }
+
+  /* Activity items */
+  .m-act { padding: 8px 0; border-top: 1px solid var(--border); }
+  .m-act:first-child { border-top: none; }
+  .m-act-head { display: flex; gap: 8px; align-items: baseline; }
+  .m-act-who { font-size: 12px; font-weight: 500; }
+  .m-act-when { font-size: 10px; color: var(--muted); margin-left: auto; }
+  .m-act-what { font-size: 13px; color: var(--ink); margin-top: 2px; }
+  .m-act-kind { font-size: 9px; text-transform: uppercase; letter-spacing: .05em;
+    color: var(--muted); border: 1px solid var(--border); border-radius: 3px;
+    padding: 0 4px; margin-right: 6px; }
+
+  /* Inbox */
+  .m-msg { padding: 8px 0; border-top: 1px solid var(--border); }
+  .m-msg:first-child { border-top: none; }
+  .m-msg-you { text-align: right; }
+  .m-msg-you .m-msg-text { background: var(--accent-soft); color: var(--accent-text);
+    border-radius: 10px; padding: 6px 10px; display: inline-block; max-width: 80%;
+    text-align: left; }
+  .m-msg-agent .m-msg-text { background: var(--card); border: 1px solid var(--border);
+    border-radius: 10px; padding: 6px 10px; display: inline-block; max-width: 80%; }
+  .m-msg-meta { font-size: 10px; color: var(--muted); margin-top: 2px; }
+
+  .m-input-row { position: fixed; bottom: 0; left: 0; right: 0; background: var(--card);
+    border-top: 1px solid var(--border); padding: 8px 12px; display: flex; gap: 8px; }
+  .m-input { flex: 1; background: var(--bg); border: 1px solid var(--border-strong);
+    border-radius: var(--r-btn); padding: 8px 10px; font: inherit; font-size: 14px; }
+  .m-send { background: var(--accent-soft); color: var(--accent-text);
+    border: 1px solid var(--accent); border-radius: var(--r-btn);
+    padding: 8px 14px; font: inherit; font-size: 13px; cursor: pointer; }
+
+  /* Voice */
+  .m-voice { text-align: center; padding: 20px 0; }
+  .m-mic { display: inline-flex; flex-direction: column; align-items: center; gap: 8px;
+    background: var(--card); border: 2px solid var(--border-strong); border-radius: 50%;
+    width: 80px; height: 80px; cursor: pointer; }
+  .m-mic.recording { border-color: var(--accent); background: var(--accent-soft); }
+  .m-mic svg { width: 28px; height: 28px; fill: var(--ink); margin-top: 14px; }
+  .m-mic span { font-size: 10px; color: var(--muted); }
+  .m-talkback { margin: 12px 0; font-size: 13px; color: var(--muted); }
+  .m-talkback input { accent-color: var(--accent); }
+  .m-transcript { margin: 12px 0; font-size: 14px; min-height: 24px; }
+  .m-quick { display: flex; flex-wrap: wrap; gap: 6px; margin: 8px 0; }
+  .m-qa { background: var(--card); border: 1px solid var(--border-strong);
+    border-radius: var(--r-btn); padding: 7px 12px; font-size: 13px;
+    cursor: pointer; color: var(--ink); }
+  .m-qa:active { background: var(--accent-soft); }
+</style>
+</head>
+<body>
+  <div class="m-head">
+    <h1>Mission Control</h1>
+    <button id="mMvosBtn" class="m-qa" style="margin-right:6px">⌘K</button>
+    <a href="/">Desktop</a>
+  </div>
+
+  <div class="m-tabs">
+    <button class="m-tab active" data-section="briefing">Briefing</button>
+    <button class="m-tab" data-section="activity">Activity</button>
+    <button class="m-tab" data-section="inbox">Inbox</button>
+    <button class="m-tab" data-section="voice">Voice</button>
+  </div>
+
+  <div class="m-body">
+    <!-- BRIEFING -->
+    <div class="m-section active" id="m-briefing">
+      <div class="m-card"><h2>Needs you</h2><div id="m-needs"></div></div>
+      <div class="m-card"><h2>Happened</h2><div id="m-happened"></div></div>
+      <div class="m-card"><h2>Moved</h2><div id="m-moved"></div></div>
+    </div>
+
+    <!-- ACTIVITY -->
+    <div class="m-section" id="m-activity">
+      <div class="m-card"><h2>Activity</h2><div id="m-act-list"></div></div>
+    </div>
+
+    <!-- INBOX -->
+    <div class="m-section" id="m-inbox">
+      <div class="m-card"><h2>Messages</h2><div id="m-msg-list"></div></div>
+    </div>
+
+    <!-- VOICE -->
+    <div class="m-section" id="m-voice">
+      <div class="m-card">
+        <h2>Click to talk</h2>
+        <div class="m-voice">
+          <button class="m-mic" id="mMic">
+            <svg viewBox="0 0 24 24" aria-hidden="true">
+              <path d="M12 2a3 3 0 0 0-3 3v6a3 3 0 0 0 6 0V5a3 3 0 0 0-3-3z"/>
+              <path d="M19 11a7 7 0 0 1-14 0M12 18v4M8 22h8" fill="none"
+                stroke="currentColor" stroke-width="2" stroke-linecap="round"/>
+            </svg>
+            <span id="mMicLabel">Tap to talk</span>
+          </button>
+        </div>
+        <div class="m-transcript" id="mTranscript"></div>
+        <div class="m-quick">
+          <button class="m-qa" data-cmd="morning">Briefing</button>
+          <button class="m-qa" data-cmd="today">Today</button>
+          <button class="m-qa" data-cmd="stuck">Stuck</button>
+          <button class="m-qa" data-cmd="who">Who</button>
+          <button class="m-qa" data-cmd="spark">Spark</button>
+          <button class="m-qa" data-cmd="connect">Connect</button>
+          <button class="m-qa" data-cmd="journal">Journal</button>
+          <button class="m-qa" data-cmd="ventures">Ventures</button>
+          <button class="m-qa" data-cmd="go">Focus</button>
+        </div>
+        <label class="m-talkback">
+          <input type="checkbox" id="mTalk"> Talk back
+        </label>
+      </div>
+    </div>
+  </div>
+
+  <!-- Inbox input bar (fixed at bottom, only visible on inbox tab) -->
+  <div class="m-input-row" id="mInputRow" style="display:none">
+    <input class="m-input" id="mMsgInput" placeholder="Send a message..." />
+    <button class="m-send" id="mMsgSend">Send</button>
+  </div>
+
+  <audio id="mAudio" style="display:none"></audio>
+
+  <script type="module">
+  // Mobile shell — fetches the same API routes as the desktop panels, but
+  // renders as plain text in a single column. No imports, no panel system,
+  // no sidebar. One page, four tabs, one scroll.
+
+  // MVOS command bar — import for mobile
+  import { toggle as toggleCmdBar } from '/mvos/commandbar.js';
+  // Wire the ⌘K button and long-press header
+  document.addEventListener('DOMContentLoaded', () => {
+    const btn = document.getElementById('mMvosBtn');
+    if (btn) btn.addEventListener('click', () => toggleCmdBar());
+    const h = document.querySelector('.m-head');
+    if (h) {
+      let pressTimer = null;
+      h.addEventListener('touchstart', (e) => {
+        if (e.target === btn || e.target.closest('a')) return;
+        pressTimer = setTimeout(() => { toggleCmdBar(); pressTimer = null; }, 600);
+      });
+      h.addEventListener('touchend', () => { if (pressTimer) clearTimeout(pressTimer); });
+    }
+  });
+
+  const esc = (s) => String(s == null ? '' : s)
+    .replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;')
+    .replace(/"/g,'&quot;');
+
+  function relTime(iso) {
+    if (!iso) return '';
+    const d = new Date(iso.includes(' ') && !iso.endsWith('Z') ? iso.replace(' ', 'T') + 'Z' : iso);
+    const diff = Date.now() - d.getTime();
+    if (isNaN(diff)) return '';
+    const mins = Math.floor(diff / 60000);
+    if (mins < 1) return 'just now';
+    if (mins < 60) return mins + 'm ago';
+    const hrs = Math.floor(mins / 60);
+    if (hrs < 24) return hrs + 'h ago';
+    return Math.floor(hrs / 24) + 'd ago';
+  }
+
+  // --- tab switching ---
+  const tabs = document.querySelectorAll('.m-tab');
+  const sections = document.querySelectorAll('.m-section');
+  const inputRow = document.getElementById('mInputRow');
+  tabs.forEach((tab) => {
+    tab.addEventListener('click', () => {
+      tabs.forEach((t) => t.classList.remove('active'));
+      sections.forEach((s) => s.classList.remove('active'));
+      tab.classList.add('active');
+      const target = tab.dataset.section;
+      document.getElementById('m-' + target).classList.add('active');
+      inputRow.style.display = target === 'inbox' ? 'flex' : 'none';
+      if (target === 'briefing') loadBriefing();
+      if (target === 'activity') loadActivity();
+      if (target === 'inbox') loadInbox();
+    });
+  });
+
+  // --- briefing ---
+  async function loadBriefing() {
+    try {
+      const r = await fetch('/api/briefing/morning');
+      if (!r.ok) return;
+      const d = await r.json();
+      const needs = d.needsYou || [];
+      const happened = d.happened || [];
+      const moved = d.moved || [];
+      document.getElementById('m-needs').innerHTML = needs.length
+        ? '<ul class="m-list">' + needs.map((n) =>
+            `<li class="${n.urgency === 'P1' ? 'm-urgency-p1' : ''}">${esc(n.text)} <span class="m-when">${esc(n.source)}</span></li>`
+          ).join('') + '</ul>'
+        : '<p class="m-empty">Nothing needs you.</p>';
+      document.getElementById('m-happened').innerHTML = happened.length
+        ? '<ul class="m-list">' + happened.map((h) =>
+            `<li><span class="m-who">${esc(h.who)}</span> ${esc(h.text)} <span class="m-when">${relTime(h.when)}</span></li>`
+          ).join('') + '</ul>'
+        : '<p class="m-empty">Quiet since last briefing.</p>';
+      document.getElementById('m-moved').innerHTML = moved.length
+        ? '<ul class="m-list">' + moved.map((m) =>
+            `<li>${esc(m.text)} <span class="m-when">${esc(m.from)} → ${esc(m.to)}</span></li>`
+          ).join('') + '</ul>'
+        : '<p class="m-empty">Nothing moved.</p>';
+    } catch {}
+  }
+
+  // --- activity ---
+  async function loadActivity() {
+    try {
+      const r = await fetch('/api/activity/stream?hours=24');
+      if (!r.ok) return;
+      const d = await r.json();
+      const items = d.items || [];
+      document.getElementById('m-act-list').innerHTML = items.length
+        ? items.slice(0, 50).map((i) =>
+            `<div class="m-act"><div class="m-act-head"><span class="m-act-kind">${esc(i.kind)}</span><span class="m-act-who">${esc(i.who)}</span><span class="m-act-when">${relTime(i.when)}</span></div><div class="m-act-what">${esc(i.what)}</div></div>`
+          ).join('')
+        : '<p class="m-empty">No activity in the last 24 hours.</p>';
+    } catch {}
+  }
+
+  // --- inbox ---
+  async function loadInbox() {
+    try {
+      const r = await fetch('/api/inbox/thread?threadId=general');
+      if (!r.ok) return;
+      const d = await r.json();
+      const msgs = d.messages || [];
+      document.getElementById('m-msg-list').innerHTML = msgs.length
+        ? msgs.map((m) =>
+            `<div class="m-msg ${m.from === 'you' ? 'm-msg-you' : 'm-msg-agent'}"><div class="m-msg-text">${esc(m.text)}</div><div class="m-msg-meta">${esc(m.from)} → ${esc(m.to)} · ${relTime(m.createdAt)}</div></div>`
+          ).join('')
+        : '<p class="m-empty">No messages yet.</p>';
+    } catch {}
+  }
+
+  // --- inbox send ---
+  document.getElementById('mMsgSend').addEventListener('click', async () => {
+    const input = document.getElementById('mMsgInput');
+    const text = input.value.trim();
+    if (!text) return;
+    input.value = '';
+    await fetch('/api/inbox/send', {
+      method: 'POST', headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ to: 'all', text }),
+    });
+    loadInbox();
+  });
+  document.getElementById('mMsgInput').addEventListener('keydown', (e) => {
+    if (e.key === 'Enter') { e.preventDefault(); document.getElementById('mMsgSend').click(); }
+  });
+
+  // --- voice ---
+  let recorder = null, chunks = [], recording = false, stream = null;
+  let talkBack = false;
+  const micBtn = document.getElementById('mMic');
+  const micLabel = document.getElementById('mMicLabel');
+  const transcriptEl = document.getElementById('mTranscript');
+  const audioEl = document.getElementById('mAudio');
+
+  document.getElementById('mTalk').addEventListener('change', (e) => {
+    talkBack = e.target.checked;
+  });
+
+  micBtn.addEventListener('click', async () => {
+    if (recording) { stopRec(); return; }
+    try { stream = await navigator.mediaDevices.getUserMedia({ audio: true }); }
+    catch { transcriptEl.innerHTML = '<span style="color:var(--accent-text)">Microphone unavailable.</span>'; return; }
+    chunks = [];
+    recorder = new MediaRecorder(stream);
+    recorder.ondataavailable = (e) => { if (e.data.size) chunks.push(e.data); };
+    recorder.onstop = transcribe;
+    recorder.start();
+    recording = true;
+    micBtn.classList.add('recording');
+    micLabel.textContent = 'Tap to stop';
+  });
+
+  function stopRec() {
+    if (!recording) return;
+    recorder.stop();
+    stream.getTracks().forEach((t) => t.stop());
+    recording = false;
+    micBtn.classList.remove('recording');
+    micLabel.textContent = 'Tap to talk';
+  }
+
+  async function transcribe() {
+    if (!chunks.length) return;
+    const blob = new Blob(chunks, { type: 'audio/webm' });
+    transcriptEl.innerHTML = '<span style="color:var(--muted);font-style:italic">Transcribing...</span>';
+    try {
+      const r = await fetch('/api/voice/stt', { method: 'POST',
+        headers: { 'Content-Type': 'audio/webm' }, body: blob });
+      if (!r.ok) { const e = await r.json().catch(() => ({}));
+        transcriptEl.innerHTML = '<span style="color:var(--accent-text)">' + esc(e.error || 'Failed') + '</span>'; return; }
+      const d = await r.json();
+      const text = (d.text || '').trim();
+      if (!text) { transcriptEl.innerHTML = '<span style="color:var(--muted)">No speech detected.</span>'; return; }
+      transcriptEl.innerHTML = '<span>' + esc(text) + '</span>';
+      // Send to command route and execute
+      mCommand(text);
+    } catch (err) { transcriptEl.innerHTML = '<span style="color:var(--accent-text)">Server unreachable.</span>'; }
+  }
+
+  // Voice command loop for mobile — same as the desktop voice panel.
+  async function mCommand(text) {
+    let cmd;
+    try {
+      const r = await fetch('/api/voice/command', {
+        method: 'POST', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ text }),
+      });
+      if (!r.ok) return;
+      const d = await r.json();
+      cmd = d.action || d;
+    } catch { return; }
+    if (!cmd) return;
+
+    if (cmd.intent === 'navigate' && cmd.panel) {
+      transcriptEl.innerHTML = '<span style="color:var(--accent-text)">Opening ' + esc(cmd.panel) + '...</span>';
+      // On mobile, switch to the relevant tab if possible
+      if (cmd.panel === 'briefing') document.querySelector('[data-section="briefing"]').click();
+      else if (cmd.panel === 'activity') document.querySelector('[data-section="activity"]').click();
+      else if (cmd.panel === 'inbox') document.querySelector('[data-section="inbox"]').click();
+      if (talkBack) speak('Opening ' + cmd.panel + '.');
+      return;
+    }
+    if ((cmd.intent === 'query' || cmd.intent === 'briefing' || cmd.intent === 'status') && cmd.api) {
+      try {
+        const r = await fetch(cmd.api);
+        if (!r.ok) return;
+        const data = await r.json();
+        let spoken = 'Response received.';
+        if (cmd.api.includes('/briefing')) {
+          spoken = (data.needsYou || []).length + ' items need you, ' + (data.happened || []).length + ' things happened.';
+        } else if (cmd.api.includes('/stale')) {
+          spoken = (data.items || []).length + ' items are stale.';
+        } else if (cmd.api.includes('/sessions/active')) {
+          const a = data.active || [];
+          spoken = a.length ? a.length + ' agents active.' : 'No agents active.';
+        } else if (cmd.api.includes('/board')) {
+          spoken = ((data.counts || {}).externalOpen || 0) + ' open items.';
+        }
+        transcriptEl.innerHTML = '<span>' + esc(spoken) + '</span>';
+        if (talkBack || cmd.speak) speak(spoken);
+      } catch {}
+      return;
+    }
+  }
+
+  async function speak(text) {
+    try {
+      const r = await fetch('/api/voice/tts', { method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ text }) });
+      if (!r.ok) return;
+      const blob = await r.blob();
+      audioEl.src = URL.createObjectURL(blob);
+      audioEl.play().catch(() => {});
+    } catch {}
+  }
+
+  // Quick action buttons on mobile
+  document.querySelectorAll('.m-qa').forEach((btn) => {
+    btn.addEventListener('click', () => {
+      const cmd = btn.dataset.cmd;
+      if (cmd) mCommand(cmd);
+    });
+  });
+
+  // Load briefing on first open
+  loadBriefing();
+  </script>
+</body>
+</html>

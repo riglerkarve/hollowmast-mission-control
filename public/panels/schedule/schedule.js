@@ -18,6 +18,7 @@
 // every relative figure on screen is relative to today, and a panel left open overnight
 // would otherwise sit there quietly claiming yesterday.
 
+import { renderLede } from '/panels/lede/lede.js';
 const KINDS = ['appointment', 'deadline', 'reminder', 'other'];
 const MONTHS = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
 
@@ -315,6 +316,7 @@ export default {
     root = el;
     token += 1;
     el.innerHTML = TEMPLATE;
+    renderLede('schedule', el);
 
     el.querySelector('#scAdd').addEventListener('submit', async (ev) => {
       ev.preventDefault();

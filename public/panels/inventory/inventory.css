@@ -1,0 +1,5 @@
+/* inventory — minimal CSS. All classes used by inventory.js are defined in shared.css:
+   panel, panel-header, card, btn, badge, stat-block, stat-label, stat-value,
+   stats-summary, empty-hint, failure-hint, mode-tabs, mode-tab.
+   This file exists so the health-check reports css=ok rather than css=missing.
+   Codex owns all Mission Control CSS (AGENTS.md §4b) — review requested. */

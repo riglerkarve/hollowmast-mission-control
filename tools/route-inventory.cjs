@@ -28,9 +28,17 @@ function inventory() {
   const files = fs.readdirSync(ROUTES_DIR)
     .filter((file) => file.endsWith('.js'))
     .map((file) => file.replace(/\.js$/, ''));
-  const required = new Set([...index.matchAll(/require\('\.\/routes\/([a-z0-9-]+)'\)/g)].map((match) => match[1]));
-  const variableToFile = new Map([...index.matchAll(/const\s+(\w+)\s*=\s*require\('\.\/routes\/([a-z0-9-]+)'\)/g)]
-    .map((match) => [match[1], match[2]]));
+  // M246: The require regex must accept an optional .js suffix. Node.js treats
+  // require('./routes/command') and require('./routes/command.js') identically,
+  // but the old regex only matched the unsuffixed form — so a route required
+  // with .js was reported as "NOT REQUIRED" (dead code) even though it was
+  // loaded and mounted correctly. The fix: optionally match .js before the
+  // closing quote, and strip it from the captured name so the Set still holds
+  // bare names that match the filenames from readdirSync.
+  const required = new Set([...index.matchAll(/require\('\.\/routes\/([a-z0-9-]+(?:\.js)?)'\)/g)]
+    .map((match) => match[1].replace(/\.js$/, '')));
+  const variableToFile = new Map([...index.matchAll(/const\s+(\w+)\s*=\s*require\('\.\/routes\/([a-z0-9-]+(?:\.js)?)'\)/g)]
+    .map((match) => [match[1], match[2].replace(/\.js$/, '')]));
   const mounts = [...index.matchAll(/app\.use\('([^']+)',\s*(\w+)\)/g)]
     .map((match) => ({ prefix: match[1], file: variableToFile.get(match[2]) || null, variable: match[2] }));
 

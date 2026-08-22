@@ -10,6 +10,7 @@
 //     refused. An empty log is captioned rather than left blank, because a blank list
 //     reads as "nothing was refused" when it may mean "nothing ever asked".
 
+import { renderLede } from '/panels/lede/lede.js';
 let root = null;
 
 const REASONS = {
@@ -267,6 +268,7 @@ export default {
   mount(el) {
     root = el;
     el.innerHTML = TEMPLATE;
+    renderLede('safety', el);
 
     el.querySelector('#sfLimits').addEventListener('submit', async (ev) => {
       ev.preventDefault();

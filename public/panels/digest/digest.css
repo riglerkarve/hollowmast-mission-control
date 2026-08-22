@@ -1,0 +1,179 @@
+/* digest — the plain-language team digest panel.
+   Tokens are from shell.css. No custom properties defined here; the panel
+   uses the shared palette so it matches every other card. */
+
+/* The summary is the panel heading: large, plain, the first thing the owner
+   reads.  It sits in the panel header beside the Read aloud button. */
+.dg-summary {
+  font-size: 1.25rem;
+  font-weight: 600;
+  line-height: 1.35;
+  color: var(--ink);
+  margin: 0;
+  flex: 1;
+  min-width: 0;
+}
+
+/* The "Read aloud" button.  Uses .btn from shared.css; narrowed like briefing. */
+.dg-read-aloud { padding: 6px 14px; font-size: 0.82rem; flex-shrink: 0; }
+
+/* A failure note from the route (e.g. team report unreachable) — quiet but
+   visible, so absence and failure never look the same. */
+.dg-note {
+  font-size: 0.82rem;
+  color: var(--accent-text);
+  background: var(--accent-soft);
+  border-left: 3px solid var(--accent);
+  padding: 8px 12px;
+  border-radius: 0 6px 6px 0;
+  margin: 0 0 12px;
+}
+
+/* Each section card inherits .card from shared.css. */
+.dg-card h2 {
+  font-size: 0.82rem;
+  text-transform: uppercase;
+  letter-spacing: 0.07em;
+  color: var(--muted);
+  margin: 0 0 10px;
+  padding-bottom: 6px;
+  border-bottom: 1px solid var(--border);
+}
+
+/* The list used by both highlights and concerns. */
+.dg-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+/* --- Highlights ------------------------------------------------------ */
+
+.dg-hi {
+  display: flex;
+  align-items: baseline;
+  gap: 8px;
+  font-size: 0.88rem;
+  line-height: 1.4;
+}
+
+/* Agent badge — mono, accent-tinted, so the eye can scan who said what. */
+.dg-badge {
+  font-family: var(--mono);
+  font-size: 0.72rem;
+  font-weight: 700;
+  letter-spacing: 0.02em;
+  padding: 1px 7px;
+  border-radius: 4px;
+  background: var(--accent-soft);
+  color: var(--accent-text);
+  flex-shrink: 0;
+  white-space: nowrap;
+}
+
+.dg-hi-text {
+  flex: 1;
+  min-width: 0;
+  color: var(--ink);
+  word-break: break-word;
+}
+
+.dg-when {
+  font-size: 0.72rem;
+  color: var(--muted);
+  flex-shrink: 0;
+  font-family: var(--mono);
+}
+
+/* --- Working now ---------------------------------------------------- */
+
+.dg-work-row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px 16px;
+  align-items: center;
+}
+
+.dg-work {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 0.85rem;
+  color: var(--ink);
+}
+
+/* Status dot — green-ish when active, muted when not.  Uses accent tokens so
+   it tracks the shell theme rather than a hardcoded colour. */
+.dg-work::before {
+  content: '';
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  flex-shrink: 0;
+}
+.dg-dot-active::before { background: var(--accent); }
+.dg-dot-quiet::before { background: var(--muted); opacity: 0.5; }
+
+.dg-work-agent { font-weight: 600; color: var(--accent-text); }
+.dg-work-sep { color: var(--muted); }
+.dg-work-task { color: var(--ink); }
+
+/* --- Concerns ------------------------------------------------------- */
+
+.dg-concerns-card h2 { color: var(--accent-text); }
+
+.dg-concern {
+  display: flex;
+  align-items: baseline;
+  gap: 8px;
+  font-size: 0.86rem;
+  line-height: 1.4;
+  padding: 6px 10px;
+  background: var(--accent-soft);
+  border-left: 3px solid var(--accent-text);
+  border-radius: 0 6px 6px 0;
+}
+
+/* Severe concerns get the full accent treatment so they stand out. */
+.dg-concern-severe {
+  border-left-color: var(--accent);
+  background: var(--accent-soft);
+}
+.dg-concern-severe .dg-concern-mark {
+  color: var(--accent);
+  font-weight: 700;
+}
+
+.dg-concern-mark {
+  font-family: var(--mono);
+  font-size: 0.9rem;
+  font-weight: 700;
+  color: var(--muted);
+  flex-shrink: 0;
+  width: 1em;
+  text-align: center;
+}
+
+.dg-concern-text {
+  flex: 1;
+  min-width: 0;
+  color: var(--ink);
+  word-break: break-word;
+}
+
+/* --- Shared --------------------------------------------------------- */
+
+/* Empty section message — quiet, centred, muted. */
+.dg-empty {
+  color: var(--muted);
+  font-size: 0.85rem;
+  margin: 0;
+  text-align: center;
+  padding: 8px 0;
+}
+
+/* The audio element is hidden — playback is triggered programmatically. */
+.dg-audio { display: none; }

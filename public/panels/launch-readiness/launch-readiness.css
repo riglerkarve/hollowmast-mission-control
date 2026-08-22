@@ -1,0 +1,87 @@
+/* launch-readiness — HOLLOWMAST Phase 5 launch-readiness view.
+   Every custom property used here is defined in shell.css. Verified by reading
+   the definition, not a mention: --accent, --accent-soft, --accent-text,
+   --accent-text-bg, --card, --bg, --ink, --muted, --border, --border-strong,
+   --mono, --r-card, --r-btn all have :root definitions in shell.css and carry
+   dark-theme overrides. */
+
+.lr-panel { max-width: 720px; }
+
+.lr-lede { color: var(--muted); font-size: 13px; line-height: 1.5; margin: 0 0 18px; max-width: 72ch; }
+.lr-loading { color: var(--muted); font-size: 13px; }
+.lr-alarm { color: var(--ink); font-size: 13px; margin: 0; }
+.lr-empty { color: var(--muted); font-size: 13px; padding: 8px 0; line-height: 1.5; max-width: 72ch; }
+
+.lr-h2 { font-size: 13px; text-transform: uppercase; letter-spacing: .07em; color: var(--muted);
+  margin: 28px 0 10px; padding-bottom: 6px; border-bottom: 1px solid var(--border); }
+.lr-panel > .lr-h2:first-of-type { margin-top: 10px; }
+
+.lr-n { font-variant-numeric: tabular-nums; color: var(--accent-text); background: var(--accent-soft);
+  border-radius: 10px; padding: 1px 8px; font-size: 13px; margin-left: 6px; }
+
+/* ---- the big status banner ------------------------------------------------ */
+
+.lr-banner { display: flex; align-items: baseline; gap: 14px; padding: 18px 20px;
+  border-radius: var(--r-card); margin-bottom: 18px; border: 1px solid var(--border); }
+
+/* READY — the accent. The owner can launch. */
+.lr-banner.lr-status-ready {
+  background: var(--accent-soft); border-color: var(--accent);
+}
+.lr-banner.lr-status-ready .lr-banner-label {
+  color: var(--accent-text); font-size: 22px; font-weight: 700;
+  letter-spacing: .04em; font-variant-numeric: tabular-nums;
+}
+.lr-banner.lr-status-ready .lr-banner-note {
+  color: var(--accent-text); font-size: 13px; line-height: 1.4;
+}
+
+/* NOT READY — muted, not alarming. The block is a reason, not a klaxon. */
+.lr-banner.lr-status-notready {
+  background: var(--card);
+}
+.lr-banner.lr-status-notready .lr-banner-label {
+  color: var(--muted); font-size: 22px; font-weight: 700;
+  letter-spacing: .04em; font-variant-numeric: tabular-nums;
+}
+.lr-banner.lr-status-notready .lr-banner-note {
+  color: var(--muted); font-size: 13px; line-height: 1.4;
+}
+
+@media (prefers-color-scheme: dark) {
+  /* --accent-soft is very dark in the dark theme. Keep the card ground so the
+     banner does not disappear, and let the accent text carry the emphasis. */
+  .lr-banner.lr-status-ready { background: var(--card); }
+}
+
+/* ---- the checklist rows --------------------------------------------------- */
+
+.lr-row { background: var(--card); border: 1px solid var(--border); border-radius: var(--r-card);
+  padding: 12px 16px; margin-bottom: 8px; display: flex; gap: 12px; align-items: flex-start;
+  border-left: 3px solid var(--border-strong); }
+
+/* The left rule carries the status colour, the same way decisions.css marks
+   due vs. neutral cards. Pass gets the accent; fail gets the accent too but a
+   different icon and detail so the two never look the same. Pending stays
+   neutral. */
+.lr-row.lr-pass { border-left-color: var(--accent); }
+.lr-row.lr-fail { border-left-color: var(--accent); }
+.lr-row.lr-pending { border-left-color: var(--border-strong); }
+
+/* The status icon — a text glyph in a fixed-size box so icons align. */
+.lr-icon { flex: 0 0 22px; font-size: 16px; line-height: 22px; text-align: center;
+  font-weight: 700; font-family: var(--mono); }
+.lr-icon.lr-pass { color: var(--accent-text); }
+.lr-icon.lr-fail { color: var(--accent-text); }
+.lr-icon.lr-pending { color: var(--muted); }
+
+.lr-body { flex: 1 1 auto; min-width: 0; }
+
+.lr-name { margin: 0 0 3px; font-size: 14px; line-height: 1.35; color: var(--ink); }
+.lr-detail { margin: 0; font-family: var(--mono); font-size: 12px; line-height: 1.5;
+  color: var(--muted); max-width: 72ch; word-break: break-word; }
+
+@media (max-width: 560px) {
+  .lr-panel { max-width: 100%; }
+  .lr-banner { flex-direction: column; gap: 6px; padding: 14px 16px; }
+}

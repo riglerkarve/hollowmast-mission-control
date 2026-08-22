@@ -1,0 +1,106 @@
+/* habit-tracker — derives which habits get dropped and when, not a streak counter.
+   Every custom property used here is defined in shell.css. Verified by reading the
+   definition, not a mention: --accent, --accent-soft, --accent-text, --accent-text-bg,
+   --card, --bg, --ink, --muted, --border, --border-strong, --mono, --r-card, --r-btn
+   all have :root definitions in shell.css and carry dark-theme overrides. */
+
+.ht-panel { max-width: 720px; }
+
+.ht-lede { color: var(--muted); font-size: 13px; line-height: 1.5; margin: 0 0 18px; max-width: 72ch; }
+.ht-loading { color: var(--muted); font-size: 13px; }
+.ht-alarm { color: var(--ink); font-size: 13px; margin: 0; }
+.ht-empty { color: var(--muted); font-size: 13px; padding: 8px 0; line-height: 1.5; max-width: 72ch; }
+
+/* ---- summary --------------------------------------------------------------- */
+
+/* The three-count summary bar: dropped, active, fresh. Sits between the lede and
+   the card list. Each count is a number with a label; the dropped count carries the
+   accent so the eye lands on the most actionable number first. */
+.ht-summary { display: flex; gap: 16px; margin: 0 0 18px; flex-wrap: wrap; }
+
+.ht-stat {
+  font-family: var(--mono); font-size: 12px; color: var(--muted);
+  display: inline-flex; align-items: baseline; gap: 5px;
+  padding: 4px 10px; border: 1px solid var(--border); border-radius: var(--r-btn, 6px);
+  background: var(--card);
+}
+.ht-stat-n { font-size: 16px; font-weight: 600; color: var(--ink); font-variant-numeric: tabular-nums; }
+
+/* The dropped count is the one that matters. Accent left rule, same as decisions.css's
+   .dc-due, and accent-text for the number so it reads as "look here first". */
+.ht-stat-dropped { border-left: 3px solid var(--accent); }
+.ht-stat-dropped .ht-stat-n { color: var(--accent-text); }
+
+/* Active is neutral — it is the fine state, not the alert. */
+.ht-stat-active .ht-stat-n { color: var(--ink); }
+
+/* Fresh is the "just did it" state. Slightly lighter, not celebratory — no green,
+   no checkmark, just a muted accent so it reads as recent without implying a reward. */
+.ht-stat-fresh .ht-stat-n { color: var(--muted); }
+
+/* ---- the card -------------------------------------------------------------- */
+
+.ht-card { background: var(--card); border: 1px solid var(--border); border-radius: var(--r-card);
+  padding: 14px 16px; margin-bottom: 10px; position: relative;
+  /* The neutral left rule, same pattern as decisions.css: a 3px border in the
+     border-strong colour, so a normal card reads as "a recorded fact" not "an alert". */
+  border-left: 3px solid var(--border-strong); }
+
+/* A DROPPED habit is the one the owner most needs to see. Accent left rule plus a
+   soft accent tint, exactly as decisions.css marks a due card. The tint is
+   --accent-soft, the same ground --accent-text is rated for. */
+.ht-dropped { border-left-color: var(--accent); background: var(--accent-soft); }
+@media (prefers-color-scheme: dark) {
+  /* --accent-soft is very dark in the dark theme (a near-black ember tint). The
+     accent rule alone carries the emphasis there; keep the ground as --card so
+     the card does not disappear into the page. Same override as decisions.css. */
+  .ht-dropped { background: var(--card); }
+}
+
+.ht-name { margin: 0 0 8px; font-size: 15px; line-height: 1.42; color: var(--ink); max-width: 72ch;
+  padding-right: 90px; /* room for the badge */ }
+
+/* The metadata rows: times done, last done, and the gap. Monospace so the numbers
+   line up across cards and the eye can scan a column. */
+.ht-row { font-family: var(--mono); font-size: 11px; margin: 0 0 6px;
+  display: flex; flex-wrap: wrap; gap: 12px; align-items: baseline; color: var(--muted); }
+
+.ht-count { color: var(--ink); font-weight: 600; }
+.ht-when { color: var(--muted); }
+.ht-never { color: var(--muted); font-style: italic; }
+
+/* The gap row — this is the key metric. "Longest gap: N days" is a measurement of
+   what already happened, not a prediction or a score. A wide gap (14+) gets the
+   accent-text colour so the eye can find the habits with the biggest breaks
+   without reading every card. */
+.ht-gap { color: var(--muted); }
+.ht-gap-wide { color: var(--accent-text); font-weight: 600; }
+.ht-gap-none { color: var(--muted); font-style: italic; }
+
+/* ---- the badge ------------------------------------------------------------- */
+
+/* The status badge sits at the top-right of each card, same position as the
+   decisions badge. 'dropped' is the accent; 'fresh' and 'active' are muted. */
+.ht-badge { position: absolute; top: 12px; right: 14px;
+  font-family: var(--mono); font-size: 10px; text-transform: uppercase; letter-spacing: .06em;
+  border: 1px solid var(--border); border-radius: 3px; padding: 2px 7px; }
+
+.ht-badge-dropped { color: var(--accent-text); background: var(--accent-soft); border-color: var(--accent); }
+.ht-badge-fresh { color: var(--muted); }
+.ht-badge-active { color: var(--muted); }
+.ht-badge-dormant { color: var(--muted); }
+
+/* On the dropped card the badge sits on the same --accent-soft ground; invert it
+   so it does not vanish into the tint, same as decisions.css's .dc-due .dc-badge. */
+.ht-dropped .ht-badge-dropped { color: var(--card); background: var(--accent); border-color: var(--accent); }
+
+/* ---- responsive ------------------------------------------------------------- */
+
+@media (max-width: 560px) {
+  .ht-panel { max-width: 100%; }
+  .ht-summary { gap: 10px; }
+  .ht-name { padding-right: 0; }
+  /* The badge stays visible on a narrow screen; move it below the name rather than
+     overlapping, so the name text is never clipped. */
+  .ht-badge { position: static; display: inline-block; margin-bottom: 8px; }
+}

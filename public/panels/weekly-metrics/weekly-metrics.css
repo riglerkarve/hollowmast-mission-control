@@ -1,0 +1,52 @@
+/* weekly-metrics — a one-screen digest: board activity, sessions, dashboard health,
+   and traffic. Every custom property used here is defined in shell.css. Verified
+   by reading the definition, not a mention: --accent, --accent-soft, --accent-text,
+   --accent-text-bg, --short-text, --card, --bg, --ink, --muted, --border,
+   --border-strong, --mono, --r-card, --r-btn all have :root definitions in shell.css
+   and carry dark-theme overrides. */
+
+.wm-panel { max-width: 720px; }
+
+.wm-loading { color: var(--muted); font-size: 13px; }
+.wm-alarm { color: var(--ink); font-size: 13px; margin: 0; }
+.wm-empty { color: var(--muted); font-size: 13px; padding: 8px 0; line-height: 1.5; max-width: 72ch; }
+
+.wm-h2 { font-size: 13px; text-transform: uppercase; letter-spacing: .07em; color: var(--muted);
+  margin: 28px 0 10px; padding-bottom: 6px; border-bottom: 1px solid var(--border); }
+.wm-panel > .wm-h2:first-of-type { margin-top: 10px; }
+
+.wm-n { font-variant-numeric: tabular-nums; color: var(--accent-text); background: var(--accent-soft);
+  border-radius: 10px; padding: 1px 8px; font-size: 13px; margin-left: 6px; }
+
+/* ---- stat blocks ---------------------------------------------------------- */
+
+.wm-stat-row { display: flex; flex-wrap: wrap; gap: 12px; margin-bottom: 4px; }
+
+.wm-stat { background: var(--card); border: 1px solid var(--border); border-radius: var(--r-card);
+  padding: 14px 16px; min-width: 110px; flex: 1 1 110px; }
+
+.wm-stat-num { display: block; font-family: var(--mono); font-size: 22px; font-weight: 600;
+  color: var(--ink); line-height: 1.2; font-variant-numeric: tabular-nums; }
+.wm-stat-label { display: block; font-size: 11px; text-transform: uppercase; letter-spacing: .05em;
+  color: var(--muted); margin-top: 4px; }
+
+/* Healthy and broken stat variants. */
+.wm-ok .wm-stat-num { color: var(--short-text); }
+.wm-bad .wm-stat-num { color: var(--accent-text); }
+
+/* ---- traffic -------------------------------------------------------------- */
+
+.wm-trf { display: flex; flex-direction: column; gap: 4px; }
+.wm-trf-row { display: flex; align-items: baseline; justify-content: space-between; gap: 12px;
+  padding: 6px 14px; background: var(--card); border: 1px solid var(--border); border-radius: var(--r-card); }
+.wm-trf-site { font-size: 13px; color: var(--ink); font-family: var(--mono); overflow: hidden;
+  text-overflow: ellipsis; white-space: nowrap; }
+.wm-trf-path { color: var(--muted); margin-left: 4px; }
+.wm-trf-visits { font-family: var(--mono); font-size: 13px; color: var(--muted);
+  font-variant-numeric: tabular-nums; flex-shrink: 0; }
+
+@media (max-width: 560px) {
+  .wm-panel { max-width: 100%; }
+  .wm-stat-row { flex-direction: column; gap: 8px; }
+  .wm-stat { min-width: 0; }
+}

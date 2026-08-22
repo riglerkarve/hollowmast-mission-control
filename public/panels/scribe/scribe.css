@@ -1,0 +1,100 @@
+/* scribe — the Scribe's proposal review queue.
+   Every custom property used here is defined in shell.css. Verified by reading
+   the definition, not a mention: --accent, --accent-soft, --accent-text,
+   --card, --bg, --ink, --muted, --border, --border-strong, --mono, --r-card,
+   --r-btn all have :root definitions in shell.css and carry dark-theme overrides.
+   Codex owns all Mission Control CSS (AGENTS.md §4b) — review requested. */
+
+.sc-panel { max-width: 720px; }
+
+.sc-lede { color: var(--muted); font-size: 13px; line-height: 1.5; margin: 0 0 18px; max-width: 72ch; }
+.sc-loading { color: var(--muted); font-size: 13px; }
+.sc-alarm { color: var(--ink); font-size: 13px; margin: 0; }
+.sc-empty { color: var(--muted); font-size: 13px; padding: 8px 0; line-height: 1.5; max-width: 72ch; }
+
+.sc-h2 { font-size: 13px; text-transform: uppercase; letter-spacing: .07em; color: var(--muted);
+  margin: 28px 0 10px; padding-bottom: 6px; border-bottom: 1px solid var(--border); }
+.sc-panel > .sc-h2:first-of-type { margin-top: 10px; }
+
+.sc-n { font-variant-numeric: tabular-nums; color: var(--accent-text); background: var(--accent-soft);
+  border-radius: 10px; padding: 1px 8px; font-size: 13px; margin-left: 6px; }
+
+/* ---- the card -------------------------------------------------------------- */
+
+.sc-card { background: var(--card); border: 1px solid var(--border); border-radius: var(--r-card);
+  padding: 14px 16px; margin-bottom: 10px; border-left: 3px solid var(--border-strong); }
+
+/* Pending proposals get the accent rule — they need attention. */
+.sc-status-pending { border-left-color: var(--accent); }
+/* Enacted get a green-ish neutral; rejected get a muted style. */
+.sc-status-enacted { border-left-color: var(--border-strong); }
+.sc-status-rejected { border-left-color: var(--border); opacity: .8; }
+.sc-status-stale { border-left-color: var(--border); opacity: .7; }
+
+/* ---- meta line ------------------------------------------------------------- */
+
+.sc-meta { font-family: var(--mono); font-size: 11px; margin: 0 0 10px;
+  display: flex; flex-wrap: wrap; gap: 8px; align-items: center; }
+.sc-module { color: var(--ink); font-weight: 600; text-transform: uppercase; letter-spacing: .05em; }
+.sc-job { color: var(--muted); }
+.sc-model { color: var(--muted); }
+.sc-field { color: var(--muted); }
+.sc-target { color: var(--muted); }
+
+/* ---- diff ------------------------------------------------------------------ */
+
+.sc-diff { margin-bottom: 10px; }
+.sc-diff h5 { margin: 0 0 4px; font-size: 10px; text-transform: uppercase; letter-spacing: .09em;
+  color: var(--muted); }
+.sc-diff h5:not(:first-child) { margin-top: 8px; }
+.sc-current, .sc-proposed { margin: 0 0 4px; font-size: 13px; line-height: 1.55; color: var(--ink); max-width: 72ch; }
+.sc-null { color: var(--muted); font-style: italic; }
+
+/* ---- content check --------------------------------------------------------- */
+
+.sc-check { background: var(--bg); border: 1px solid var(--border); border-radius: var(--r-btn);
+  padding: 10px 12px; margin-bottom: 10px; }
+.sc-check h5 { margin: 0 0 6px; font-size: 10px; text-transform: uppercase; letter-spacing: .09em;
+  color: var(--muted); }
+.sc-flags { font-family: var(--mono); font-size: 11px; color: var(--accent-text);
+  background: var(--accent-soft); border-radius: 3px; padding: 1px 6px; }
+.sc-flags-none { font-family: var(--mono); font-size: 11px; color: var(--muted); }
+.sc-why { margin: 6px 0 0; font-size: 12px; line-height: 1.5; color: var(--muted); max-width: 72ch; }
+.sc-blind { margin: 4px 0 0; font-size: 11px; line-height: 1.5; color: var(--muted); max-width: 72ch;
+  font-style: italic; }
+
+/* ---- review info (past decisions) ------------------------------------------ */
+
+.sc-review { font-family: var(--mono); font-size: 11px; margin: 0;
+  display: flex; flex-wrap: wrap; gap: 8px; align-items: center; }
+.sc-status { text-transform: uppercase; letter-spacing: .05em; font-weight: 600;
+  padding: 1px 6px; border-radius: 3px; border: 1px solid var(--border-strong); }
+.sc-status-enacted { color: var(--accent-text); border-color: var(--accent); background: var(--accent-soft); }
+.sc-status-rejected { color: var(--muted); }
+.sc-status-stale { color: var(--muted); }
+.sc-by { color: var(--ink); }
+.sc-when { color: var(--muted); }
+.sc-note { color: var(--muted); font-style: italic; }
+
+/* ---- actions (review form) ------------------------------------------------- */
+
+.sc-actions { margin-top: 10px; display: flex; flex-wrap: wrap; gap: 8px; align-items: center; }
+.sc-reviewer { font-size: 13px; padding: 4px 8px; border: 1px solid var(--border);
+  border-radius: var(--r-btn); background: var(--bg); color: var(--ink); width: 120px; }
+.sc-reviewer:disabled { opacity: .6; }
+.sc-approve, .sc-reject { font-size: 12px; padding: 4px 12px; border: 1px solid var(--border-strong);
+  border-radius: var(--r-btn); background: var(--card); color: var(--ink); cursor: pointer; }
+.sc-approve { color: var(--accent-text); border-color: var(--accent); background: var(--accent-soft); }
+.sc-approve:hover { background: var(--accent); color: var(--card); }
+.sc-reject:hover { background: var(--bg); }
+.sc-approve:disabled, .-reject:disabled { opacity: .5; cursor: default; }
+.sc-note-input { font-size: 12px; padding: 4px 8px; border: 1px solid var(--border);
+  border-radius: var(--r-btn); background: var(--bg); color: var(--ink); flex: 1; min-width: 120px; }
+.sc-wb-note { font-size: 11px; color: var(--muted); margin: 0 0 6px; width: 100%; font-style: italic; }
+
+@media (max-width: 560px) {
+  .sc-panel { max-width: 100%; }
+  .sc-actions { flex-direction: column; align-items: stretch; }
+  .sc-reviewer, .sc-note-input { width: 100%; }
+  .sc-approve, .sc-reject { width: 100%; text-align: center; }
+}

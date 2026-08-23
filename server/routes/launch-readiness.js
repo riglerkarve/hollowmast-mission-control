@@ -16,6 +16,12 @@
 const express = require('express');
 const fs = require('node:fs');
 const http = require('node:http');
+// checkItchPage below fetches an https: URL. http.get THROWS SYNCHRONOUSLY on a
+// scheme it does not support -- before any 'error' listener exists -- so the
+// promise's own error path, written to resolve 'pending' on a failed request,
+// never ran and the whole route 500'd. The degrade was correct for async
+// failures and blind to the synchronous one.
+const https = require('node:https');
 const { execSync } = require('node:child_process');
 
 const db = require('../db');
@@ -24,7 +30,14 @@ const router = express.Router();
 
 // HOLLOWMAST lives in the Survive/ directory, one level above mission-control.
 const SURVIVE_DIR = 'C:/Users/jcwhi/Claude Outputs/Survive';
-const BUILD_FILE = SURVIVE_DIR + '/index.html';
+// The build is dist/Hollowmast.html. This pointed at SURVIVE_DIR/index.html,
+// which has never existed in that repository -- build.sh writes only to dist/.
+// So the check reported 'a build has not been done' against a 1.4 MB artefact
+// sitting on disk, and did so in the FAILING direction, which is why nobody
+// chased it: a red lamp on a project you know is mid-flight reads as expected.
+// Note this constant is defined in BOTH hollowmast.js and launch-readiness.js
+// -- one figure, two owners, and both copies carried the same wrong path.
+const BUILD_FILE = SURVIVE_DIR + '/dist/Hollowmast.html';
 const SRC_DIR = SURVIVE_DIR + '/src';
 const REPO_ROOT = 'C:/Users/jcwhi/Claude Outputs';
 const DEV_PORT = 5177;
@@ -36,16 +49,16 @@ function checkBuildFile() {
   try {
     if (!fs.existsSync(BUILD_FILE)) {
       return { name: 'Build file exists', status: 'fail',
-        detail: 'Survive/index.html not found — a build has not been done.' };
+        detail: 'Survive/dist/Hollowmast.html not found — a build has not been done.' };
     }
     const stat = fs.statSync(BUILD_FILE);
     if (stat.size <= 0) {
       return { name: 'Build file exists', status: 'fail',
-        detail: 'Survive/index.html exists but is 0 bytes.' };
+        detail: 'Survive/dist/Hollowmast.html exists but is 0 bytes.' };
     }
     const kb = (stat.size / 1024).toFixed(1);
     return { name: 'Build file exists', status: 'pass',
-      detail: 'Survive/index.html — ' + kb + ' KB.' };
+      detail: 'Survive/dist/Hollowmast.html — ' + kb + ' KB.' };
   } catch (e) {
     return { name: 'Build file exists', status: 'pending',
       detail: 'Could not stat the build file: ' + String(e.message || '').split('\n')[0] };
@@ -130,7 +143,7 @@ function checkDevServer() {
 // cannot confirm the page is live), not a hard fail.
 function checkItchPage() {
   return new Promise(function (resolve) {
-    var req = http.get(
+    var req = https.get(
       'https://hollowmast.com/',
       { timeout: 3000 },
       function (res) {

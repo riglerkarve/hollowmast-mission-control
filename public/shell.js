@@ -1,4 +1,9 @@
 const PANELS = {
+  'habit-tracker': () => import('/panels/habit-tracker/habit-tracker.js'),
+  'launch-readiness': () => import('/panels/launch-readiness/launch-readiness.js'),
+  'team-digest': () => import('/panels/team-digest/team-digest.js'),
+  'todo': () => import('/panels/todo/todo.js'),
+  'unsigned': () => import('/panels/unsigned/unsigned.js'),
   crm: () => import('/panels/crm/crm.js'),
   inventory: () => import('/panels/inventory/inventory.js'),
   focus: () => import('/panels/focus/focus.js'),
@@ -18,6 +23,7 @@ const PANELS = {
   board: () => import('/panels/board/board.js'),
   team: () => import('/panels/team/team.js'),
   goals: () => import('/panels/goals/goals.js'),
+  viability: () => import('/panels/viability/viability.js'),
   schedule: () => import('/panels/schedule/schedule.js'),
   projects: () => import('/panels/projects/projects.js'),
   machine: () => import('/panels/machine/machine.js'),
@@ -178,6 +184,7 @@ async function mountPanel(name) {
 
 // MindVirus OS command bar — import and wire Ctrl+K
 import { toggle as toggleCmdBar } from '/mvos/commandbar.js';
+import { mountNudgeBar } from '/nudge.js';
 
 // Wire the ⌘K trigger button in the sidebar header
 const mvosBtn = document.getElementById('mvosTrigger');
@@ -233,6 +240,12 @@ async function quietCurtain() {
 
 const initial = window.location.hash.replace('#', '') || 'workspace-overview';
 quietCurtain().then((gated) => { if (!gated) mountPanel(PANELS[initial] ? initial : 'workspace-overview'); });
+
+// Outside #panelRoot, so a panel switch never clears it. mountNudgeBar checks quiet hours
+// itself, the same way quietCurtain above does — belt and braces, since the two are
+// independent modules and neither should assume the other already gated.
+const nudgeBar = document.getElementById('nudgeBar');
+if (nudgeBar) mountNudgeBar(nudgeBar);
 
 // ZEN MODE — strip the dashboard to briefing + voice only.
 // Activated by #zen in the URL or by a keyboard shortcut (Z then E).

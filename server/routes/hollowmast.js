@@ -22,7 +22,14 @@ const router = express.Router();
 
 // HOLLOWMAST lives in the Survive/ directory, one level above mission-control.
 const SURVIVE_DIR = 'C:/Users/jcwhi/Claude Outputs/Survive';
-const BUILD_FILE = path.join(SURVIVE_DIR, 'index.html');
+// The build is dist/Hollowmast.html. This pointed at SURVIVE_DIR/index.html,
+// which has never existed in that repository -- build.sh writes only to dist/.
+// So the check reported 'a build has not been done' against a 1.4 MB artefact
+// sitting on disk, and did so in the FAILING direction, which is why nobody
+// chased it: a red lamp on a project you know is mid-flight reads as expected.
+// Note this constant is defined in BOTH hollowmast.js and launch-readiness.js
+// -- one figure, two owners, and both copies carried the same wrong path.
+const BUILD_FILE = path.join(SURVIVE_DIR, 'dist', 'Hollowmast.html');
 const SRC_DIR = path.join(SURVIVE_DIR, 'src');
 const REPO_ROOT = 'C:/Users/jcwhi/Claude Outputs';
 const DEV_PORT = 5177;

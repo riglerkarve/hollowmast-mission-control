@@ -1,0 +1,53 @@
+/* servers — four states, four treatments, and only two of them are meant to draw the eye.
+   The greys are load-bearing: "nothing to start here" must not compete with "should be
+   running and is not", or the amber stops meaning anything. */
+
+.srv-list { display: flex; flex-direction: column; gap: 1px; margin-top: 10px; }
+
+.srv-row {
+  display: grid;
+  grid-template-columns: 14px minmax(170px, 1.4fr) 62px 104px 1fr auto;
+  align-items: center;
+  gap: 10px;
+  padding: 9px 12px;
+  background: var(--card);
+  border: 1px solid var(--border);
+  border-radius: var(--r-btn);
+  font-size: 0.82rem;
+}
+.srv-row:hover { border-color: var(--border-strong); }
+
+.srv-lamp { width: 9px; height: 9px; border-radius: 50%; justify-self: center; }
+.srv-ok   { background: var(--short); box-shadow: 0 0 0 3px color-mix(in srgb, var(--short) 22%, transparent); }
+.srv-warn { background: var(--accent); box-shadow: 0 0 0 3px var(--accent-glow); }
+.srv-bad  { background: var(--work); box-shadow: 0 0 0 3px color-mix(in srgb, var(--work) 22%, transparent); }
+.srv-idle { background: var(--border-strong); }
+
+.srv-name  { font-weight: 600; color: var(--ink); }
+.srv-cfg   { font-weight: 400; color: var(--muted); font-family: var(--mono); font-size: 0.74rem; }
+.srv-port  { font-family: var(--mono); color: var(--muted); font-variant-numeric: tabular-nums; }
+.srv-state { font-family: var(--mono); font-size: 0.72rem; letter-spacing: 0.06em;
+             text-transform: uppercase; color: var(--muted); }
+.srv-why   { color: var(--muted); font-size: 0.76rem; }
+.srv-act   { justify-self: end; }
+.srv-cmd   { font-family: var(--mono); font-size: 0.7rem; color: var(--muted);
+             background: var(--ring-bg); padding: 2px 6px; border-radius: 4px; }
+
+/* A conflict is the one thing here that is nobody's fault and everybody's problem, so it
+   gets the accent rather than a lamp — it belongs to no single row. */
+.srv-conflict {
+  margin: 8px 0 0; padding: 8px 11px;
+  background: var(--accent-soft);
+  border: 1px solid var(--accent);
+  border-radius: var(--r-btn);
+  font-size: 0.79rem; color: var(--ink);
+}
+
+.panel-note { color: var(--muted); font-size: 0.75rem; margin-top: 6px; }
+
+@media (max-width: 820px) {
+  /* The why-column is the first thing to go: on a phone this panel answers "what is up",
+     and the explanation is for the machine you can actually start things from. */
+  .srv-row { grid-template-columns: 14px 1fr 58px auto; }
+  .srv-state, .srv-why { display: none; }
+}

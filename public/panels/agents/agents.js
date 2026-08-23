@@ -1,34 +1,35 @@
 //
-// agents — the team roster: who is registered, what they own, and whether they
-// are active, idle, or available right now.
+// agents — the Hermes profile roster: who is registered, whether they are running a task
+// right now, and what it is.
 //
-// ONE FETCH, ONE LIST. The route returns every agent with a status field. This
-// panel sorts them (active first, then available, then idle) and renders one
-// card per agent. It does not derive status, infer it from lastSeen, or
-// second-guess the route — a panel that recomputed "is this agent active"
-// would agree with the route until one was edited, and then disagree without
-// either erroring, the exact failure this project keeps meeting.
+// ONE FETCH, ONE LIST. The route returns every profile with a status field derived straight
+// from the kanban board (`hermes kanban list --status running`). This panel sorts them
+// (running first) and renders one card per profile. It does not derive status, infer it
+// from a session heartbeat, or second-guess the route — a panel that recomputed "is this
+// profile running" would agree with the route until one was edited, and then disagree
+// without either erroring, the exact failure this project keeps meeting.
+//
+// REBUILT 23 Aug 2026 (t_e0d4f4cb) alongside server/routes/agents.js. The old shape was
+// {name, role, engine, model, owns, status: active|available|idle, lastSeen}. The new shape
+// is {name, model, status: running|idle, currentTask, lastHeartbeat, lastSeen, doneCount} —
+// there is no `role`/`owns`/`engine` any more because the Hermes profile roster does not
+// carry that TEAM.md-role concept; see agents.js's header comment for why the two rosters
+// are not merged here.
 import { renderLede } from '/panels/lede/lede.js';
 
 const esc = (s) => String(s == null ? '' : s)
   .replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
 
-// Agent names and roles are escaped, not parsed. A half-implemented markdown
-// renderer that swallows a `**` is worse than plain text, because it silently
-// changes what was recorded.
-const prose = (s) => esc(s).replace(/\n{2,}/g, '</p><p>').replace(/\n/g, '<br>');
-
 let root = null;
 let state = null;
 
-const STATUS_ORDER = { active: 0, available: 1, idle: 2 };
+const STATUS_ORDER = { running: 0, idle: 1 };
 
 function sortAgents(agents) {
   return agents.slice().sort((a, b) => {
-    const sa = STATUS_ORDER[a.status] ?? 3;
-    const sb = STATUS_ORDER[b.status] ?? 3;
+    const sa = STATUS_ORDER[a.status] ?? 2;
+    const sb = STATUS_ORDER[b.status] ?? 2;
     if (sa !== sb) return sa - sb;
-    // Within the same status, sort by name so the list is stable.
     return String(a.name || '').localeCompare(String(b.name || ''));
   });
 }
@@ -51,36 +52,55 @@ function relTime(iso) {
   return then.toISOString().slice(0, 10);
 }
 
+// Existing CSS only — the stylesheet is Codex's (AGENTS.md §4b) and this rebuild does not
+// touch it. `running` maps onto the accent rule that used to mean `active`; there is no
+// styled `available` state left to reuse, so the previous green rule is simply unused now.
+// Filed as a hotspot below for Codex to pick up rather than editing agents.css here.
 function statusClass(s) {
-  if (s === 'active') return 'ag-st-active';
-  if (s === 'available') return 'ag-st-available';
-  return 'ag-st-idle';
+  return s === 'running' ? 'ag-st-active' : 'ag-st-idle';
 }
 
 function cardHTML(a) {
   const stCls = statusClass(a.status);
   const stLabel = esc(a.status || 'idle');
-  const role = a.role ? `<span class="ag-role">${esc(a.role)}</span>` : '';
-  const engine = a.engine ? `<span class="ag-engine">${esc(a.engine)}</span>` : '';
   const model = a.model ? `<span class="ag-model">${esc(a.model)}</span>` : '';
-  const owns = a.owns ? `<p class="ag-owns"><span class="ag-field-label">Owns</span> ${prose(a.owns)}</p>` : '';
+  const doneCount = `<span class="ag-model">done: ${esc(a.doneCount ?? 0)}</span>`;
   const lastSeen = a.lastSeen
     ? `<span class="ag-seen">${esc(relTime(a.lastSeen))}</span>`
     : '<span class="ag-seen ag-seen-none">never seen</span>';
 
+  const task = a.currentTask
+    ? `<p class="ag-owns"><span class="ag-field-label">Task</span> ${esc(a.currentTask.title)}
+        <span class="ag-role">${esc(a.currentTask.id)}</span></p>`
+    : '';
+  const heartbeat = a.status === 'running'
+    ? `<p class="ag-owns"><span class="ag-field-label">Last heartbeat</span> ${esc(relTime(a.lastHeartbeat))}</p>`
+    : '';
+
   return `<article class="ag-card ${stCls}">
     <div class="ag-head">
       <h3 class="ag-name">${esc(a.name || 'unnamed')}</h3>
-      ${role}
       <span class="ag-status">${stLabel}</span>
     </div>
     <div class="ag-meta">
-      ${engine}
       ${model}
+      ${doneCount}
       ${lastSeen}
     </div>
-    ${owns}
+    ${task}
+    ${heartbeat}
   </article>`;
+}
+
+function residueNote(residue) {
+  if (!residue) return '';
+  const failed = [];
+  if (residue.running_list_ok === false) failed.push('the running-task list');
+  if (residue.done_list_ok === false) failed.push('the done-task list');
+  if (residue.heartbeats_ok === false) failed.push('one or more task heartbeats');
+  if (!failed.length) return '';
+  return `<p class="ag-alarm">Could not read ${esc(failed.join(', '))} from the kanban board —
+    status below may be incomplete, not wrong.</p>`;
 }
 
 function render() {
@@ -109,9 +129,10 @@ function render() {
 
   root.innerHTML = `<section class="panel ag-panel">
     <h1>Agents</h1>
-    <p class="ag-lede">The team roster — every registered agent, what they own, and
-      whether they are active, available, or idle right now. Active agents are
-      surfaced first so you can see who is working at a glance.</p>
+    <p class="ag-lede">The Hermes profile roster — every profile, and whether it is running a
+      kanban task right now. Running profiles are surfaced first so you can see who is
+      actually working at a glance. Source: the kanban board, not a session heartbeat.</p>
+    ${residueNote(state.data.residue)}
     <h2 class="ag-h2">Roster <span class="ag-n">${agents.length}</span></h2>
     ${listHTML}
   </section>`;
@@ -119,9 +140,17 @@ function render() {
 
 async function load() {
   try {
-    state.data = await (await fetch('/api/agents')).json();
-    state.error = null;
+    const r = await fetch('/api/agents');
+    const body = await r.json();
+    if (!r.ok) {
+      state.data = null;
+      state.error = body.error || `HTTP ${r.status}`;
+    } else {
+      state.data = body;
+      state.error = null;
+    }
   } catch (e) {
+    state.data = null;
     state.error = e.message;
   }
   render();

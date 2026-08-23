@@ -1,14 +1,23 @@
 //
-// search — cross-project search across board items, handovers, and workspace files.
+// search — cross-project search across the backlog, board items, handovers, and files.
 //
-// ONE INPUT, ONE FETCH, THREE GROUPS. A debounced search input fires GET /api/search?q=…,
-// and the results are grouped by source: Board items (ref, title, project badge, kind),
-// Handovers (title, shift, date), and Files (path only). Each result is clickable-looking
-// but static — no actions are wired, because a search that navigates before the owner has
-// read the matches is a guess, not a tool.
+// ONE INPUT, ONE FETCH, FOUR GROUPS. A debounced search input fires GET /api/search?q=…,
+// and the results are grouped by source: Backlog (id, title, project, kind, priority, and
+// where the match landed), Board items (ref, title, project badge, kind), Handovers (title,
+// shift, date), and Files (path only). Each result is clickable-looking but static — no
+// actions are wired, because a search that navigates before the owner has read the matches
+// is a guess, not a tool.
+//
+// BACKLOG IS FIRST because it is the store the owner authored. Board items are the read-only
+// import of project trackers; the backlog is where a filed finding actually lives, so it is
+// the answer to "did I write this down?" and belongs above the copies.
+//
+// A CAP THAT BIT IS SAID OUT LOUD. The route returns `truncated` per source; every group
+// whose count was capped prints how many it dropped. A list that quietly stops at 50 reads
+// as a complete answer, and the owner has no way to tell it was not.
 //
 // ABSENCE AND FAILURE MUST LOOK DIFFERENT. Three states, three messages:
-//   Empty (no query yet): "Type to search across board items, handovers, and workspace files."
+//   Empty (no query yet): "Type to search across the backlog, board items, handovers, and workspace files."
 //   No results (query returned zero): "No matches found. That is a real count, not a failed search."
 //   Error (fetch failed): "Could not search — <error>. That is a failure to look, not no results."
 // Conflating any two is the failure mode this workspace was built to prevent.
@@ -44,6 +53,35 @@ function boardCardHTML(item) {
   </article>`;
 }
 
+// A backlog row: id, title, project, kind, priority, status, and where the query matched.
+//
+// `matchedIn` is rendered, not hidden. A hit on the title and a hit buried in a 900-word
+// rationale are different results, and showing which one it was is the difference between
+// "here is your item" and "something in here contains that word". The project badge falls
+// back to "unassigned" rather than being omitted, because a blank where a badge belongs
+// reads as a rendering bug rather than as an item nobody filed against a project.
+function backlogCardHTML(item) {
+  const priority = item.priority
+    ? `<span class="sr-tag sr-tag-priority">${esc(item.priority)}</span>` : '';
+  const kind = item.kind
+    ? `<span class="sr-tag sr-tag-kind">${esc(item.kind)}</span>` : '';
+  const status = item.status && item.status !== 'open'
+    ? `<span class="sr-tag sr-tag-${esc(item.status)}">${esc(item.status)}</span>` : '';
+  const where = (item.matchedIn && item.matchedIn.length)
+    ? `<p class="sr-matched">matched in ${esc(item.matchedIn.join(', '))}</p>` : '';
+  return `<article class="sr-card sr-card-backlog">
+    <div class="sr-card-head">
+      <span class="sr-ref">${esc(item.id)}</span>
+      <span class="sr-badge">${esc(item.project || 'unassigned')}</span>
+      ${kind}
+      ${priority}
+      ${status}
+    </div>
+    <p class="sr-title">${esc(item.title)}</p>
+    ${where}
+  </article>`;
+}
+
 // A handover row: title, shift, date. The done/blocked/next prose is escaped, not parsed —
 // a half-implemented markdown renderer that swallows a `**` is worse than plain text,
 // because it silently changes what was recorded.
@@ -67,8 +105,18 @@ function fileRowHTML(f) {
   return `<div class="sr-file">${esc(f)}</div>`;
 }
 
-function groupHTML(label, count, inner) {
-  return `<h2 class="sr-h2">${esc(label)} <span class="sr-n">${count}</span></h2>${inner}`;
+// A group heading, its count, its rows — and, when the cap bit, what it dropped. The
+// dropped line is part of the result, not a footnote: a list that silently stops reads as
+// the whole answer.
+// A group heading, its count, its rows — and, when the cap bit or the source could not look
+// everywhere, what it did not cover. Both lines are part of the result, not a footnote: a
+// list that silently stops reads as the whole answer.
+function groupHTML(label, count, inner, dropped, note) {
+  const more = dropped > 0
+    ? `<p class="sr-matched">Showing ${count}; ${dropped} further match${dropped === 1 ? '' : 'es'} not listed. Narrow the search to see them.</p>`
+    : '';
+  const caveat = note ? `<p class="sr-matched">${esc(note)}</p>` : '';
+  return `<h2 class="sr-h2">${esc(label)} <span class="sr-n">${count}</span></h2>${more}${caveat}${inner}`;
 }
 
 function render() {
@@ -80,7 +128,7 @@ function render() {
     root.innerHTML = `<section class="panel sr-panel">
       <h1>Search</h1>
       <div class="sr-search-box">
-        <input type="text" class="sr-input" placeholder="Search board items, handovers, files…"
+        <input type="text" class="sr-input" placeholder="Search the backlog, board, handovers, files…"
           value="${esc(lastQuery)}" />
       </div>
       <p class="sr-alarm">Could not search — ${esc(state.error)}.
@@ -95,9 +143,9 @@ function render() {
     root.innerHTML = `<section class="panel sr-panel">
       <h1>Search</h1>
       <div class="sr-search-box">
-        <input type="text" class="sr-input" placeholder="Search board items, handovers, files…" />
+        <input type="text" class="sr-input" placeholder="Search the backlog, board, handovers, files…" />
       </div>
-      <p class="sr-empty">Type to search across board items, handovers, and workspace files.</p>
+      <p class="sr-empty">Type to search across the backlog, board items, handovers, and workspace files.</p>
     </section>`;
     bindInput();
     return;
@@ -108,7 +156,7 @@ function render() {
     root.innerHTML = `<section class="panel sr-panel">
       <h1>Search</h1>
       <div class="sr-search-box">
-        <input type="text" class="sr-input" placeholder="Search board items, handovers, files…"
+        <input type="text" class="sr-input" placeholder="Search the backlog, board, handovers, files…"
           value="${esc(lastQuery)}" />
       </div>
       <p class="sr-loading">Searching…</p>
@@ -122,11 +170,16 @@ function render() {
   const d = state.data;
   const total = d.total;
 
-  if (total === 0) {
+  // Zero results is only "a real count" if every source actually looked. If any source
+  // reported a caveat, the honest statement is that nothing was found in what WAS searched —
+  // so that case falls through to the grouped render, where the caveat is visible.
+  const anyCaveat = Object.keys(d.notes || {}).length > 0;
+
+  if (total === 0 && !anyCaveat) {
     root.innerHTML = `<section class="panel sr-panel">
       <h1>Search</h1>
       <div class="sr-search-box">
-        <input type="text" class="sr-input" placeholder="Search board items, handovers, files…"
+        <input type="text" class="sr-input" placeholder="Search the backlog, board, handovers, files…"
           value="${esc(lastQuery)}" />
       </div>
       <p class="sr-empty">No matches found. That is a real count, not a failed search.</p>
@@ -135,23 +188,38 @@ function render() {
     return;
   }
 
-  const boardHTML = d.board.length
-    ? groupHTML('Board items', d.board.length, d.board.map(boardCardHTML).join(''))
+  // The route may predate this panel (or a source may have thrown), so every array and the
+  // truncated bundle are read defensively. A missing key must render as "this group has
+  // nothing", never as a thrown TypeError that blanks the whole result set.
+  const t = d.truncated || {};
+  const n = d.notes || {};
+  const backlog = d.backlog || [];
+
+  // A group renders when it has rows OR when it has a caveat. A source that found nothing
+  // and a source that could not look everywhere must not both render as silence — dropping
+  // an empty-but-caveated group is how "could not look" gets read as "looked and it was
+  // fine", which is the one confusion this panel exists to prevent.
+  const backlogHTML = (backlog.length || n.backlog)
+    ? groupHTML('Backlog', backlog.length, backlog.map(backlogCardHTML).join(''), t.backlog || 0, n.backlog)
     : '';
-  const handoverHTML = d.handovers.length
-    ? groupHTML('Handovers', d.handovers.length, d.handovers.map(handoverCardHTML).join(''))
+  const boardHTML = (d.board.length || n.board)
+    ? groupHTML('Board items', d.board.length, d.board.map(boardCardHTML).join(''), t.board || 0, n.board)
     : '';
-  const fileHTML = d.files.length
-    ? groupHTML('Files', d.files.length, d.files.map(fileRowHTML).join(''))
+  const handoverHTML = (d.handovers.length || n.handovers)
+    ? groupHTML('Handovers', d.handovers.length, d.handovers.map(handoverCardHTML).join(''), t.handovers || 0, n.handovers)
+    : '';
+  const fileHTML = (d.files.length || n.files)
+    ? groupHTML('Files', d.files.length, d.files.map(fileRowHTML).join(''), t.files || 0, n.files)
     : '';
 
   root.innerHTML = `<section class="panel sr-panel">
     <h1>Search</h1>
     <div class="sr-search-box">
-      <input type="text" class="sr-input" placeholder="Search board items, handovers, files…"
+      <input type="text" class="sr-input" placeholder="Search the backlog, board, handovers, files…"
         value="${esc(lastQuery)}" />
     </div>
     <p class="sr-summary">${total} match${total === 1 ? '' : 'es'} for "${esc(d.query)}"</p>
+    ${backlogHTML}
     ${boardHTML}
     ${handoverHTML}
     ${fileHTML}

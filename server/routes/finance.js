@@ -183,6 +183,41 @@ db.migrate('finance', [
       ALTER TABLE finance_rules_new RENAME TO finance_rules;
     `);
   },
+
+  // v5 — recorded purpose. WHAT the money was actually for, which is a different question
+  // from `category` (WHAT KIND of transaction it is) and does not replace it.
+  //
+  // The problem it exists for, measured: over the last twelve complete months 310 payments
+  // worth GBP 24,228 are "Cash withdrawn" or "Payments to people". The bank cannot say what
+  // any of them bought, so 77.3% of measured spending has no purpose recorded and every
+  // affordability question is answered from the other 22%.
+  //
+  // SCOPED, BECAUSE 310 TICK BOXES IS A CHORE WITH A NICE FONT. The money is concentrated:
+  // five counterparties are 88% of it. So a purpose attaches to a COUNTERPARTY by default
+  // and to a single TRANSACTION only where that is wrong. Five decisions explain most of
+  // the money; the rest can be left alone without the tool nagging.
+  //
+  // 'unknown' IS A REAL PURPOSE and must be storable. A payment the owner has looked at and
+  // genuinely cannot place is not the same fact as one nobody has opened yet, and collapsing
+  // them would let a reviewed ledger and an ignored one render identically — the failure this
+  // project keeps meeting. The summary therefore reports three states, never two.
+  (d) => {
+    d.exec(`
+      CREATE TABLE finance_purposes (
+        id         INTEGER PRIMARY KEY AUTOINCREMENT,
+        scope      TEXT NOT NULL,             -- 'counterparty' | 'transaction'
+        match_key  TEXT NOT NULL,             -- the counterparty name, or the transaction id
+        direction  TEXT NOT NULL DEFAULT 'out',
+        purpose    TEXT NOT NULL,             -- from PURPOSES; 'unknown' is a valid answer
+        note       TEXT,
+        by_whom    TEXT NOT NULL DEFAULT 'unknown',
+        created_at TEXT NOT NULL DEFAULT (datetime('now', 'localtime')),
+        UNIQUE (scope, match_key, direction)
+      );
+
+      CREATE INDEX finance_purposes_key ON finance_purposes (scope, match_key);
+    `);
+  },
 ]);
 
 const router = express.Router();
@@ -797,7 +832,219 @@ function counterparties(opts) {
     });
 }
 
+// ============================================================ recorded purpose (v5)
+//
+// WHICH SPEND IS OPAQUE is defined in ONE place. Everything below — the queue, the summary,
+// the accessor other tools call — reads this constant, so the queue can never describe a
+// different population from the figure it prints beside it.
+const OPAQUE_CATEGORIES = ['Cash withdrawn', 'Payments to people'];
+
+// A fixed vocabulary, not free text. Free text fragments into "food", "Food" and "groceries"
+// and then nothing can be totalled. 'unknown' is deliberately IN the list: see the migration.
+const PURPOSES = [
+  'rent', 'bills', 'food', 'transport', 'debt-repaid', 'lent',
+  'gift', 'business', 'personal', 'savings', 'unknown',
+];
+
+const opaqueWhere = `category IN (${OPAQUE_CATEGORIES.map(() => '?').join(',')}) AND amount_pence < 0`;
+
+// ONE window helper for all three purpose endpoints.
+//
+// The first version of this read `ledgerSpan().lastCompleteMonthEnd`, a field ledgerSpan has
+// never returned — it returns { first, last, rows, staleDays }. That would have put
+// `undefined` into the date arithmetic and produced an invalid window matching either nothing or
+// everything, with no error either way. Caught by reading the function rather than trusting
+// the name.
+//
+// The last calendar month is ALWAYS partial: the ledger is an import that stops mid-month, so
+// including the stub drags every monthly figure down by an amount nobody can see.
+function purposeWindow(months = 12) {
+  const last = db.prepare('SELECT MAX(date) AS d FROM finance_transactions').get().d;
+  if (!last) return { from: null, to: null, months };
+  const [y, m, d] = last.split('-').map(Number);
+  const endOfThatMonth = new Date(Date.UTC(y, m, 0)).getUTCDate();
+  const to = d >= endOfThatMonth ? last : new Date(Date.UTC(y, m - 1, 0)).toISOString().slice(0, 10);
+  const [ty, tm] = to.split('-').map(Number);
+  const from = new Date(Date.UTC(ty, tm - months, 1)).toISOString().slice(0, 10);
+  return { from, to, months };
+}
+
+// Resolve the purpose for a row: a TRANSACTION assignment beats a COUNTERPARTY one, because
+// the per-transaction form exists precisely to say "this one was different". Precedence by
+// test order is invisible, so it is a single expression here rather than two lookups whose
+// order some later caller could reverse.
+const RESOLVED = `
+  COALESCE(
+    (SELECT p.purpose FROM finance_purposes p
+      WHERE p.scope = 'transaction' AND p.match_key = CAST(t.id AS TEXT)),
+    (SELECT p.purpose FROM finance_purposes p
+      WHERE p.scope = 'counterparty' AND p.match_key = t.counterparty)
+  )`;
+
+// GET /purpose/summary — three states, never two.
+router.get('/purpose/summary', (req, res) => {
+  const { from, to, months } = purposeWindow(Number(req.query.months) || 12);
+
+  const row = db.prepare(`
+    SELECT
+      COUNT(*) AS n,
+      COALESCE(SUM(-t.amount_pence), 0) AS pence,
+      COALESCE(SUM(CASE WHEN ${RESOLVED} IS NULL THEN -t.amount_pence ELSE 0 END), 0) AS unreviewed_pence,
+      SUM(CASE WHEN ${RESOLVED} IS NULL THEN 1 ELSE 0 END) AS unreviewed_n,
+      COALESCE(SUM(CASE WHEN ${RESOLVED} = 'unknown' THEN -t.amount_pence ELSE 0 END), 0) AS unknown_pence,
+      SUM(CASE WHEN ${RESOLVED} = 'unknown' THEN 1 ELSE 0 END) AS unknown_n,
+      COALESCE(SUM(CASE WHEN ${RESOLVED} IS NOT NULL AND ${RESOLVED} <> 'unknown' THEN -t.amount_pence ELSE 0 END), 0) AS explained_pence,
+      SUM(CASE WHEN ${RESOLVED} IS NOT NULL AND ${RESOLVED} <> 'unknown' THEN 1 ELSE 0 END) AS explained_n
+    FROM finance_transactions t
+    WHERE t.date >= ? AND t.date <= ? AND ${opaqueWhere}`
+  ).get(from, to, ...OPAQUE_CATEGORIES);
+
+  const byPurpose = db.prepare(`
+    SELECT ${RESOLVED} AS purpose, COUNT(*) AS n, SUM(-t.amount_pence) AS pence
+      FROM finance_transactions t
+     WHERE t.date >= ? AND t.date <= ? AND ${opaqueWhere} AND ${RESOLVED} IS NOT NULL
+     GROUP BY purpose ORDER BY pence DESC`
+  ).all(from, to, ...OPAQUE_CATEGORIES);
+
+  res.json({
+    from, to, months, purposes: PURPOSES, categories: OPAQUE_CATEGORIES, ...row, byPurpose,
+  });
+});
+
+// GET /purpose/queue — what to ask about next, biggest money first.
+//
+// It DECIDES the order rather than listing rows: the point is that a handful of decisions
+// move most of the money, and a date-ordered list of 310 payments hides that completely.
+router.get('/purpose/queue', (req, res) => {
+  const { from, to, months } = purposeWindow(Number(req.query.months) || 12);
+
+  const rows = db.prepare(`
+    SELECT t.counterparty,
+           COUNT(*) AS n,
+           SUM(-t.amount_pence) AS pence,
+           MIN(t.date) AS first_seen,
+           MAX(t.date) AS last_seen,
+           (SELECT p.purpose FROM finance_purposes p
+             WHERE p.scope = 'counterparty' AND p.match_key = t.counterparty) AS counterparty_purpose,
+           SUM(CASE WHEN EXISTS (SELECT 1 FROM finance_purposes p
+                 WHERE p.scope = 'transaction' AND p.match_key = CAST(t.id AS TEXT)) THEN 1 ELSE 0 END) AS overridden_n,
+           SUM(CASE WHEN ${RESOLVED} IS NULL THEN -t.amount_pence ELSE 0 END) AS unreviewed_pence
+      FROM finance_transactions t
+     WHERE t.date >= ? AND t.date <= ? AND ${opaqueWhere}
+     GROUP BY t.counterparty
+     ORDER BY pence DESC`
+  ).all(from, to, ...OPAQUE_CATEGORIES);
+
+  const total = rows.reduce((a, r) => a + r.pence, 0);
+  let running = 0;
+  const withShare = rows.map((r) => {
+    running += r.pence;
+    return { ...r, shareOfOpaque: total ? r.pence / total : 0, cumulativeShare: total ? running / total : 0 };
+  });
+  res.json({ from, to, months, total, purposes: PURPOSES, counterparties: withShare });
+});
+
+// GET /purpose/transactions?counterparty=X — the rows behind one counterparty, so a single
+// payment that was different can be overridden without abandoning the counterparty rule.
+router.get('/purpose/transactions', (req, res) => {
+  const cp = String(req.query.counterparty || '');
+  if (!cp) return res.status(400).json({ error: 'counterparty is required' });
+  // WINDOWED, to the same period as the queue and the summary.
+  //
+  // Without this it returned every payment to the counterparty across the whole ledger —
+  // 662 rows for a counterparty with 128 in the window. Caught by opening the panel and
+  // counting. The rows outside the window are real payments, but they contribute nothing to
+  // the figures printed beside them, so assigning one appeared to do nothing. A detail list
+  // that describes a different population from the total above it is worse than no detail
+  // list: both are plausible and only one is being measured.
+  //
+  // `outsideWindow` is reported rather than hidden, because "128 shown" and "128 exist" are
+  // different claims and the difference here is 534 payments.
+  const { from, to } = purposeWindow(Number(req.query.months) || 12);
+  const rows = db.prepare(`
+    SELECT t.id, t.date, t.counterparty, -t.amount_pence AS pence, t.category, t.reference,
+           (SELECT p.purpose FROM finance_purposes p
+             WHERE p.scope = 'transaction' AND p.match_key = CAST(t.id AS TEXT)) AS own_purpose,
+           ${RESOLVED} AS resolved_purpose
+      FROM finance_transactions t
+     WHERE t.counterparty = ? AND t.date >= ? AND t.date <= ? AND ${opaqueWhere}
+     ORDER BY t.date DESC`
+  ).all(cp, from, to, ...OPAQUE_CATEGORIES);
+  const outside = db.prepare(`
+    SELECT COUNT(*) AS n, COALESCE(SUM(-t.amount_pence), 0) AS pence
+      FROM finance_transactions t
+     WHERE t.counterparty = ? AND (t.date < ? OR t.date > ?) AND ${opaqueWhere}`
+  ).get(cp, from, to, ...OPAQUE_CATEGORIES);
+  res.json({ counterparty: cp, from, to, purposes: PURPOSES, transactions: rows, outsideWindow: outside });
+});
+
+// POST /purpose — assign. { scope, key, purpose, note? }
+router.post('/purpose', express.json(), (req, res) => {
+  const { scope, key, purpose, note } = req.body || {};
+  if (scope !== 'counterparty' && scope !== 'transaction') {
+    return res.status(400).json({ error: "scope must be 'counterparty' or 'transaction'" });
+  }
+  if (!String(key || '').trim()) return res.status(400).json({ error: 'key is required' });
+  // Refused rather than coerced: an out-of-vocabulary purpose would total into nothing and
+  // look like a working entry. Same reasoning as the enum on the local model's output.
+  if (!PURPOSES.includes(purpose)) {
+    return res.status(400).json({ error: `purpose must be one of ${PURPOSES.join(', ')}` });
+  }
+  // A transaction key must actually exist AND be in the opaque set. Assigning a purpose to
+  // a row this surface does not cover would store a fact nothing ever reads.
+  if (scope === 'transaction') {
+    const t = db.prepare(`SELECT id FROM finance_transactions t WHERE t.id = ? AND ${opaqueWhere}`)
+      .get(Number(key), ...OPAQUE_CATEGORIES);
+    if (!t) return res.status(404).json({ error: `transaction ${key} is not an unexplained payment` });
+  }
+  try {
+    db.prepare(`
+      INSERT INTO finance_purposes (scope, match_key, direction, purpose, note, by_whom)
+      VALUES (?, ?, 'out', ?, ?, ?)
+      ON CONFLICT (scope, match_key, direction)
+      DO UPDATE SET purpose = excluded.purpose, note = excluded.note,
+                    by_whom = excluded.by_whom, created_at = datetime('now', 'localtime')`
+    ).run(scope, String(key), purpose, note || null, req.by || 'unknown');
+  } catch (err) {
+    return res.status(500).json({ error: err.message });
+  }
+  res.status(201).json({ scope, key: String(key), purpose, note: note || null });
+});
+
+// DELETE /purpose — remove an assignment, returning the row to unreviewed.
+router.delete('/purpose', express.json(), (req, res) => {
+  const { scope, key } = req.body || {};
+  const r = db.prepare('DELETE FROM finance_purposes WHERE scope = ? AND match_key = ? AND direction = ?')
+    .run(String(scope), String(key), 'out');
+  if (!r.changes) return res.status(404).json({ error: 'no such assignment' });
+  res.json({ removed: r.changes, scope, key: String(key) });
+});
+
+// The accessor other modules and tools call. rent-affordability.cjs asks THIS rather than
+// recomputing the opaque share, so the figure has one owner.
+function purposeSummary(months = 12) {
+  const { from, to } = purposeWindow(months);
+  const row = db.prepare(`
+    SELECT COALESCE(SUM(-t.amount_pence), 0) AS pence,
+           COALESCE(SUM(CASE WHEN ${RESOLVED} IS NULL THEN -t.amount_pence ELSE 0 END), 0) AS unreviewed_pence,
+           COALESCE(SUM(CASE WHEN ${RESOLVED} = 'unknown' THEN -t.amount_pence ELSE 0 END), 0) AS unknown_pence,
+           COALESCE(SUM(CASE WHEN ${RESOLVED} IS NOT NULL AND ${RESOLVED} <> 'unknown' THEN -t.amount_pence ELSE 0 END), 0) AS explained_pence
+      FROM finance_transactions t
+     WHERE t.date >= ? AND t.date <= ? AND ${opaqueWhere}`
+  ).get(from, to, ...OPAQUE_CATEGORIES);
+  const byPurpose = db.prepare(`
+    SELECT ${RESOLVED} AS purpose, SUM(-t.amount_pence) AS pence
+      FROM finance_transactions t
+     WHERE t.date >= ? AND t.date <= ? AND ${opaqueWhere}
+       AND ${RESOLVED} IS NOT NULL AND ${RESOLVED} <> 'unknown'
+     GROUP BY purpose ORDER BY pence DESC`
+  ).all(from, to, ...OPAQUE_CATEGORIES);
+  return { from, to, ...row, byPurpose };
+}
+
 module.exports = router;
+module.exports.purposeSummary = purposeSummary;
+module.exports.PURPOSES = PURPOSES;
 module.exports.counterparties = counterparties;
 module.exports.recurring = recurring;
 module.exports.categoryMonthly = categoryMonthly;

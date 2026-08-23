@@ -33,6 +33,8 @@ const PANELS = {
   activity: () => import('/panels/activity/activity.js'),
   inbox: () => import('/panels/inbox/inbox.js'),
   money: () => import('/panels/money/money.js'),
+  // Reads /api/finance — purpose is an attribute of a transaction and finance owns those.
+  purpose: () => import('/panels/purpose/purpose.js'),
   life: () => import('/panels/life/life.js'),
   system: () => import('/panels/system/system.js'),
   creative: () => import('/panels/creative/creative.js'),

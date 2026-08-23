@@ -43,7 +43,9 @@ const db = require('../server/db');
 // Provenance: every read this process makes is logged against this actor. Without it the
 // access log records 'unknown', which is honest but useless. See server/provenance.js.
 db.setProcessActor('claude');
-require('../server/routes/finance');
+// Kept as a binding rather than a bare require: the purpose figures are asked of finance
+// through its exported accessor, not recomputed here. One owner per number.
+const finance = require('../server/routes/finance');
 
 const argOf = (name) => {
   const i = process.argv.indexOf(name);
@@ -322,10 +324,39 @@ say(`  cash + payments to people ${perYear(spendOpaque.p)}${perMonth(spendOpaque
 say(`  itemised, purpose known   ${perYear(itemised)}${perMonth(itemised)}`);
 say('');
 say(`  ${opaquePct}% of what you spend has no purpose recorded. Not miscategorised -- there is`);
-say('  no information to categorise. Any statement of the form "you spend GBP X on living');
-say('  costs, so GBP Y is free for rent" would be derived from the other 22%, and would look');
-say('  exactly as confident as one derived from all of it.');
+say('  no information to categorise in the bank export. Any statement of the form "you spend');
+say('  GBP X on living costs, so GBP Y is free for rent" would be derived from the rest, and');
+say('  would look exactly as confident as one derived from all of it.');
 say('');
+
+// ASKED, NOT RECOMPUTED. finance owns finance_transactions and now owns the purpose
+// assignments too, so it owns this figure. Recomputing it here would be a second owner for
+// one number, and the two would drift the first time the opaque category list changed.
+{
+  const pp = finance.purposeSummary(MONTHS);
+  const known = pp.explained_pence;
+  const stillOpaque = pp.unreviewed_pence + pp.unknown_pence;
+  say('  HOW MUCH OF THAT YOU HAVE SINCE EXPLAINED -- the Purpose panel:');
+  say(`    explained                 ${perYear(known)}${perMonth(known)}`);
+  say(`    reviewed, not placeable   ${perYear(pp.unknown_pence)}${perMonth(pp.unknown_pence)}`);
+  say(`    not yet reviewed          ${perYear(pp.unreviewed_pence)}${perMonth(pp.unreviewed_pence)}`);
+  if (pp.byPurpose.length) {
+    say('');
+    pp.byPurpose.forEach((r) => say(`    ${String(r.purpose).padEnd(24)}${perYear(r.pence)}${perMonth(r.pence)}`));
+  }
+  say('');
+  if (known === 0) {
+    say('    Nothing assigned yet, so every figure below still treats the whole of it as');
+    say('    undescribed. Assigning the largest counterparties in the Purpose panel is the');
+    say('    single change that most narrows the answer -- five decisions cover 88% of it.');
+  } else {
+    const share = (100 * known / (known + stillOpaque)).toFixed(1);
+    say(`    ${share}% of the opaque spend now has a recorded purpose. The columns below still`);
+    say('    subtract ALL of it, explained or not -- money spent is money spent. What the');
+    say('    breakdown changes is whether you can tell which parts of it a move would end.');
+  }
+  say('');
+}
 
 say('IS THE HOUSING COST ALREADY IN HERE?');
 say('-'.repeat(78));

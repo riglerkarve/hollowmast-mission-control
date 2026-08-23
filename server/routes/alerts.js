@@ -51,6 +51,29 @@ db.migrate('alerts', [
         ('briefing', 'The morning briefing is ready');
     `);
   },
+
+  // M337 / owner decision #47 — A PROPOSED VERDICT IS NOT A VERDICT, AND LIVES IN ITS OWN
+  // COLUMNS FOR A REASON THAT IS NOT TIDINESS.
+  //
+  // The mute rule counts `verdict = 'ignored'`. If a proposal were written into that same
+  // column, this module could silence one of its own kinds on its own guess, without the
+  // owner ever seeing the alert that did it — an alerts ledger muting itself is the exact
+  // failure the workspace rule about notifications exists to prevent, one level up. Separate
+  // columns make that structurally impossible rather than merely unintended.
+  //
+  // WHY THIS EXISTS AT ALL: 31 events, 31 unjudged, zero verdicts ever recorded. The owner
+  // first decided to cut the module (#44) and then reversed it (#47) on new evidence: the
+  // debate established that every instrument requiring a RECURRING act from him is dead
+  // here — journal 1 row, cash_counts 0, lifestyle_intake 0, steering asked and re-asked —
+  // while every instrument a session operates and he merely ADJUDICATES is alive. 31/0 was
+  // predictable from the shape, not a verdict on the module. So the shape changes: a session
+  // proposes from observable state, he accepts or rejects.
+  (d) => {
+    const cols = d.prepare("SELECT name FROM pragma_table_info('alert_events')").all().map(r => r.name);
+    if (!cols.includes('proposed_verdict')) d.exec('ALTER TABLE alert_events ADD COLUMN proposed_verdict TEXT');
+    if (!cols.includes('proposed_because')) d.exec('ALTER TABLE alert_events ADD COLUMN proposed_because TEXT');
+    if (!cols.includes('proposed_at')) d.exec('ALTER TABLE alert_events ADD COLUMN proposed_at TEXT');
+  },
 ]);
 
 const IGNORES_TO_MUTE = 2;   // the rule, in one place
@@ -134,6 +157,96 @@ router.get('/events', (req, res) => {
 });
 
 // Judging an alert is the whole point. It is also what enforces the rule.
+// ------------------------------------------------------------------------------------
+// THE PROPOSER. M337 / decision #47.
+//
+// A session derives a verdict from OBSERVABLE STATE and offers it; the owner accepts or
+// rejects. Nothing here writes `verdict`, and nothing here can mute a kind — see the
+// migration note. A proposal is an argument, and it always ships with the evidence that
+// produced it, because a verdict he cannot check is one he has to take on trust and the
+// whole point is that he is the one who knows.
+//
+// THREE OF FIVE KINDS ARE NOT DERIVABLE, AND SAY SO RATHER THAN GUESSING. That is not a
+// gap in the implementation, it is the honest answer, and it is worth him seeing:
+//
+//   unregistered-session  DERIVABLE. The alert names a session and asks for it to be added
+//                         to the roster. Either it is on the roster now or it is not.
+//   chores_due            DERIVABLE. A chore completed after the alert was sent is the
+//                         action the alert was asking for.
+//   briefing              NOT DERIVABLE. "The briefing is ready" — nothing records whether
+//                         he read it. team_handovers.read_at exists and is 'unknown' on 99
+//                         of 99 rows, so it cannot tell his hand from a session's.
+//   uptime                NOT DERIVABLE. The watchdog restores the service, not him. The
+//                         alert may be useful and his behaviour cannot show it either way.
+//   schedule_overdue      NOT DERIVABLE YET. schedule_events has a `status`, but nothing
+//                         links an alert to the event that triggered it, so which row to
+//                         look at is a guess. Filed rather than approximated.
+const PROPOSERS = {
+  'unregistered-session': (ev) => {
+    const m = String(ev.title || '').match(/"([^"]+)"/);
+    if (!m) return { verdict: null, because: 'could not read a session name out of the title' };
+    const name = m[1];
+    const row = db.prepare('SELECT retired_at FROM team_sessions WHERE title = ?').get(name);
+    if (row) {
+      return { verdict: 'useful', because: `"${name}" is on the roster now`
+        + (row.retired_at ? ' (retired, but registered)' : '') + ' — the alert asked for that and it happened.' };
+    }
+    return { verdict: 'ignored', because: `"${name}" is still not on the roster. The alert asked for `
+      + 'an action that was never taken, which is what ignored means here — not that it was wrong.' };
+  },
+  chores_due: (ev) => {
+    const after = db.prepare('SELECT COUNT(*) c FROM lifestyle_done WHERE recorded_at > ?')
+      .get(ev.sent_at || '').c;
+    if (after > 0) return { verdict: 'useful', because: `${after} chore(s) were recorded done after this fired.` };
+    return { verdict: 'ignored', because: 'no chore was recorded done at any point after this fired.' };
+  },
+};
+
+// Kinds with no proposer, and WHY — carried to the panel so "nothing proposed" and
+// "nothing could be proposed" never look the same.
+const NOT_DERIVABLE = {
+  briefing: 'nothing records whether he read it; handover read_at is "unknown" on 99 of 99 rows',
+  uptime: 'the watchdog restores the service, not him — his behaviour cannot show usefulness either way',
+  schedule_overdue: 'no link from an alert to the schedule row that triggered it, so which row to check is a guess',
+};
+
+// EXPORTED so the daily briefing pass can run it. A proposer nothing triggers is the
+// dormant-mechanism shape this project rules worse than an absent one -- and it would have
+// shipped that way: an endpoint exists, nothing calls it, proposals only ever appear if
+// somebody remembers to POST. That is the same "no scheduled writer" cause M341's census
+// was built to make visible, and it would have been invisible here for the same reason.
+function proposeAll() {
+  // Only unjudged events, and only ones without a proposal already. Re-running must not
+  // overwrite a proposal he has already seen and is about to act on.
+  const rows = db.prepare(
+    'SELECT * FROM alert_events WHERE verdict IS NULL AND proposed_verdict IS NULL'
+  ).all();
+
+  const now = new Date().toISOString();
+  const upd = db.prepare('UPDATE alert_events SET proposed_verdict=?, proposed_because=?, proposed_at=? WHERE id=?');
+  const made = [], skipped = [];
+
+  db.withTransaction(() => {
+    for (const ev of rows) {
+      const fn = PROPOSERS[ev.kind];
+      if (!fn) { skipped.push({ id: ev.id, kind: ev.kind, why: NOT_DERIVABLE[ev.kind] || 'no proposer for this kind' }); continue; }
+      let p;
+      try { p = fn(ev); } catch (e) { skipped.push({ id: ev.id, kind: ev.kind, why: 'proposer threw: ' + e.message }); continue; }
+      if (!p || !p.verdict) { skipped.push({ id: ev.id, kind: ev.kind, why: (p && p.because) || 'proposer declined' }); continue; }
+      upd.run(p.verdict, p.because, now, ev.id);
+      made.push({ id: ev.id, kind: ev.kind, verdict: p.verdict, because: p.because });
+    }
+  });
+
+  return {
+    considered: rows.length, proposed: made.length, made, skipped,
+    note: 'A proposal is not a verdict. Nothing here writes alert_events.verdict and nothing '
+        + 'here can mute a kind — the mute rule counts his verdicts only.',
+  };
+}
+
+router.post('/propose', express.json(), (_req, res) => res.json(proposeAll()));
+
 router.post('/events/:id/verdict', (req, res) => {
   const { verdict } = req.body || {};
   if (!['useful', 'ignored', null].includes(verdict)) {
@@ -224,3 +337,4 @@ module.exports = router;
 module.exports.raisedSince = raisedSince;
 module.exports.record = record;
 module.exports.IGNORES_TO_MUTE = IGNORES_TO_MUTE;
+module.exports.proposeAll = proposeAll;

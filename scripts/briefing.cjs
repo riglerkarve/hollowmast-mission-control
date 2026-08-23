@@ -265,6 +265,18 @@ function gatherFacts() {
   const activity = ask(() => stats.derivedActivity());
   const projectsProgress = ask(() => projects.progressSince(sinceStamp));
   const goalSteps = ask(() => goals.nextSteps());
+  // M337 / decision #47 — propose a verdict on any alert he has not judged, BEFORE reading
+  // them below, so the briefing reports the state the panel will show him.
+  //
+  // WIRED HERE BECAUSE AN ENDPOINT NOBODY CALLS IS DORMANT. The proposer shipped as
+  // POST /api/alerts/propose and nothing invoked it, so proposals would only ever have
+  // appeared if somebody remembered to send one — the same no-scheduled-writer cause M341's
+  // census exists to make visible, and it would have been invisible here for that reason.
+  //
+  // It cannot mute anything: proposals live in their own columns and the mute rule counts
+  // his verdicts only. `ask` turns a throw into a could-not-look, so a broken proposer
+  // degrades the briefing rather than stopping it.
+  const alertsProposed = ask(() => alerts.proposeAll());
   const alertsRaised = ask(() => alerts.raisedSince(sinceStamp));
   const sitesDown = ask(() => analytics.notOk());
 
@@ -278,6 +290,12 @@ function gatherFacts() {
     cashPos,
     activity,
     goalSteps,
+    // Carried into facts so a proposer that stops working is DISCOVERABLE. Without this the
+    // call is a bare side effect: it could throw every morning, `ask` would swallow it into
+    // a could-not-look nobody reads, and the panel would simply stop showing proposals with
+    // no trace of why. A silent instrument is the failure this whole module was converted
+    // to avoid.
+    alertsProposed,
     alertsRaised,
     sitesDown,
     scheduleDue,

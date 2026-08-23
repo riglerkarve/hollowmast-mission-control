@@ -108,3 +108,22 @@
   .al-counts { gap: 6px; }
   .al-count { min-width: 46px; padding: 3px 6px; }
 }
+
+/* M337 — the proposed verdict. Quieter than the real one on purpose: a proposal that looks
+   like a decision invites him to click past it, and the whole value is that he reads the
+   reason before agreeing. Never coloured as strongly as .al-verdict-badge. */
+.al-proposal {
+  display: flex; align-items: baseline; gap: 8px; flex-wrap: wrap;
+  margin: 8px 0 6px; padding: 7px 10px;
+  background: var(--ring-bg);
+  border-left: 2px solid var(--border-strong);
+  border-radius: 0 var(--r-btn) var(--r-btn) 0;
+  font-size: 0.78rem;
+}
+.al-proposal-tag {
+  font-family: var(--mono); font-size: 0.68rem; letter-spacing: 0.06em;
+  text-transform: uppercase; white-space: nowrap; color: var(--muted);
+}
+.al-p-useful  { color: var(--short); }
+.al-p-ignored { color: var(--muted); }
+.al-proposal-why { color: var(--muted); }

@@ -116,6 +116,26 @@ function eventVerdictButtonsHTML(ev) {
   </div>`;
 }
 
+// M337 / decision #47 — THE PROPOSAL, SHOWN WITH ITS EVIDENCE.
+//
+// A session derives a verdict from observable state and offers it; he accepts or rejects.
+// The reasoning renders beside it deliberately: a proposed verdict he cannot check is one
+// he has to take on trust, and the whole reason this module was converted rather than cut
+// is that HE is the one who knows whether an alert helped.
+//
+// NEVER PRE-SELECTED AND NEVER APPLIED. The buttons below are unchanged; the proposal only
+// says which one a session would press, and why. An unproposed event shows nothing here
+// rather than an empty proposal — three of five kinds cannot be derived at all, and a
+// blank where a proposal would go must not read as "no opinion, probably ignore".
+function proposalHTML(ev) {
+  if (ev.verdict || !ev.proposed_verdict) return '';
+  const cls = ev.proposed_verdict === 'useful' ? ' al-p-useful' : ' al-p-ignored';
+  return `<div class="al-proposal">
+    <span class="al-proposal-tag${cls}">proposed: ${esc(ev.proposed_verdict)}</span>
+    <span class="al-proposal-why">${esc(ev.proposed_because || '')}</span>
+  </div>`;
+}
+
 function eventHTML(ev) {
   const sentAt = ev.sent_at
     ? `<span class="al-ev-when">${esc(day(ev.sent_at))} ${esc(time(ev.sent_at))}</span>`
@@ -129,6 +149,7 @@ function eventHTML(ev) {
     </div>
     <h4 class="al-ev-title">${esc(ev.title || '(no title)')}</h4>
     ${body}
+    ${proposalHTML(ev)}
     ${eventVerdictButtonsHTML(ev)}
   </article>`;
 }

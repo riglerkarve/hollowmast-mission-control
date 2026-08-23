@@ -762,7 +762,32 @@ router.post('/handover/:id/resolve-owner', express.json(), (req, res) => {
   // here with a track record of catching what the author could not see -- it found a P1, a
   // dark theme swallowed by a stray comment, and an inverted rules pass, none of which the
   // author's own checks could detect.
-  {
+  // THE OWNER IS NOT A SESSION, AND THE RULE ABOVE DOES NOT APPLY TO HIM. Added 23 Aug 2026
+  // after the Team Manager reported being BLOCKED executing decision #44's prune. The blocker
+  // was this check: `by: "owner"` returned 403 "resolver is not on the roster", because he is
+  // a human and humans are not on a roster of Claude sessions. So "42 owner items outstanding,
+  // zero resolved by the owner" was a fact about the SCHEMA, not about him — he was locked out
+  // of the only mechanism for clearing his own queue.
+  //
+  // THE SAME-ENGINE RULE EXISTS BECAUSE TWO CLAUDE SESSIONS SHARE BLIND SPOTS. A human shares
+  // none of them; he is the ground truth the rule is a proxy for. Refusing him is the check
+  // firing in exactly the case it was built to protect.
+  //
+  // KEYED ON PROVENANCE, NOT ON THE `by` STRING, and that is the security of it. `by` is free
+  // text a caller chooses; X-MC-By is the established owner signal, sent by the browser
+  // panels and validated against a fixed list in server/provenance.js. That module also
+  // records why loopback is NOT usable as a signal — the browser, a Claude session running
+  // curl, and every importer all arrive on 127.0.0.1, so the network says nothing about who
+  // is typing, and only an explicit claim does. This is exactly as strong as that, and no
+  // stronger; it is the same claim the rest of the system already trusts for attribution.
+  //
+  // DELIBERATELY NOT FIXED BY ADDING A ROSTER ROW WITH engine 'human', which was the first
+  // proposal. That would make the check pass by an accident of data rather than by intent,
+  // model a person as a session with a cwd and a last_seen, and be silently undone by anyone
+  // tidying the roster. A rule that should not apply to him is better stated than evaded.
+  const ownerIsResolving = req.by === 'you';
+
+  if (!ownerIsResolving) {
     const resolver = String(by).trim();
     const authorEngine = engineOf(resolver === h.title ? h.title : h.title);
     const resolverEngine = engineOf(resolver);

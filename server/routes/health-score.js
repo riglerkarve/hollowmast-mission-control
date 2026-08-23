@@ -57,9 +57,31 @@ async function checkPanels() {
     const d = await r.json();
     const panels = d.panels || [];
     if (panels.length === 0) return { name: 'Panels healthy', passed: null, detail: 'No panels registered — the check ran but found nothing to check.' };
-    const broken = panels.filter((p) => p.status !== 'healthy');
-    if (broken.length === 0) return { name: 'Panels healthy', passed: true, detail: `All ${panels.length} panels healthy.` };
-    return { name: 'Panels healthy', passed: false, detail: `${broken.length} of ${panels.length} panels broken: ${broken.map((p) => p.name).slice(0, 5).join(', ')}${broken.length > 5 ? '…' : ''}` };
+    // THREE OUTCOMES, NOT TWO. `!== 'healthy'` used to sweep both real breakage and panels
+    // that were never checked into one bucket, and health-check's own verdict then ignored
+    // its api field entirely — so this leg printed "All 69 panels healthy" on 23 Aug 2026
+    // while exercise and work were both answering 404. A leg of a score that cannot say
+    // "I did not look at 45 of these" is not reporting health, it is reporting file presence.
+    const broken = panels.filter((p) => p.status === 'broken');
+    const unchecked = panels.filter((p) => p.status === 'unchecked');
+    // Stated on every outcome, pass included. A caveat that only appears on failure is a
+    // caveat nobody reads, because nobody investigates good news.
+    const blind = unchecked.length
+      ? ` ${unchecked.length} of ${panels.length} have no API mapped and were NOT checked.`
+      : '';
+    if (broken.length === 0) {
+      return {
+        name: 'Panels healthy',
+        passed: true,
+        detail: `${panels.length - unchecked.length} of ${panels.length} panels checked and healthy.${blind}`,
+      };
+    }
+    return {
+      name: 'Panels healthy',
+      passed: false,
+      detail: `${broken.length} of ${panels.length} panels broken: `
+        + `${broken.map((p) => p.name).slice(0, 5).join(', ')}${broken.length > 5 ? '…' : ''}.${blind}`,
+    };
   } catch (e) {
     return { name: 'Panels healthy', passed: null, detail: `Could not reach /api/health-check — ${String(e.message || e).slice(0, 80)}. This is a failure to look, not a clean bill of health.` };
   }

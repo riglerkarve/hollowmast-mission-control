@@ -187,6 +187,37 @@ function parseRequestsJsonl(text) {
     if (!prev || (a !== null && b !== null && a > b)) latestStatus.set(String(e.re), e);
   }
 
+  // TWO RECORDS CAN CARRY THE SAME `id`, AND THE RENAME BELOW HIDES WHAT THAT COSTS.
+  //
+  // The loop appends a `+` to a ref already taken, so the second record survives instead of
+  // overwriting the first. That is the right call and it is deliberately visible. But the
+  // event index is keyed on the event's own `re` field, which says the ORIGINAL id — so
+  // nothing ever names `R027+`, and every event addressed to `R027` is applied to whichever
+  // record happened to come first in the file. The second record then keeps its own `status`
+  // field forever, with `status_basis: 'record'` as the only trace.
+  //
+  // Nothing here reported that, and the existing residue could not have: an event landing on
+  // the wrong half of a collided pair IS applied, and a renamed record that consequently
+  // receives nothing was never skipped. `applied` and `applied to the intended record` are
+  // different claims and only the first was being checked. Measured 23 Aug 2026 on the live
+  // file: R027 is two unrelated things -- a HOLLOWMAST bug logged 22 Aug 18:33 and a website
+  // agent request logged 23 Aug 00:33 -- with four events between them. The request had been
+  // marked done at 09:35 and was showing on the board as open.
+  //
+  // The same file read by dash/read-requests.cjs resolves the collision the OTHER way: it
+  // folds with `byId.set`, so the LAST record wins. Two readers, one file, two different
+  // answers about who owns an event, neither of them reporting it.
+  const idCounts = new Map();
+  for (const r of records) {
+    if (!r.id) continue;
+    const key = String(r.id);
+    idCounts.set(key, (idCounts.get(key) || 0) + 1);
+  }
+  const idCollisions = [...idCounts].filter(([, n]) => n > 1).map(([id]) => id).sort();
+  const collided = new Set(idCollisions);
+  const eventsOnCollided = events.filter((e) => e.re && collided.has(String(e.re))).length;
+  const collidedRows = [];
+
   const seen = new Set();
   let conflicts = 0;
   let synthesised = 0;
@@ -195,7 +226,24 @@ function parseRequestsJsonl(text) {
   for (const r of records) {
     let ref = r.id ? String(r.id) : `at:${r.at}`;
     if (!r.id) synthesised += 1;
+    const claimedRef = ref;
     while (seen.has(ref)) ref += '+';        // stable and visible; never silently merged
+    if (ref !== claimedRef) {
+      // A renamed record cannot be matched by any event, because events name the original id.
+      // Said out loud rather than left to be inferred from `status_basis: 'record'`.
+      collidedRows.push({
+        id: claimedRef,
+        renamedTo: ref,
+        at: r.at || null,
+        title: String(r.t || r.text || r.d || '(no title)').slice(0, 120),
+      });
+      skipped.push(
+        `${claimedRef}: a second record carries this id and was renamed ${ref}.`
+        + ` No event names ${ref}, so every event addressed to ${claimedRef} was applied to the`
+        + ` FIRST record instead and this one keeps its own status field. The two records are`
+        + ` not the same request.`,
+      );
+    }
     seen.add(ref);
 
     const raw = (r.status || '').toLowerCase();
@@ -246,10 +294,20 @@ function parseRequestsJsonl(text) {
     items,
     skipped,
     conflicts,
+    // Additive. Every existing caller reads items/skipped/conflicts/note and is unaffected.
+    // These three can all be empty or zero -- they are on a file with no duplicate id, which
+    // is what makes a non-zero answer mean something. A counter never shown returning nothing
+    // is decoration.
+    idCollisions,
+    eventsOnCollided,
+    collidedRows,
     note: `${items.length} requests from ${lines.length} lines · ${events.length} audit events`
       + ` (${fromEvent} set a status, ${orphanEvents} reference nothing)`
       + ` · ${synthesised} had no id and were keyed by timestamp`
-      + (unordered ? ` · ${unordered} event(s) NOT applied because they could not be ordered after their record` : ""),
+      + (unordered ? ` · ${unordered} event(s) NOT applied because they could not be ordered after their record` : "")
+      + (idCollisions.length
+        ? ` · ${idCollisions.length} DUPLICATE id(s) (${idCollisions.join(', ')}) carrying ${eventsOnCollided} event(s) that cannot be attributed to a single record`
+        : ""),
   };
 }
 
@@ -391,6 +449,17 @@ function importAll(db) {
       conflicts: parsed.conflicts,
       note: parsed.note,
       residue: parsed.skipped.slice(0, 10),
+      // Surfaced only by a parser that computes them, so a source with no id concept omits
+      // them rather than reporting a zero it never measured. Absent and zero are different
+      // claims here: absent means this parser does not key on ids at all, zero means it
+      // looked and every id was unique.
+      ...(parsed.idCollisions
+        ? {
+          idCollisions: parsed.idCollisions,
+          eventsOnCollided: parsed.eventsOnCollided,
+          collidedRows: parsed.collidedRows,
+        }
+        : {}),
     });
   }
 

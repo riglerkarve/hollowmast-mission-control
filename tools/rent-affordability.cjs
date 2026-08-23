@@ -52,6 +52,11 @@ const argOf = (name) => {
 const SAVE = process.argv.includes('--save');
 const RENTS = (argOf('--rent') || '')
   .split(',').map((s) => Number(String(s).trim())).filter((n) => Number.isFinite(n) && n > 0);
+// The Local Housing Allowance rate for the property's Broad Rental Market Area. Supplied by
+// the owner from gov.uk, never guessed: it decides the whole answer, and the two areas in
+// this record differ by a factor of five.
+const LHA = (argOf('--lha') || '')
+  .split(',').map((s) => Number(String(s).trim())).filter((n) => Number.isFinite(n) && n > 0);
 
 // ---------------------------------------------------------------- the window
 // The last period is ALWAYS partial: the ledger is an import and stops mid-month, so
@@ -118,9 +123,30 @@ const adjacent = HOUSING_ADJACENT.map((c) => ({ c, ...outCat(c) }));
 const L = [];
 const say = (s = '') => { L.push(s); console.log(s); };
 
+// ---------------------------------------------------------------- the UC statements
+// Read from data/uc-statements.jsonl, which tools/uc-reconcile.cjs has checked against the
+// bank. Absent file = the hold still stands, and the report says so rather than pretending.
+//
+// These answer the one question the LEDGER cannot: the housing element never appears in the
+// bank because DWP pays it straight to the landlord, so a bank export shows £0 of housing
+// for a tenancy that is in fact being paid in full.
+let UC = [];
+try {
+  UC = fs.readFileSync(path.join(__dirname, '..', 'data', 'uc-statements.jsonl'), 'utf8')
+    .split(/\r?\n/).filter(Boolean).map((l) => JSON.parse(l))
+    .sort((a, b) => a.ap_end.localeCompare(b.ap_end));
+} catch { UC = []; }
+const ucLatest = UC.length ? UC[UC.length - 1] : null;
+const ucLine = (r, label) => (r.entitlement_lines || []).find((x) => x.label === label);
+const ucPaidToLandlord = (r) => (r.deduction_lines || []).some((x) => x.label === 'Payment to your landlord');
+
 say('RENT AFFORDABILITY, FROM YOUR OWN LEDGER');
- say('*** THIS ITEM IS HELD: Universal Credit statements are to be imported first ***');
- say('*** Nothing below is an answer. The scenarios narrow once that data exists.  ***');
+if (UC.length) {
+  say(`*** Hold released: ${UC.length} Universal Credit statements imported and reconciled. ***`);
+} else {
+  say('*** THIS ITEM IS HELD: Universal Credit statements are to be imported first ***');
+  say('*** Nothing below is an answer. The scenarios narrow once that data exists.  ***');
+}
 say('='.repeat(78));
 say(`Twelve complete months, ${FROM} to ${TO}.`);
 if (TO !== ledgerEnd) {
@@ -263,10 +289,58 @@ say('  consistent amount to the same counterparty. Nothing matches: every repeat
 say('  has a median gap of 0-7 days with mostly-distinct amounts, which is the pattern of');
 say('  informal transfers, not a tenancy.');
 say('');
-say('  So either housing is paid in cash, or from an account not imported here, or it is');
-say('  not being paid by you. THIS TOOL CANNOT TELL WHICH, and the three have completely');
-say('  different consequences for the question you asked.');
-say('');
+if (!ucLatest) {
+  say('  So either housing is paid in cash, or from an account not imported here, or it is');
+  say('  not being paid by you. THIS TOOL CANNOT TELL WHICH, and the three have completely');
+  say('  different consequences for the question you asked.');
+  say('');
+} else {
+  // The fourth possibility, which the three above did not include, and which the statements
+  // settle outright.
+  const h = ucLine(ucLatest, 'Housing');
+  const direct = ucPaidToLandlord(ucLatest);
+  say('  ANSWERED BY THE UC STATEMENTS, and the answer was not one of the three above:');
+  say(`  the housing element is paid by DWP DIRECT TO THE LANDLORD. It never enters this`);
+  say('  account, which is why the ledger shows GBP 0.00 of housing for a tenancy that is');
+  say('  in fact being paid in full.');
+  say('');
+  say(`  Latest statement, assessment period ending ${ucLatest.ap_end}:`);
+  say(`    rent                     GBP ${gbp(Math.round((ucLatest.rent_stated || 0) * 100))}`);
+  if (ucLatest.service_charges) {
+    say(`    service charges          GBP ${gbp(Math.round(ucLatest.service_charges * 100))}`);
+  }
+  say(`    housing element          GBP ${gbp(Math.round((h ? h.amount : 0) * 100))}   ${direct ? 'paid direct to the landlord' : 'PAID TO YOU -- you pay the landlord'}`);
+  say(`    total UC entitlement     GBP ${gbp(Math.round(ucLatest.total_entitlement * 100))}`);
+  say(`    reaches your account     GBP ${gbp(Math.round(ucLatest.total_payment * 100))}`);
+  say('');
+  say('  SO THE "Benefits" LINE ABOVE IS NOT THE AWARD. It is what is left after housing');
+  say('  has been taken out and sent elsewhere. Reading it as income and then asking what');
+  say('  rent it can carry counts the rent twice -- once as missing, once as unaffordable.');
+  say('');
+
+  // The shortfall history is the part that actually generalises to a new tenancy.
+  const capped = UC.filter((r) => r.lha_shortfall);
+  if (capped.length) {
+    const last = capped[capped.length - 1];
+    say('  WHERE THE RISK ACTUALLY SITS -- the cap, not the rent:');
+    say(`    ${capped.length} of ${UC.length} statements show the element held BELOW the rent by a cap`);
+    say(`    (${last.cap_type || 'Local Housing Allowance'}). Most recent: rent GBP ${gbp(Math.round(last.rent_stated * 100))} against an element`);
+    say(`    of GBP ${gbp(Math.round((ucLine(last, 'Housing') || { amount: 0 }).amount * 100))}, a shortfall of GBP ${gbp(Math.round(last.lha_shortfall * 100))} a month to find yourself.`);
+    say('');
+    say('    That is the number a listing has to be judged against. A rent inside the LHA');
+    say('    rate for the area costs you nothing; a rent above it costs you the difference');
+    say('    every month, out of the GBP ' + gbp(Math.round(ucLatest.total_payment * 100)) + ' that actually reaches you.');
+    say('');
+  }
+  const noHousing = UC.filter((r) => !ucLine(r, 'Housing'));
+  if (noHousing.length) {
+    say(`  AND IT IS NOT AUTOMATIC: ${noHousing.length} of ${UC.length} statements carry NO housing element at all`);
+    say(`    (${noHousing[0].ap_end} to ${noHousing[noHousing.length - 1].ap_end}). Standard allowance only.`);
+    say('    Moving does not carry the element with you -- it is reassessed, and in this');
+    say('    record it has both stopped for a year and restarted a period late.');
+    say('');
+  }
+}
 
 say('THE ONE QUESTION THAT UNLOCKS THIS');
 say('-'.repeat(78));
@@ -345,6 +419,39 @@ if (!RENTS.length) {
   say('');
   say(`  Also not included: the GBP ${movedM.toFixed(2)}/month above, in either direction, because`);
   say('  whether it is available is the open question.');
+
+  // THE COLUMNS ABOVE CHARGE HIM THE WHOLE RENT, and in 47 of 62 statements that is not
+  // what happened — UC paid the housing element, latterly straight to the landlord. Left
+  // uncorrected this is not a small conservatism, it is the wrong question, and it fails in
+  // the direction that would talk him out of a move he can afford.
+  if (ucLatest) {
+    say('');
+    say('  THE COLUMNS ABOVE ASSUME YOU PAY THE WHOLE RENT YOURSELF.');
+    say('  In this record you almost never have. What you actually pay is the SHORTFALL:');
+    say('  rent above the Local Housing Allowance rate for the property, plus anything the');
+    say('  element does not cover. On the current tenancy that shortfall is GBP 0.00.');
+    say('');
+    if (LHA.length) {
+      say('  rent      LHA rate      you pay      against GBP ' + gbp(Math.round(ucLatest.total_payment * 100)) + ' reaching your account');
+      for (const rent of RENTS) {
+        for (const lha of LHA) {
+          const gap = Math.max(0, rent - lha);
+          say(`  GBP ${String(rent).padEnd(8)} GBP ${String(lha).padEnd(11)} GBP ${gap.toFixed(2).padStart(9)}   ${gap === 0 ? 'fully covered' : `${((gap / (ucLatest.total_payment)) * 100).toFixed(0)}% of what reaches you`}`);
+        }
+      }
+      say('');
+      say('  The LHA rate is YOURS to supply from gov.uk for the actual Broad Rental Market');
+      say('  Area. It is not derivable from this ledger and is not guessed here.');
+    } else {
+      say('  Supply the LHA rate for the area and this will do that arithmetic:');
+      say(`      node tools/rent-affordability.cjs --rent ${RENTS[0] || 850} --lha 900`);
+      say('');
+      say('  Look it up on gov.uk for the Broad Rental Market Area of the actual property.');
+      say('  NO DEFAULT IS OFFERED. An invented LHA rate would decide the whole answer, and');
+      say('  the two areas in this record differ enormously: the element was GBP 332.41 at the');
+      say('  Shared Accommodation rate in Poole and is GBP 1646.36 in Oxford.');
+    }
+  }
 }
 say('');
 

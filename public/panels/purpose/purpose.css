@@ -1,0 +1,121 @@
+/* purpose — assigning what the opaque spending was actually for.
+ *
+ * Written 23 Aug 2026 under decision #48, which returned CSS control to Claude sessions
+ * (superseding #18). Scoped entirely to `.pp-` so it cannot reach another panel: the risk
+ * decision 18 named — a shared working tree where one session's whole-file commit reverts
+ * another's — is unrefuted, and a per-panel sheet is the version of that risk nobody else
+ * is standing in.
+ *
+ * Every custom property used here is defined in shell.css. Checked by grepping for the
+ * definitions rather than assuming the names exist:
+ *   colours, all with dark-theme overrides —
+ *     --accent --accent-soft --accent-text --card --bg --ink --muted --border
+ *   radii, correctly WITHOUT dark overrides because they are not colours —
+ *     --r-card --r-btn
+ * No new tokens are invented. An undefined custom property renders as nothing and raises no
+ * error, which is how five invented tokens once shipped unnoticed.
+ */
+
+/* ---------------------------------------------------------------- the share bar
+ * The three states are the whole point of the panel, so they get the one piece of real
+ * visual encoding in it. They must stay distinguishable from each other — "reviewed and
+ * not placeable" is a DIFFERENT FACT from "not yet reviewed", and a bar that rendered them
+ * in two shades of the same colour would quietly merge them again.
+ *
+ * Not a .bar-chart: that primitive in shared.css is a VERTICAL column chart, 120px tall
+ * with align-items:flex-end. Reusing it for a horizontal share would have fought it. */
+.pp-bar {
+  display: flex;
+  height: 14px;
+  border-radius: 7px;
+  overflow: hidden;
+  background: var(--border);
+  margin: 4px 0 14px;
+}
+
+.pp-seg { min-width: 2px; transition: width .25s ease; }
+
+/* Explained is the solid accent — the state you are working towards. */
+.pp-seg-explained { background: var(--accent); }
+
+/* Reviewed-but-not-placeable is deliberately NOT a lighter accent: it is an answer, not a
+   partial success, and it should not read as "nearly explained". Hatched so it is separable
+   from its neighbours without relying on hue alone, which also keeps it legible to anyone
+   who cannot distinguish the two colours. */
+.pp-seg-unknown {
+  background: repeating-linear-gradient(
+    45deg, var(--accent-soft), var(--accent-soft) 4px, var(--card) 4px, var(--card) 8px);
+}
+
+/* Not-yet-reviewed is the flat ground: the work still to do. */
+.pp-seg-unreviewed { background: var(--border); }
+
+.pp-legend { display: flex; flex-wrap: wrap; gap: 6px 18px; list-style: none; margin: 0 0 6px; padding: 0; }
+.pp-legend li { display: flex; align-items: center; gap: 7px; font-size: 12px; color: var(--muted); }
+.pp-key { width: 12px; height: 12px; border-radius: 3px; flex: none; }
+
+/* ---------------------------------------------------------------- counterparty rows
+ * A row, not a stack of stat blocks: name and amount lead, because the panel's argument is
+ * that a handful of counterparties hold most of the money and that is only visible when the
+ * amounts line up in a column you can scan. */
+.pp-row-head {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.pp-name { font-size: 15px; color: var(--ink); font-weight: 600; }
+.pp-amount { font-variant-numeric: tabular-nums; font-size: 15px; color: var(--ink); white-space: nowrap; }
+.pp-meta { font-size: 12px; color: var(--muted); margin: 2px 0 10px; line-height: 1.5; }
+
+.pp-actions { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; }
+
+/* A row whose counterparty rule is set recedes — the eye should land on what is still
+   undecided, which is the only thing the panel is asking you to do. */
+.pp-row-done .pp-name,
+.pp-row-done .pp-amount { color: var(--muted); }
+
+select.pp-select {
+  font-size: 13px;
+  padding: 5px 9px;
+  border: 1px solid var(--border);
+  border-radius: var(--r-btn);
+  background: var(--bg);
+  color: var(--ink);
+}
+select.pp-select:focus { border-color: var(--accent); outline: none; }
+
+/* ---------------------------------------------------------------- the payment table
+ * These rules exist because the padding was inline in the JS, which was the only place to
+ * put it while this sheet did not exist. */
+.pp-tx { width: 100%; border-collapse: collapse; margin-top: 6px; }
+.pp-tx td { padding: 5px 10px 5px 0; border-top: 1px solid var(--border); font-size: 13px; }
+.pp-tx tr:first-child td { border-top: none; }
+.pp-tx-amount { text-align: right; font-variant-numeric: tabular-nums; white-space: nowrap; }
+.pp-tx-from { color: var(--muted); font-size: 12px; }
+
+/* The window control. Default is 12 months so the panel and the affordability report can
+   never disagree; widening is a deliberate act, so the active choice is stated rather than
+   implied by a subtle tint. */
+.pp-window { display: flex; align-items: center; flex-wrap: wrap; gap: 8px; margin: 0 0 14px; font-size: 12px; color: var(--muted); }
+
+.pp-win { font-size: 12px; padding: 4px 10px; }
+
+.pp-win-on {
+  background: var(--accent);
+  color: var(--accent-text);
+  border-color: var(--accent);
+}
+
+/* A counterparty card. The margin is the only thing it needs — .card already carries the
+   background, radius and padding — but it is defined rather than left as a bare marker,
+   because a class in the markup with no rule anywhere is indistinguishable from a typo. */
+.pp-row { margin-bottom: 10px; }
+
+.pp-residue { font-size: 12px; color: var(--muted); line-height: 1.5; margin: 0 0 8px; }
+
+@media (max-width: 560px) {
+  .pp-row-head { flex-direction: column; gap: 2px; }
+  .pp-legend { gap: 4px 12px; }
+}

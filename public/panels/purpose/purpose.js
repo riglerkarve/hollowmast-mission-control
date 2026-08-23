@@ -16,12 +16,10 @@
 // facts. A payment looked at and genuinely not placeable is not the same as one nobody has
 // opened, and collapsing them would make a reviewed ledger and an ignored one identical.
 //
-// NO STYLESHEET OF ITS OWN, deliberately. Codex owns every stylesheet in mission-control
-// (owner decision #18) and no Claude session edits one, so this is built entirely from the
-// shared primitives in shared.css — .panel, .card, .stats-summary, .stat-block, .btn,
-// .badge, .empty-hint, .failure-hint. That means it arrives styled rather than arriving as
-// 1,378 unstyled elements the way the backlog did (M72). The layout refinements that DO want
-// a purpose.css are filed for Codex rather than written here.
+// IT HAS ITS OWN STYLESHEET AGAIN. Decision #48 (23 Aug 2026) returned CSS control to
+// Claude sessions, superseding #18. purpose.css is scoped entirely to .pp- so it cannot
+// reach another panel — the shared-working-tree risk decision 18 named is unrefuted, and a
+// per-panel sheet is the version of it nobody else is standing in.
 import { renderLede } from '/panels/lede/lede.js';
 
 const esc = (s) => String(s == null ? '' : s)
@@ -45,10 +43,28 @@ async function api(path, opts = {}) {
   return r.json();
 }
 
+// The window is a query parameter on every call, so the queue, the summary and the detail
+// list can never describe different periods. 12 months is the default because that is what
+// rent-affordability.cjs measures, and two surfaces answering the same question over
+// different windows is the drift this project keeps meeting.
+const WINDOWS = [
+  { months: 12, label: '12 months' },
+  { months: 24, label: '24 months' },
+  { months: 240, label: 'all time' },
+];
+
 async function load() {
   state.error = null;
+  // The default-window paths are written as plain literals so tools/verify-panel.cjs can
+  // still extract and probe them. Built entirely by interpolation they became invisible to
+  // it, and a panel whose endpoints no checker can reach loses the one automated check that
+  // catches a route going away.
+  const dflt = state.months === 12;
   try {
-    const [summary, queue] = await Promise.all([api('/purpose/summary'), api('/purpose/queue')]);
+    const [summary, queue] = await Promise.all([
+      dflt ? api('/purpose/summary') : api(`/purpose/summary?months=${state.months}`),
+      dflt ? api('/purpose/queue') : api(`/purpose/queue?months=${state.months}`),
+    ]);
     state.summary = summary;
     state.queue = queue;
   } catch (e) {
@@ -57,26 +73,45 @@ async function load() {
   render();
 }
 
+function windowHTML() {
+  return `<div class="pp-window">
+    <span>Window</span>
+    ${WINDOWS.map((w) => `<button class="btn pp-win${w.months === state.months ? ' pp-win-on' : ''}"
+      data-months="${w.months}"${w.months === state.months ? ' aria-current="true"' : ''}>${esc(w.label)}</button>`).join('')}
+    <span>default 12 months, matching the affordability report</span>
+  </div>`;
+}
+
 // The derived figure, and the reason this panel is not just storage: it shows what assigning
-// actually bought. Three stat blocks because there are three states.
+// actually bought. Three segments and three legend rows because there are three states.
 function summaryHTML(s) {
   const share = s.pence ? s.explained_pence / s.pence : 0;
+  const total = s.pence || 1;
+  const seg = (v, cls) => (v > 0 ? `<div class="pp-seg ${cls}" style="width:${(v / total) * 100}%"></div>` : '');
   const block = (label, value, sub) => `<div class="stat-block">
       <span class="stat-value">${esc(value)}</span>
       <span class="stat-label">${esc(label)}${sub ? ` · ${esc(sub)}` : ''}</span>
     </div>`;
   return `<div class="card">
+    ${windowHTML()}
     <div class="stats-summary">
-      ${block('explained', gbp(s.explained_pence), `${pct(share)} · ${s.explained_n} payments`)}
-      ${block('reviewed, not placeable', gbp(s.unknown_pence), `${s.unknown_n} payments`)}
-      ${block('not yet reviewed', gbp(s.unreviewed_pence), `${s.unreviewed_n} payments`)}
+      ${block('explained', gbp(s.explained_pence), `${pct(share)} of the opaque total`)}
       ${block('opaque total', gbp(s.pence), `${s.n} payments`)}
     </div>
-    <p class="empty-hint" style="text-align:left">Cash withdrawals and payments to people,
-      ${esc(s.from)} to ${esc(s.to)}. The bank records no purpose for any of it.
-      <b>Not placeable</b> is a real answer and is kept separate from <b>not yet reviewed</b> —
-      those are different facts, and a ledger you have been through should not look like one
-      you have ignored.</p>
+    <div class="pp-bar">
+      ${seg(s.explained_pence, 'pp-seg-explained')}
+      ${seg(s.unknown_pence, 'pp-seg-unknown')}
+      ${seg(s.unreviewed_pence, 'pp-seg-unreviewed')}
+    </div>
+    <ul class="pp-legend">
+      <li><span class="pp-key pp-seg-explained"></span>Explained ${gbp(s.explained_pence)} · ${s.explained_n}</li>
+      <li><span class="pp-key pp-seg-unknown"></span>Reviewed, not placeable ${gbp(s.unknown_pence)} · ${s.unknown_n}</li>
+      <li><span class="pp-key pp-seg-unreviewed"></span>Not yet reviewed ${gbp(s.unreviewed_pence)} · ${s.unreviewed_n}</li>
+    </ul>
+    <p class="pp-residue">Cash withdrawals and payments to people, ${esc(s.from)} to ${esc(s.to)}.
+      The bank records no purpose for any of it. <b>Not placeable</b> is a real answer and is
+      kept separate from <b>not yet reviewed</b> — those are different facts, and a ledger you
+      have been through should not look like one you have ignored.</p>
     ${s.byPurpose && s.byPurpose.length ? `<div class="stats-summary">${s.byPurpose
       .map((p) => block(p.purpose, gbp(p.pence), `${p.n}`)).join('')}</div>` : ''}
   </div>`;
@@ -85,34 +120,27 @@ function summaryHTML(s) {
 function purposeSelect(scope, key, current) {
   const opts = (state.summary.purposes || [])
     .map((p) => `<option value="${esc(p)}"${p === current ? ' selected' : ''}>${esc(p)}</option>`).join('');
-  return `<select data-scope="${esc(scope)}" data-key="${esc(key)}" aria-label="purpose">
+  return `<select class="pp-select" data-scope="${esc(scope)}" data-key="${esc(key)}" aria-label="purpose">
     <option value=""${current ? '' : ' selected'}>— not set —</option>${opts}
   </select>`;
 }
 
 function rowHTML(c) {
   const open = state.open === c.counterparty;
-  return `<div class="card">
-    <div class="stats-summary" style="margin-bottom:8px">
-      <div class="stat-block">
-        <span class="stat-value">${gbp(c.pence)}</span>
-        <span class="stat-label">${esc(c.counterparty)}</span>
-      </div>
-      <div class="stat-block">
-        <span class="stat-value">${pct(c.shareOfOpaque)}</span>
-        <span class="stat-label">of the opaque total · running ${pct(c.cumulativeShare)}</span>
-      </div>
-      <div class="stat-block">
-        <span class="stat-value">${c.n}</span>
-        <span class="stat-label">payments · ${esc(c.first_seen)} to ${esc(c.last_seen)}</span>
-      </div>
+  const done = !!c.counterparty_purpose;
+  return `<div class="card pp-row${done ? ' pp-row-done' : ''}">
+    <div class="pp-row-head">
+      <span class="pp-name">${esc(c.counterparty)}</span>
+      <span class="pp-amount">${gbp(c.pence)}</span>
     </div>
-    <p style="margin:0 0 10px">
+    <p class="pp-meta">${c.n} payment${c.n === 1 ? '' : 's'} · ${pct(c.shareOfOpaque)} of the opaque
+      total · running ${pct(c.cumulativeShare)} · ${esc(c.first_seen)} to ${esc(c.last_seen)}${
+  c.overridden_n ? ` · ${c.overridden_n} set individually` : ''}</p>
+    <div class="pp-actions">
       ${purposeSelect('counterparty', c.counterparty, c.counterparty_purpose)}
       <button class="btn" data-cp="${esc(c.counterparty)}">${open ? 'Hide payments' : 'Payments…'}</button>
-      ${c.counterparty_purpose ? `<span class="badge"><span class="badge-label">${esc(c.counterparty_purpose)}</span></span>` : ''}
-      ${c.overridden_n ? `<span class="badge"><span class="badge-label">${c.overridden_n} set individually</span></span>` : ''}
-    </p>
+      ${done ? `<span class="badge"><span class="badge-label">${esc(c.counterparty_purpose)}</span></span>` : ''}
+    </div>
     ${open ? detailHTML(c.counterparty) : ''}
   </div>`;
 }
@@ -132,16 +160,16 @@ function detailHTML(cp) {
   // contribute nothing to the totals above, and a list that quietly showed only some of them
   // would read as the whole history.
   const outside = d.outsideWindow && d.outsideWindow.n
-    ? `<p class="empty-hint" style="text-align:left">Showing the ${d.transactions.length} payment(s)
-       inside ${esc(d.from)} to ${esc(d.to)}. A further <b>${d.outsideWindow.n}</b> payment(s)
-       worth ${gbp(d.outsideWindow.pence)} fall outside that window and are not counted in any
-       figure on this page.</p>`
+    ? `<p class="pp-residue">Showing the ${d.transactions.length} payment(s) inside
+       ${esc(d.from)} to ${esc(d.to)}. A further <b>${d.outsideWindow.n}</b> payment(s) worth
+       ${gbp(d.outsideWindow.pence)} fall outside that window and are counted in no figure on
+       this page. Widen the window above to include them.</p>`
     : '';
-  return `${outside}<table style="width:100%;border-collapse:collapse"><tbody>${d.transactions.map((t) => `<tr>
-      <td style="padding:4px 8px 4px 0">${esc(t.date)}</td>
-      <td style="padding:4px 8px;text-align:right">${gbp(t.pence)}</td>
-      <td style="padding:4px 8px">${purposeSelect('transaction', t.id, t.own_purpose)}</td>
-      <td style="padding:4px 0">${t.own_purpose
+  return `${outside}<table class="pp-tx"><tbody>${d.transactions.map((t) => `<tr>
+      <td>${esc(t.date)}</td>
+      <td class="pp-tx-amount">${gbp(t.pence)}</td>
+      <td>${purposeSelect('transaction', t.id, t.own_purpose)}</td>
+      <td class="pp-tx-from">${t.own_purpose
         ? 'set here'
         : (t.resolved_purpose ? `from ${esc(cp)}` : '—')}</td>
     </tr>`).join('')}</tbody></table>`;
@@ -185,6 +213,7 @@ function render() {
 function bind() {
   root.querySelectorAll('select[data-scope]').forEach((el) => el.addEventListener('change', onSet));
   root.querySelectorAll('button[data-cp]').forEach((el) => el.addEventListener('click', onExpand));
+  root.querySelectorAll('button[data-months]').forEach((el) => el.addEventListener('click', onWindow));
 }
 
 async function onSet(e) {
@@ -207,10 +236,25 @@ async function onSet(e) {
 
 async function loadDetail(cp) {
   try {
-    state.detail[cp] = await api(`/purpose/transactions?counterparty=${encodeURIComponent(cp)}`);
+    // months is passed here too. The detail list is windowed server-side, so omitting it
+    // would let an open payment list describe a different period from the totals above it —
+    // which is the defect this panel already had once and is not getting back.
+    state.detail[cp] = await api(
+      `/purpose/transactions?counterparty=${encodeURIComponent(cp)}&months=${state.months}`,
+    );
   } catch (e) {
     state.detail[cp] = { error: e.message, transactions: [] };
   }
+}
+
+// Changing the window invalidates every cached detail list, because those are windowed too.
+// Keeping them would let an open list describe a different period from the totals above it —
+// the exact defect found by opening this panel the first time.
+async function onWindow(e) {
+  state.months = Number(e.target.dataset.months);
+  state.detail = {};
+  await load();
+  if (state.open) { await loadDetail(state.open); render(); }
 }
 
 async function onExpand(e) {
@@ -223,7 +267,7 @@ async function onExpand(e) {
 export default {
   mount(el) {
     root = el;
-    state = { summary: null, queue: null, detail: {}, open: null, error: null };
+    state = { summary: null, queue: null, detail: {}, open: null, error: null, months: 12 };
     render();
     load();
   },

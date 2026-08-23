@@ -59,6 +59,38 @@ const TEMPLATE = `
       <div id="brainNoteResult" class="brain-result"></div>
       <div id="brainNotes"></div>
     </section>
+
+    <section class="card">
+      <h2 class="brain-h2">Owner decisions</h2>
+      <p class="brain-note-intro">Cross-venture calls — which niche, which spend ceiling, why
+        HOLLOWMAST stays private — kept in the same shape as the AI team's own decision log, so
+        a business or personal call can be found and explained later. This register is not
+        edited or deleted: a change of mind supersedes the old row rather than rewriting it.</p>
+      <form class="brain-note-form" id="brainDecisionForm">
+        <div class="brain-note-row">
+          <input id="brainDecisionVenture" class="brain-in" list="brainVentureList"
+                 placeholder="Venture (e.g. HOLLOWMAST)" required maxlength="60">
+          <input id="brainDecisionTitle" class="brain-in" placeholder="Decision" required maxlength="160">
+        </div>
+        <datalist id="brainVentureList"></datalist>
+        <textarea id="brainDecisionBecause" class="brain-in brain-ta" rows="3" required
+                  placeholder="Because — the reasoning behind it"></textarea>
+        <div class="brain-note-row">
+          <input id="brainDecisionCost" class="brain-in" placeholder="Cost if wrong (optional)" maxlength="200">
+          <input id="brainDecisionRevisit" class="brain-in" placeholder="Revisit when… (optional)" maxlength="200">
+        </div>
+        <div class="brain-note-row">
+          <input id="brainDecisionRecheck" class="brain-in" type="date" aria-label="Recheck date (optional)">
+          <input id="brainDecisionEvidence" class="brain-in" placeholder="Evidence (optional)" maxlength="200">
+        </div>
+        <select id="brainDecisionSupersedes" class="brain-sort" aria-label="Supersedes an earlier decision">
+          <option value="">— does not supersede an earlier decision —</option>
+        </select>
+        <button class="btn primary" type="submit">Save decision</button>
+      </form>
+      <div id="brainDecisionResult" class="brain-result"></div>
+      <div id="brainDecisions"></div>
+    </section>
   </div>
 `;
 
@@ -72,6 +104,7 @@ let root = null;
 let all = [];
 let typeFilter = null;
 let selected = null;
+let decisions = [];
 // Ordering is the ROUTE's job, not the panel's: it holds the frontmatter-vs-mtime rule
 // and the caveat that goes with it. The panel only remembers which order was asked for.
 let sortBy = 'name';
@@ -208,6 +241,71 @@ async function renderNotes() {
       }
     });
   });
+}
+
+// M149. Same shape as team_decisions (public/panels/team/team.js), for the owner's own
+// cross-venture calls rather than the AI team's operational ones. There is no PATCH or
+// DELETE here — the route deliberately offers none: a decision is superseded, not rewritten,
+// so the register stays a record of what was actually decided at the time.
+async function renderDecisions() {
+  if (!root) return;   // may be CALLED after teardown, not only resumed after it
+  const box = root.querySelector('#brainDecisions');
+  let d;
+  try {
+    d = await api('/decisions');
+    if (!root) return;   // the panel was torn down mid-await; root is null now
+  } catch (err) {
+    if (!root) return;   // the panel was torn down mid-await; root is null now
+    box.innerHTML = `<p class="brain-error">Could not read the decision register: ${esc(err.message)}
+      — that is a failure to look, not a report that none exist.</p>`;
+    return;
+  }
+
+  decisions = d.decisions;
+  const supersededBy = new Map();
+  for (const row of decisions) {
+    if (row.supersedes != null) supersededBy.set(row.supersedes, row.id);
+  }
+
+  const ventureList = root.querySelector('#brainVentureList');
+  if (ventureList) ventureList.innerHTML = d.ventures.map((v) => `<option value="${esc(v)}">`).join('');
+
+  // Only offer to supersede the head of a chain — superseding an already-superseded row
+  // would bury the real current answer one link deeper instead of correcting it.
+  const supersedesSel = root.querySelector('#brainDecisionSupersedes');
+  if (supersedesSel) {
+    const current = supersedesSel.value;
+    supersedesSel.innerHTML = '<option value="">— does not supersede an earlier decision —</option>'
+      + decisions.filter((r) => !supersededBy.has(r.id)).map((r) =>
+        `<option value="${r.id}">#${r.id} ${esc(r.venture)} — ${esc(r.decision)}</option>`).join('');
+    supersedesSel.value = current;
+  }
+
+  const today = new Date().toISOString().slice(0, 10);
+
+  box.innerHTML = !decisions.length
+    ? '<p class="empty-hint">No owner decisions logged yet.</p>'
+    : `<p class="brain-meta">${decisions.length} decision${decisions.length === 1 ? '' : 's'} across
+         ${d.ventures.length} venture${d.ventures.length === 1 ? '' : 's'}</p>
+       <ul class="brain-note-list">${decisions.map((row) => {
+    const superseded = supersededBy.has(row.id);
+    const due = !superseded && row.recheck_at && row.recheck_at <= today;
+    return `
+         <li class="${superseded ? 'brain-decision-superseded' : ''}">
+           <div class="brain-note-head">
+             <span class="brain-note-kind">${esc(row.venture)}</span>
+             <span class="brain-note-title">${esc(row.decision)}</span>
+             ${superseded ? `<span class="brain-flag brain-flag-stale">superseded by #${supersededBy.get(row.id)}</span>` : ''}
+             ${due ? '<span class="brain-flag brain-flag-wrong">recheck due</span>' : ''}
+           </div>
+           <p class="brain-note-body">${esc(row.because)}</p>
+           ${row.cost_if_wrong ? `<p class="brain-meta"><b>If wrong:</b> ${esc(row.cost_if_wrong)}</p>` : ''}
+           ${row.revisit_when ? `<p class="brain-meta"><b>Revisit when:</b> ${esc(row.revisit_when)}${row.recheck_at ? ` (by ${esc(row.recheck_at)})` : ''}</p>` : ''}
+           ${row.evidence ? `<p class="brain-meta"><b>Evidence:</b> ${esc(row.evidence)}</p>` : ''}
+           ${row.supersedes != null ? `<p class="brain-meta brain-dim">Supersedes decision #${row.supersedes}</p>` : ''}
+           <span class="brain-meta brain-dim">#${row.id} · ${esc(row.at)}</span>
+         </li>`;
+  }).join('')}</ul>`;
 }
 
 async function setFlag(name, status) {
@@ -349,10 +447,50 @@ export default {
       }
     });
 
+    el.querySelector('#brainDecisionForm').addEventListener('submit', async (ev) => {
+      ev.preventDefault();
+      const out = el.querySelector('#brainDecisionResult');
+      const venture = el.querySelector('#brainDecisionVenture').value.trim();
+      const decision = el.querySelector('#brainDecisionTitle').value.trim();
+      const because = el.querySelector('#brainDecisionBecause').value.trim();
+      const costIfWrong = el.querySelector('#brainDecisionCost').value.trim();
+      const revisitWhen = el.querySelector('#brainDecisionRevisit').value.trim();
+      const recheckAt = el.querySelector('#brainDecisionRecheck').value;
+      const evidence = el.querySelector('#brainDecisionEvidence').value.trim();
+      const supersedes = el.querySelector('#brainDecisionSupersedes').value;
+      if (!venture || !decision || !because) return;
+
+      out.innerHTML = '';
+      try {
+        const r = await api('/decisions', {
+          method: 'POST',
+          headers: { 'content-type': 'application/json', 'x-mc-by': 'you' },
+          body: JSON.stringify({
+            venture, decision, because,
+            cost_if_wrong: costIfWrong || undefined,
+            revisit_when: revisitWhen || undefined,
+            recheck_at: recheckAt || undefined,
+            evidence: evidence || undefined,
+            supersedes: supersedes ? Number(supersedes) : undefined,
+          }),
+        });
+        el.querySelector('#brainDecisionForm').reset();
+        // Says what actually happened, including the part that matters: it reached the
+        // file Claude reads, same convention as the note-save confirmation above.
+        out.innerHTML = `<p class="brain-ok">Saved as decision #${r.id} — written to the memory
+          directory (${r.written} decision${r.written === 1 ? '' : 's'} total). Claude reads it
+          at the start of the next session.</p>`;
+        renderDecisions();
+      } catch (err) {
+        out.innerHTML = `<p class="brain-error">${esc(err.message)}</p>`;
+      }
+    });
+
     load('');
-    // Called separately from load(): the notes list comes from a different route and must
-    // not disappear because the memory store failed to read.
+    // Called separately from load(): the notes list and the decision register each come
+    // from a different route and must not disappear because the memory store failed to read.
     renderNotes();
+    renderDecisions();
   },
 
   // Not optional: the debounce timer would otherwise keep firing against a detached DOM
@@ -364,6 +502,7 @@ export default {
     all = [];
     selected = null;
     typeFilter = null;
+    decisions = [];
     // sortBy is deliberately NOT reset, and the difference is not an oversight: a type
     // filter HIDES memories, so carrying one back into a fresh mount would make the store
     // look smaller than it is. An order hides nothing, so remembering it is safe.

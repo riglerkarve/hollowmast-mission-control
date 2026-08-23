@@ -206,3 +206,10 @@
    as nothing at all and shows no error, which is why classes get audited against the
    sheet rather than assumed. */
 .brain-dim { color: var(--muted); }
+
+/* ---------------------------------------------------------------------------------------
+   Owner decisions — backlog #M149. Reuses .brain-note-list/.brain-in/.brain-h2 etc. above;
+   only the superseded-row treatment is new.
+   --------------------------------------------------------------------------------------- */
+.brain-decision-superseded { opacity: 0.6; border-left-color: var(--muted); }
+.brain-decision-superseded .brain-note-title { text-decoration: line-through; }

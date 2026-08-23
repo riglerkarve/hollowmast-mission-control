@@ -138,6 +138,6 @@ if (!PEEK && view.handovers.length) {
 // confirm it — an impossible instruction against retired endpoints. Replaced with
 // the stage-gated workflow that actually runs: pick from the handovers above,
 // write a markdown plan, and delegate via the board.
-console.log('\\n  NEXT: pick work from the handovers above and write a markdown plan.');
+console.log('\n  NEXT: pick work from the handovers above and write a markdown plan.');
 console.log('  Delegate through the board — the plan/confirm/assign cycle was retired');
 console.log('  20 Aug 2026. The API refuses those endpoints with 410 RETIRED_CYCLE.\n');

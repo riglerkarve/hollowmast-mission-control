@@ -437,18 +437,29 @@ function decorateMonthEnd(r, gaps) {
   };
 }
 
+// ONE OWNER for "how a chore row becomes a decorated chore" (M273).
+//
+// This dispatch used to live inline inside allChores(), and PUT /chores/:id called the bare
+// interval `decorate()` instead of repeating it. So setting scheduleKind to month_end wrote
+// correctly to the database and the PUT response echoed back scheduleKind: 'interval'. A
+// caller trusting the response it just got would believe the write had silently failed —
+// and a later GET /chores, which did dispatch, would disagree with it.
+//
+// The defect was not the missing branch, it was that the rule had two implementations and
+// only one of them was maintained. With one function there is nowhere for a second reader
+// to drift to. Dispatches on the declared kind, falling back to the old inference for any
+// row a migration has not reached. Three kinds, one dueInDays: the briefing, the trigger
+// and the sort never learn which is which.
+function decorateChore(r, gaps) {
+  const kind = r.schedule_kind || (r.anchor_date ? 'anchored' : 'interval');
+  if (kind === 'month_end') return decorateMonthEnd(r, gaps);
+  if (kind === 'anchored' && r.anchor_date) return decorateAnchored(r, gaps);
+  return decorate(r, gaps);
+}
+
 function allChores() {
   const gaps = typicalGaps();
-  return db.prepare(CHORE_SQL).all()
-    .map((r) => {
-      // Dispatch on the declared kind, falling back to the old inference for any row a
-      // migration has not reached. Three kinds, one dueInDays: the briefing, the trigger
-      // and the sort never learn which is which.
-      const kind = r.schedule_kind || (r.anchor_date ? 'anchored' : 'interval');
-      if (kind === 'month_end') return decorateMonthEnd(r, gaps);
-      if (kind === 'anchored' && r.anchor_date) return decorateAnchored(r, gaps);
-      return decorate(r, gaps);
-    });
+  return db.prepare(CHORE_SQL).all().map((r) => decorateChore(r, gaps));
 }
 
 const STATE_ORDER = { due: 0, 'never done': 1, soon: 2, ok: 3 };
@@ -534,7 +545,9 @@ router.put('/chores/:id', (req, res) => {
   db.prepare('UPDATE lifestyle_chores SET name = ?, interval_days = ?, active = ? WHERE id = ?').run(n, every, act, id);
   const gaps = typicalGaps();
   const fresh = db.prepare(`${CHORE_SQL} HAVING c.id = ?`).get(id);
-  res.json(decorate(fresh, gaps));
+  // decorateChore, not decorate — the response must describe the row that was actually
+  // stored. See M273 at the definition.
+  res.json(decorateChore(fresh, gaps));
 });
 
 router.delete('/chores/:id', (req, res) => {
@@ -569,7 +582,14 @@ router.post('/chores/:id/done', (req, res) => {
   if (!already) db.prepare('INSERT INTO lifestyle_done (chore_id, done_on, by_whom) VALUES (?, ?, ?)').run(id, when, req.by);
 
   const gaps = typicalGaps();
-  const fresh = decorate(db.prepare(`${CHORE_SQL} HAVING c.id = ?`).get(id), gaps);
+  // decorateChore, not decorate (M273). This one was not cosmetic: the comment below says
+  // recording a chore is also how you find out when it next comes round, so a bare
+  // interval decorate reported an ANCHORED or MONTH_END chore's next date using the
+  // last-done + interval model. That is the precise error anchoring exists to prevent —
+  // put the bins out a day late and the interval model books the next collection from the
+  // wrong day and stays wrong. GET /chores dispatched correctly, so the value shown here
+  // and the value shown a moment later on the panel could disagree with no error.
+  const fresh = decorateChore(db.prepare(`${CHORE_SQL} HAVING c.id = ?`).get(id), gaps);
 
   // The capture returns a value immediately, as the gate requires — and the value is the
   // derived one, so recording is also how you find out when it next comes round.

@@ -35,15 +35,18 @@ const REPO_ROOT = 'C:/Users/jcwhi/Claude Outputs';
 const DEV_PORT = 5177;
 
 // Read the built index.html and its byte size. Absence is reported, not thrown.
+// mtime is used as "build time" -- the filesystem already records when the
+// build artefact was written, so this is read, not tracked. It is the time
+// `build.sh` last wrote the file, not the time the source was last edited.
 function readBuildFile() {
   try {
     if (!fs.existsSync(BUILD_FILE)) {
-      return { path: BUILD_FILE, sizeBytes: 0, exists: false };
+      return { path: BUILD_FILE, sizeBytes: 0, exists: false, mtime: null };
     }
     const stat = fs.statSync(BUILD_FILE);
-    return { path: BUILD_FILE, sizeBytes: stat.size, exists: true };
+    return { path: BUILD_FILE, sizeBytes: stat.size, exists: true, mtime: stat.mtime.toISOString() };
   } catch (e) {
-    return { path: BUILD_FILE, sizeBytes: 0, exists: false, error: e.message };
+    return { path: BUILD_FILE, sizeBytes: 0, exists: false, mtime: null, error: e.message };
   }
 }
 

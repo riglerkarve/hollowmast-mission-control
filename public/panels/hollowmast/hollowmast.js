@@ -1,9 +1,10 @@
 //
 // hollowmast — build status for the HOLLOWMAST (Survive) project.
 //
-// FOUR STAT BLOCKS, ONE FETCH.
+// FIVE STAT BLOCKS, ONE FETCH.
 //   Build file — the size of the built index.html, formatted as KB. If it does
 //   not exist, that is not an error: it means a build has not been done.
+//   Build time — when the build file was last written (filesystem mtime).
 //   Sources — the file count under Survive/src/.
 //   Last commit — the short hash and date of the last commit touching Survive/.
 //   Dev server — whether the Vite dev server is listening on port 5177. Down is
@@ -66,6 +67,15 @@ function renderBuildFile(bf) {
   return statBlock('Build file', kb(bf.sizeBytes), pathLabel(bf.path), false);
 }
 
+// Build time — the build file's mtime. Only meaningful when the file exists;
+// a missing build has no build time, and that renders as '—', not a failure.
+function renderBuildTime(bf) {
+  if (!bf || !bf.exists || !bf.mtime) {
+    return statBlock('Build time', '—', 'No build file to date.', false);
+  }
+  return statBlock('Build time', commitDate(bf.mtime), 'Filesystem write time of the build.', false);
+}
+
 function renderSources(s) {
   if (!s || !s.exists) {
     return statBlock('Sources', '—', 'No src/ directory found.', false);
@@ -114,6 +124,7 @@ function render() {
 
     <div class="hm-grid">
       ${renderBuildFile(d.buildFile)}
+      ${renderBuildTime(d.buildFile)}
       ${renderSources(d.sources)}
       ${renderCommit(d.lastCommit)}
       ${renderDevServer(d.devServer)}

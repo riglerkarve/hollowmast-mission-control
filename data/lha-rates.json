@@ -1,16 +1,1517 @@
 {
   "_what": "Local Housing Allowance rates — the ceiling on the Universal Credit housing element for a PRIVATE rented tenancy, by Broad Rental Market Area.",
-  "_source": "https://www.gov.uk/csv-preview/69d654a2e1430e837a86f64a/england-rates-2026-to-2027.csv",
-  "_source_page": "https://www.gov.uk/government/publications/universal-credit-local-housing-allowance-rates-2026-to-2027",
+  "_generated_by": "tools/fetch-lha-rates.cjs",
   "_retrieved": "2026-08-23",
-  "_units": "pounds per calendar month",
-  "_why_monthly": "These are the UNIVERSAL CREDIT monthly figures, not the weekly Housing Benefit ones. UC assessment periods are monthly and the statements quote monthly, so mixing in a weekly rate would be wrong by a factor of about 4.33 while still looking like a plausible rent.",
-  "_frozen": "Rates from 1 April 2026 were set by The Rent Officers (Housing Benefit and Universal Credit Functions) (Modification) Order 2026 (SI 2026/5) and are the SAME rates that came into force on 1 April 2024. LHA has been frozen at 2024/25 levels for 2025/26 and 2026/27. That is why the observed Bournemouth element does not move across two years of statements — it is a policy freeze, not a stale figure.",
-  "_residue": "Only the two BRMAs relevant to this record were taken from the CSV. England alone has around 150 more, and Scotland and Wales are separate files. A BRMA that is not listed here is NOT looked up and must not be guessed — add it from the source above.",
-  "_categories": "SAR is the Shared Accommodation Rate. Which category applies to a single person depends on age and on exemptions, which are NOT recorded here because they are facts about the claimant rather than about the area.",
+  "_units_warning": "England, Scotland and Wales are PER CALENDAR MONTH as published for Universal Credit. Northern Ireland is PER WEEK as published by NIHE, with a derived monthly column. Using a weekly figure as a monthly one is wrong by a factor of 4.33 and still looks like a plausible rent.",
+  "_frozen": "GB rates from 1 April 2026 were set by SI 2026/5 and are the same rates that came into force on 1 April 2024 — frozen at 2024/25 levels for 2025/26 and 2026/27. NI rents for 2026/27 are frozen at 2025/26 levels.",
+  "_lha_applies_to": "PRIVATE rented tenancies. A housing association or council tenancy is not LHA-capped; UC pays eligible rent and service charges instead. Supported, specified and temporary accommodation are treated differently again.",
+  "_categories": "Which category applies to a single person depends on age and on exemptions from the Shared Accommodation Rate. Those are facts about the claimant, not about the area, and are deliberately not recorded here.",
+  "_controls": [
+    {
+      "nation": "England",
+      "brma": "Bournemouth",
+      "cat": "1bed",
+      "expect": 695,
+      "why": "the housing element actually awarded on the Bournemouth statements"
+    },
+    {
+      "nation": "England",
+      "brma": "Oxford",
+      "cat": "1bed",
+      "expect": 900,
+      "why": "checked by hand against the gov.uk CSV on 23 Aug 2026"
+    }
+  ],
   "period": "2026-04-01 to 2027-03-31",
-  "brma": {
-    "Oxford": { "SAR": 550.00, "1bed": 900.00, "2bed": 1125.00, "3bed": 1325.00, "4bed": 1750.00 },
-    "Bournemouth": { "SAR": 426.33, "1bed": 695.00, "2bed": 875.00, "3bed": 1150.00, "4bed": 1550.00 }
+  "nations": {
+    "England": {
+      "units": "per calendar month",
+      "published": "monthly",
+      "source": "https://assets.publishing.service.gov.uk/media/69d654a2e1430e837a86f64a/england-rates-2026-to-2027.csv",
+      "brma": {
+        "Ashford": {
+          "SAR": 393.24,
+          "1bed": 750,
+          "2bed": 850,
+          "3bed": 1097.8,
+          "4bed": 1440
+        },
+        "Aylesbury": {
+          "SAR": 442.67,
+          "1bed": 800,
+          "2bed": 995,
+          "3bed": 1330,
+          "4bed": 1650
+        },
+        "Barnsley": {
+          "SAR": 316.33,
+          "1bed": 415,
+          "2bed": 450,
+          "3bed": 550,
+          "4bed": 775
+        },
+        "Barrow-in-Furness": {
+          "SAR": 395.42,
+          "1bed": 475,
+          "2bed": 500,
+          "3bed": 635,
+          "4bed": 807.5
+        },
+        "Basingstoke": {
+          "SAR": 406.33,
+          "1bed": 780,
+          "2bed": 950,
+          "3bed": 1150,
+          "4bed": 1400
+        },
+        "Bath": {
+          "SAR": 540,
+          "1bed": 815,
+          "2bed": 980,
+          "3bed": 1200,
+          "4bed": 1945
+        },
+        "Bedford": {
+          "SAR": 450,
+          "1bed": 650,
+          "2bed": 825,
+          "3bed": 1000,
+          "4bed": 1300
+        },
+        "Birmingham": {
+          "SAR": 341.58,
+          "1bed": 695,
+          "2bed": 750,
+          "3bed": 825,
+          "4bed": 1100
+        },
+        "Black Country": {
+          "SAR": 320,
+          "1bed": 495,
+          "2bed": 625,
+          "3bed": 750,
+          "4bed": 925
+        },
+        "Blackwater Valley": {
+          "SAR": 477.98,
+          "1bed": 800,
+          "2bed": 1000,
+          "3bed": 1295,
+          "4bed": 1700
+        },
+        "Bolton and Bury": {
+          "SAR": 341.51,
+          "1bed": 475,
+          "2bed": 575,
+          "3bed": 700,
+          "4bed": 950
+        },
+        "Bournemouth": {
+          "SAR": 426.33,
+          "1bed": 695,
+          "2bed": 875,
+          "3bed": 1150,
+          "4bed": 1550
+        },
+        "Bradford and South Dales": {
+          "SAR": 326.33,
+          "1bed": 450,
+          "2bed": 525,
+          "3bed": 635,
+          "4bed": 750
+        },
+        "Brighton and Hove": {
+          "SAR": 586.61,
+          "1bed": 920,
+          "2bed": 1200,
+          "3bed": 1450,
+          "4bed": 2000
+        },
+        "Bristol": {
+          "SAR": 511.33,
+          "1bed": 900,
+          "2bed": 1095,
+          "3bed": 1300,
+          "4bed": 1850
+        },
+        "Bury St Edmunds": {
+          "SAR": 451.33,
+          "1bed": 630,
+          "2bed": 775,
+          "3bed": 955,
+          "4bed": 1300
+        },
+        "Cambridge": {
+          "SAR": 526.33,
+          "1bed": 900,
+          "2bed": 950,
+          "3bed": 1125,
+          "4bed": 1450
+        },
+        "Canterbury": {
+          "SAR": 425,
+          "1bed": 675,
+          "2bed": 895,
+          "3bed": 1100,
+          "4bed": 1315
+        },
+        "Central Greater Manchester": {
+          "SAR": 411.58,
+          "1bed": 775,
+          "2bed": 875,
+          "3bed": 950,
+          "4bed": 1350
+        },
+        "Central Lancs": {
+          "SAR": 304.17,
+          "1bed": 450,
+          "2bed": 575,
+          "3bed": 650,
+          "4bed": 925
+        },
+        "Central London": {
+          "SAR": 829.83,
+          "1bed": 1439.97,
+          "2bed": 1793.98,
+          "3bed": 2160.02,
+          "4bed": 3060
+        },
+        "Central Norfolk and Norwich": {
+          "SAR": 393.5,
+          "1bed": 590,
+          "2bed": 695,
+          "3bed": 800,
+          "4bed": 1150
+        },
+        "Chelmsford": {
+          "SAR": 426.33,
+          "1bed": 795,
+          "2bed": 950,
+          "3bed": 1200,
+          "4bed": 1450
+        },
+        "Cheltenham": {
+          "SAR": 436.5,
+          "1bed": 625,
+          "2bed": 800,
+          "3bed": 1000,
+          "4bed": 1470
+        },
+        "Cherwell Valley": {
+          "SAR": 466.5,
+          "1bed": 775,
+          "2bed": 950,
+          "3bed": 1185,
+          "4bed": 1450
+        },
+        "Chesterfield": {
+          "SAR": 351.33,
+          "1bed": 450,
+          "2bed": 525,
+          "3bed": 600,
+          "4bed": 850
+        },
+        "Chichester": {
+          "SAR": 450,
+          "1bed": 788,
+          "2bed": 950,
+          "3bed": 1225,
+          "4bed": 1600
+        },
+        "Chilterns": {
+          "SAR": 525,
+          "1bed": 850,
+          "2bed": 1100,
+          "3bed": 1450,
+          "4bed": 2000
+        },
+        "Colchester": {
+          "SAR": 401.33,
+          "1bed": 625,
+          "2bed": 795,
+          "3bed": 975,
+          "4bed": 1250
+        },
+        "Coventry": {
+          "SAR": 432.35,
+          "1bed": 575,
+          "2bed": 675,
+          "3bed": 775,
+          "4bed": 1000
+        },
+        "Crawley and Reigate": {
+          "SAR": 476.33,
+          "1bed": 860,
+          "2bed": 1100,
+          "3bed": 1365,
+          "4bed": 1750
+        },
+        "Darlington": {
+          "SAR": 288.96,
+          "1bed": 360,
+          "2bed": 450,
+          "3bed": 530,
+          "4bed": 695
+        },
+        "Derby": {
+          "SAR": 359.83,
+          "1bed": 450,
+          "2bed": 595,
+          "3bed": 700,
+          "4bed": 935
+        },
+        "Doncaster": {
+          "SAR": 304.17,
+          "1bed": 425,
+          "2bed": 500,
+          "3bed": 550,
+          "4bed": 725
+        },
+        "Dover-Shepway": {
+          "SAR": 431.5,
+          "1bed": 510,
+          "2bed": 695,
+          "3bed": 865,
+          "4bed": 1200
+        },
+        "Durham": {
+          "SAR": 393.25,
+          "1bed": 393.25,
+          "2bed": 400,
+          "3bed": 475,
+          "4bed": 659.87
+        },
+        "East Cheshire": {
+          "SAR": 421.5,
+          "1bed": 550,
+          "2bed": 725,
+          "3bed": 995,
+          "4bed": 1750
+        },
+        "East Lancs": {
+          "SAR": 291.5,
+          "1bed": 425,
+          "2bed": 475,
+          "3bed": 595,
+          "4bed": 795
+        },
+        "East Thames Valley": {
+          "SAR": 591.5,
+          "1bed": 900,
+          "2bed": 1200,
+          "3bed": 1450,
+          "4bed": 1900
+        },
+        "Eastbourne": {
+          "SAR": 422.5,
+          "1bed": 720,
+          "2bed": 900,
+          "3bed": 1083,
+          "4bed": 1400
+        },
+        "Eastern Staffordshire": {
+          "SAR": 321.33,
+          "1bed": 495,
+          "2bed": 600,
+          "3bed": 725,
+          "4bed": 985.8
+        },
+        "Exeter": {
+          "SAR": 537,
+          "1bed": 630,
+          "2bed": 795,
+          "3bed": 950,
+          "4bed": 1300
+        },
+        "Fylde Coast": {
+          "SAR": 350.88,
+          "1bed": 400,
+          "2bed": 542,
+          "3bed": 625,
+          "4bed": 742.5
+        },
+        "Gloucester": {
+          "SAR": 406.33,
+          "1bed": 550,
+          "2bed": 725,
+          "3bed": 850,
+          "4bed": 1200
+        },
+        "Grantham and Newark": {
+          "SAR": 376.33,
+          "1bed": 425,
+          "2bed": 575,
+          "3bed": 655,
+          "4bed": 875.01
+        },
+        "Greater Liverpool": {
+          "SAR": 344.36,
+          "1bed": 500,
+          "2bed": 595,
+          "3bed": 650,
+          "4bed": 875
+        },
+        "Grimsby": {
+          "SAR": 317.2,
+          "1bed": 395,
+          "2bed": 480,
+          "3bed": 521.43,
+          "4bed": 720
+        },
+        "Guildford": {
+          "SAR": 515,
+          "1bed": 950,
+          "2bed": 1225,
+          "3bed": 1480,
+          "4bed": 1978
+        },
+        "Halifax": {
+          "SAR": 356.31,
+          "1bed": 440,
+          "2bed": 525,
+          "3bed": 625,
+          "4bed": 750
+        },
+        "Harlow and Stortford": {
+          "SAR": 451.33,
+          "1bed": 810,
+          "2bed": 1025,
+          "3bed": 1210,
+          "4bed": 1375
+        },
+        "Harrogate": {
+          "SAR": 421.33,
+          "1bed": 595,
+          "2bed": 735.86,
+          "3bed": 875,
+          "4bed": 1275
+        },
+        "Herefordshire": {
+          "SAR": 351.5,
+          "1bed": 475,
+          "2bed": 600,
+          "3bed": 750,
+          "4bed": 975
+        },
+        "High Weald": {
+          "SAR": 459.83,
+          "1bed": 800,
+          "2bed": 1075,
+          "3bed": 1323,
+          "4bed": 1825
+        },
+        "Hull and East Riding": {
+          "SAR": 335.83,
+          "1bed": 380,
+          "2bed": 475,
+          "3bed": 550,
+          "4bed": 700
+        },
+        "Huntingdon": {
+          "SAR": 460,
+          "1bed": 650,
+          "2bed": 795,
+          "3bed": 950,
+          "4bed": 1250
+        },
+        "Inner East London": {
+          "SAR": 699.5,
+          "1bed": 1439.97,
+          "2bed": 1750,
+          "3bed": 2160.02,
+          "4bed": 3000
+        },
+        "Inner North London": {
+          "SAR": 708.27,
+          "1bed": 1439.97,
+          "2bed": 1793.98,
+          "3bed": 2160.02,
+          "4bed": 3060
+        },
+        "Inner South East London": {
+          "SAR": 650,
+          "1bed": 1295.5,
+          "2bed": 1550,
+          "3bed": 1950,
+          "4bed": 2625
+        },
+        "Inner South West London": {
+          "SAR": 685,
+          "1bed": 1420,
+          "2bed": 1700,
+          "3bed": 2160.02,
+          "4bed": 2900
+        },
+        "Inner West London": {
+          "SAR": 760,
+          "1bed": 1350,
+          "2bed": 1625,
+          "3bed": 2050,
+          "4bed": 2550
+        },
+        "Ipswich": {
+          "SAR": 366.5,
+          "1bed": 595,
+          "2bed": 717,
+          "3bed": 800,
+          "4bed": 1100
+        },
+        "Isle of Wight": {
+          "SAR": 343.27,
+          "1bed": 515,
+          "2bed": 650,
+          "3bed": 815,
+          "4bed": 995
+        },
+        "Kendal": {
+          "SAR": 325.89,
+          "1bed": 575,
+          "2bed": 650,
+          "3bed": 775,
+          "4bed": 995
+        },
+        "Kernow West": {
+          "SAR": 392.5,
+          "1bed": 550,
+          "2bed": 695,
+          "3bed": 815,
+          "4bed": 1100
+        },
+        "Kings Lynn": {
+          "SAR": 399.83,
+          "1bed": 548.23,
+          "2bed": 650,
+          "3bed": 775,
+          "4bed": 1050
+        },
+        "Kirklees": {
+          "SAR": 316.33,
+          "1bed": 450,
+          "2bed": 525,
+          "3bed": 650,
+          "4bed": 825
+        },
+        "Lancaster": {
+          "SAR": 394.33,
+          "1bed": 475,
+          "2bed": 575,
+          "3bed": 650,
+          "4bed": 725
+        },
+        "Leeds": {
+          "SAR": 347.62,
+          "1bed": 675,
+          "2bed": 775,
+          "3bed": 850,
+          "4bed": 1200
+        },
+        "Leicester": {
+          "SAR": 395.42,
+          "1bed": 540,
+          "2bed": 650,
+          "3bed": 775,
+          "4bed": 1050
+        },
+        "Lincoln": {
+          "SAR": 354.14,
+          "1bed": 495,
+          "2bed": 600,
+          "3bed": 675,
+          "4bed": 925
+        },
+        "Lincolnshire Fens": {
+          "SAR": 368.33,
+          "1bed": 500,
+          "2bed": 625,
+          "3bed": 735,
+          "4bed": 865.03
+        },
+        "Lowestoft and Great Yarmouth": {
+          "SAR": 376.33,
+          "1bed": 441.07,
+          "2bed": 575,
+          "3bed": 630,
+          "4bed": 825
+        },
+        "Luton": {
+          "SAR": 436.17,
+          "1bed": 700,
+          "2bed": 875,
+          "3bed": 1100,
+          "4bed": 1350
+        },
+        "Maidstone": {
+          "SAR": 444.83,
+          "1bed": 750,
+          "2bed": 905,
+          "3bed": 1200,
+          "4bed": 1550
+        },
+        "Medway and Swale": {
+          "SAR": 410,
+          "1bed": 675,
+          "2bed": 850,
+          "3bed": 940,
+          "4bed": 1300
+        },
+        "Mendip": {
+          "SAR": 405,
+          "1bed": 600,
+          "2bed": 775,
+          "3bed": 975,
+          "4bed": 1350
+        },
+        "Mid and East Devon": {
+          "SAR": 404.11,
+          "1bed": 530,
+          "2bed": 685,
+          "3bed": 825,
+          "4bed": 1100
+        },
+        "Mid and West Dorset": {
+          "SAR": 426.33,
+          "1bed": 595,
+          "2bed": 750,
+          "3bed": 900,
+          "4bed": 1250
+        },
+        "Mid Staffs": {
+          "SAR": 352.4,
+          "1bed": 500,
+          "2bed": 625,
+          "3bed": 740,
+          "4bed": 995
+        },
+        "Milton Keynes": {
+          "SAR": 501.33,
+          "1bed": 775,
+          "2bed": 925,
+          "3bed": 1195,
+          "4bed": 1495
+        },
+        "Newbury": {
+          "SAR": 451.33,
+          "1bed": 750,
+          "2bed": 895,
+          "3bed": 1200,
+          "4bed": 1605
+        },
+        "North Cheshire": {
+          "SAR": 341.5,
+          "1bed": 475,
+          "2bed": 590,
+          "3bed": 695,
+          "4bed": 1000
+        },
+        "North Cornwall and Devon Borders": {
+          "SAR": 368.33,
+          "1bed": 475,
+          "2bed": 609,
+          "3bed": 725,
+          "4bed": 950
+        },
+        "North Cumbria": {
+          "SAR": 319.83,
+          "1bed": 395,
+          "2bed": 475,
+          "3bed": 590,
+          "4bed": 740
+        },
+        "North Devon": {
+          "SAR": 425,
+          "1bed": 485,
+          "2bed": 645,
+          "3bed": 775,
+          "4bed": 995
+        },
+        "North Nottingham": {
+          "SAR": 338.93,
+          "1bed": 445,
+          "2bed": 550,
+          "3bed": 585,
+          "4bed": 810
+        },
+        "North West Kent": {
+          "SAR": 451.33,
+          "1bed": 750,
+          "2bed": 995,
+          "3bed": 1200,
+          "4bed": 1450
+        },
+        "North West London": {
+          "SAR": 621.33,
+          "1bed": 1100,
+          "2bed": 1350,
+          "3bed": 1680,
+          "4bed": 2100
+        },
+        "Northampton": {
+          "SAR": 410.62,
+          "1bed": 645,
+          "2bed": 750,
+          "3bed": 900,
+          "4bed": 1160
+        },
+        "Northants Central": {
+          "SAR": 375.86,
+          "1bed": 550,
+          "2bed": 695,
+          "3bed": 795,
+          "4bed": 995
+        },
+        "Northumberland": {
+          "SAR": 356.33,
+          "1bed": 375,
+          "2bed": 425,
+          "3bed": 530,
+          "4bed": 760
+        },
+        "Nottingham": {
+          "SAR": 380,
+          "1bed": 550,
+          "2bed": 650,
+          "3bed": 750,
+          "4bed": 970
+        },
+        "Oldham and Rochdale": {
+          "SAR": 344.83,
+          "1bed": 475,
+          "2bed": 577.5,
+          "3bed": 695,
+          "4bed": 950
+        },
+        "Outer East London": {
+          "SAR": 561.33,
+          "1bed": 1200,
+          "2bed": 1400,
+          "3bed": 1675,
+          "4bed": 1950
+        },
+        "Outer North East London": {
+          "SAR": 549.83,
+          "1bed": 1000,
+          "2bed": 1250,
+          "3bed": 1500,
+          "4bed": 1800
+        },
+        "Outer North London": {
+          "SAR": 595,
+          "1bed": 1150,
+          "2bed": 1400,
+          "3bed": 1695,
+          "4bed": 2200
+        },
+        "Outer South East London": {
+          "SAR": 600,
+          "1bed": 1050,
+          "2bed": 1300,
+          "3bed": 1550,
+          "4bed": 1800
+        },
+        "Outer South London": {
+          "SAR": 569.33,
+          "1bed": 950,
+          "2bed": 1200,
+          "3bed": 1500,
+          "4bed": 1950
+        },
+        "Outer South West London": {
+          "SAR": 591.5,
+          "1bed": 1200,
+          "2bed": 1495,
+          "3bed": 1800,
+          "4bed": 2550
+        },
+        "Outer West London": {
+          "SAR": 576.33,
+          "1bed": 1000,
+          "2bed": 1300,
+          "3bed": 1475,
+          "4bed": 1800
+        },
+        "Oxford": {
+          "SAR": 550,
+          "1bed": 900,
+          "2bed": 1125,
+          "3bed": 1325,
+          "4bed": 1750
+        },
+        "Peaks and Dales": {
+          "SAR": 347.62,
+          "1bed": 475,
+          "2bed": 595,
+          "3bed": 695,
+          "4bed": 900
+        },
+        "Peterborough": {
+          "SAR": 344.83,
+          "1bed": 575,
+          "2bed": 700,
+          "3bed": 810,
+          "4bed": 1050
+        },
+        "Plymouth": {
+          "SAR": 400,
+          "1bed": 550,
+          "2bed": 675,
+          "3bed": 800,
+          "4bed": 975
+        },
+        "Portsmouth": {
+          "SAR": 422.83,
+          "1bed": 695,
+          "2bed": 845,
+          "3bed": 1000,
+          "4bed": 1300
+        },
+        "Reading": {
+          "SAR": 391.5,
+          "1bed": 850,
+          "2bed": 1095,
+          "3bed": 1300,
+          "4bed": 1654
+        },
+        "Richmond and Hambleton": {
+          "SAR": 417.67,
+          "1bed": 450,
+          "2bed": 550,
+          "3bed": 650,
+          "4bed": 830
+        },
+        "Rotherham": {
+          "SAR": 351.33,
+          "1bed": 430,
+          "2bed": 500,
+          "3bed": 550,
+          "4bed": 817.5
+        },
+        "Rugby and East": {
+          "SAR": 425,
+          "1bed": 595,
+          "2bed": 725,
+          "3bed": 850,
+          "4bed": 1200
+        },
+        "Salisbury": {
+          "SAR": 426.33,
+          "1bed": 650,
+          "2bed": 780,
+          "3bed": 915,
+          "4bed": 1250
+        },
+        "Scarborough": {
+          "SAR": 309.83,
+          "1bed": 425,
+          "2bed": 550,
+          "3bed": 650,
+          "4bed": 725
+        },
+        "Scunthorpe": {
+          "SAR": 310.68,
+          "1bed": 410,
+          "2bed": 495,
+          "3bed": 575,
+          "4bed": 725
+        },
+        "Sheffield": {
+          "SAR": 350,
+          "1bed": 575,
+          "2bed": 620,
+          "3bed": 680,
+          "4bed": 950
+        },
+        "Shropshire": {
+          "SAR": 369.35,
+          "1bed": 475,
+          "2bed": 595,
+          "3bed": 725,
+          "4bed": 975
+        },
+        "Solihull": {
+          "SAR": 412.5,
+          "1bed": 700,
+          "2bed": 825,
+          "3bed": 1000,
+          "4bed": 1375
+        },
+        "South Cheshire": {
+          "SAR": 325,
+          "1bed": 475,
+          "2bed": 575,
+          "3bed": 680,
+          "4bed": 995
+        },
+        "South Devon": {
+          "SAR": 367.17,
+          "1bed": 505,
+          "2bed": 675,
+          "3bed": 840,
+          "4bed": 1100
+        },
+        "South East Herts": {
+          "SAR": 475,
+          "1bed": 835,
+          "2bed": 1050,
+          "3bed": 1370,
+          "4bed": 1700
+        },
+        "South West Essex": {
+          "SAR": 476.33,
+          "1bed": 775,
+          "2bed": 950,
+          "3bed": 1200,
+          "4bed": 1500
+        },
+        "South West Herts": {
+          "SAR": 501.33,
+          "1bed": 950,
+          "2bed": 1250,
+          "3bed": 1500,
+          "4bed": 2000
+        },
+        "Southampton": {
+          "SAR": 425,
+          "1bed": 700,
+          "2bed": 875,
+          "3bed": 1075,
+          "4bed": 1450
+        },
+        "Southend": {
+          "SAR": 406.33,
+          "1bed": 680,
+          "2bed": 875,
+          "3bed": 1100,
+          "4bed": 1350
+        },
+        "Southern Greater Manchester": {
+          "SAR": 411.58,
+          "1bed": 625,
+          "2bed": 750,
+          "3bed": 900,
+          "4bed": 1400
+        },
+        "Southport": {
+          "SAR": 369.35,
+          "1bed": 475,
+          "2bed": 600,
+          "3bed": 775,
+          "4bed": 925
+        },
+        "St Helens": {
+          "SAR": 324.75,
+          "1bed": 425,
+          "2bed": 525,
+          "3bed": 625,
+          "4bed": 800
+        },
+        "Staffordshire North": {
+          "SAR": 301.33,
+          "1bed": 425,
+          "2bed": 480,
+          "3bed": 595,
+          "4bed": 800
+        },
+        "Stevenage and North Herts": {
+          "SAR": 436.17,
+          "1bed": 775,
+          "2bed": 975,
+          "3bed": 1250,
+          "4bed": 1600
+        },
+        "Sunderland": {
+          "SAR": 321.33,
+          "1bed": 425,
+          "2bed": 475,
+          "3bed": 550,
+          "4bed": 700
+        },
+        "Sussex East": {
+          "SAR": 361,
+          "1bed": 595,
+          "2bed": 750,
+          "3bed": 950,
+          "4bed": 1150
+        },
+        "Swindon": {
+          "SAR": 451.33,
+          "1bed": 675,
+          "2bed": 785,
+          "3bed": 950,
+          "4bed": 1300
+        },
+        "Tameside and Glossop": {
+          "SAR": 321.08,
+          "1bed": 525,
+          "2bed": 600,
+          "3bed": 750,
+          "4bed": 1150
+        },
+        "Taunton and West Somerset": {
+          "SAR": 404.11,
+          "1bed": 575,
+          "2bed": 725,
+          "3bed": 850,
+          "4bed": 1000
+        },
+        "Teesside": {
+          "SAR": 288.96,
+          "1bed": 410,
+          "2bed": 475,
+          "3bed": 550,
+          "4bed": 750
+        },
+        "Thanet": {
+          "SAR": 380,
+          "1bed": 577.84,
+          "2bed": 750,
+          "3bed": 900,
+          "4bed": 1150
+        },
+        "Tyneside": {
+          "SAR": 381.33,
+          "1bed": 490,
+          "2bed": 550,
+          "3bed": 650,
+          "4bed": 925
+        },
+        "Wakefield": {
+          "SAR": 326.98,
+          "1bed": 500,
+          "2bed": 595,
+          "3bed": 725,
+          "4bed": 885
+        },
+        "Walton": {
+          "SAR": 620,
+          "1bed": 950,
+          "2bed": 1212,
+          "3bed": 1450,
+          "4bed": 1975
+        },
+        "Warwickshire South": {
+          "SAR": 412.5,
+          "1bed": 700,
+          "2bed": 850,
+          "3bed": 1045,
+          "4bed": 1350
+        },
+        "West Cheshire": {
+          "SAR": 375.86,
+          "1bed": 550,
+          "2bed": 675,
+          "3bed": 795,
+          "4bed": 1224
+        },
+        "West Cumbria": {
+          "SAR": 319.83,
+          "1bed": 385,
+          "2bed": 475,
+          "3bed": 550,
+          "4bed": 700
+        },
+        "West Pennine": {
+          "SAR": 310.68,
+          "1bed": 400,
+          "2bed": 450,
+          "3bed": 505,
+          "4bed": 762.5
+        },
+        "West Wiltshire": {
+          "SAR": 450,
+          "1bed": 595,
+          "2bed": 725,
+          "3bed": 900,
+          "4bed": 1200
+        },
+        "Weston-S-Mare": {
+          "SAR": 451.33,
+          "1bed": 580,
+          "2bed": 750,
+          "3bed": 925,
+          "4bed": 1250
+        },
+        "Wigan": {
+          "SAR": 339.83,
+          "1bed": 400,
+          "2bed": 500,
+          "3bed": 595,
+          "4bed": 775
+        },
+        "Winchester": {
+          "SAR": 525,
+          "1bed": 825,
+          "2bed": 1050,
+          "3bed": 1275,
+          "4bed": 1700
+        },
+        "Wirral": {
+          "SAR": 318.71,
+          "1bed": 425,
+          "2bed": 525,
+          "3bed": 650,
+          "4bed": 825
+        },
+        "Wolds and Coast": {
+          "SAR": 344.36,
+          "1bed": 400,
+          "2bed": 495,
+          "3bed": 600,
+          "4bed": 675
+        },
+        "Worcester North": {
+          "SAR": 329.83,
+          "1bed": 515,
+          "2bed": 650,
+          "3bed": 750,
+          "4bed": 995
+        },
+        "Worcester South": {
+          "SAR": 382.58,
+          "1bed": 569,
+          "2bed": 700,
+          "3bed": 825,
+          "4bed": 1150
+        },
+        "Worthing": {
+          "SAR": 445,
+          "1bed": 760,
+          "2bed": 950,
+          "3bed": 1180,
+          "4bed": 1465
+        },
+        "Yeovil": {
+          "SAR": 435,
+          "1bed": 525,
+          "2bed": 695,
+          "3bed": 850,
+          "4bed": 1250
+        },
+        "York": {
+          "SAR": 417.67,
+          "1bed": 675,
+          "2bed": 775,
+          "3bed": 825,
+          "4bed": 1200
+        }
+      }
+    },
+    "Scotland": {
+      "units": "per calendar month",
+      "published": "monthly",
+      "source": "https://assets.publishing.service.gov.uk/media/69d657392ea7bc150a394ae5/scotland-rates-2026-to-2027.csv",
+      "brma": {
+        "Aberdeen and Shire": {
+          "SAR": 325,
+          "1bed": 475,
+          "2bed": 650,
+          "3bed": 860,
+          "4bed": 1250
+        },
+        "Argyll and Bute": {
+          "SAR": 350,
+          "1bed": 450,
+          "2bed": 600,
+          "3bed": 695,
+          "4bed": 1200
+        },
+        "Ayrshires": {
+          "SAR": 375,
+          "1bed": 375,
+          "2bed": 475,
+          "3bed": 564.88,
+          "4bed": 800
+        },
+        "Dumfries and Galloway": {
+          "SAR": 335,
+          "1bed": 380,
+          "2bed": 450,
+          "3bed": 500,
+          "4bed": 690
+        },
+        "Dundee and Angus": {
+          "SAR": 375,
+          "1bed": 400,
+          "2bed": 615,
+          "3bed": 795,
+          "4bed": 1100
+        },
+        "East Dunbartonshire": {
+          "SAR": 425,
+          "1bed": 550,
+          "2bed": 750,
+          "3bed": 1000,
+          "4bed": 1400
+        },
+        "Fife": {
+          "SAR": 375,
+          "1bed": 450,
+          "2bed": 590,
+          "3bed": 715,
+          "4bed": 1250
+        },
+        "Forth Valley": {
+          "SAR": 415,
+          "1bed": 460,
+          "2bed": 650,
+          "3bed": 800,
+          "4bed": 1300
+        },
+        "Greater Glasgow": {
+          "SAR": 450,
+          "1bed": 695,
+          "2bed": 850,
+          "3bed": 970,
+          "4bed": 1800
+        },
+        "Highland and Islands": {
+          "SAR": 380,
+          "1bed": 475,
+          "2bed": 595,
+          "3bed": 695,
+          "4bed": 850
+        },
+        "Lothian": {
+          "SAR": 475,
+          "1bed": 750,
+          "2bed": 970,
+          "3bed": 1375,
+          "4bed": 2180
+        },
+        "North Lanarkshire": {
+          "SAR": 375,
+          "1bed": 440,
+          "2bed": 550,
+          "3bed": 675,
+          "4bed": 895
+        },
+        "Perth and Kinross": {
+          "SAR": 359.17,
+          "1bed": 425,
+          "2bed": 560,
+          "3bed": 750,
+          "4bed": 1250
+        },
+        "Renfrewshire/ Inverclyde": {
+          "SAR": 360,
+          "1bed": 400,
+          "2bed": 525,
+          "3bed": 600,
+          "4bed": 1100
+        },
+        "Scottish Borders": {
+          "SAR": 325,
+          "1bed": 375,
+          "2bed": 500,
+          "3bed": 615,
+          "4bed": 985
+        },
+        "South Lanarkshire": {
+          "SAR": 375,
+          "1bed": 450,
+          "2bed": 575,
+          "3bed": 715.84,
+          "4bed": 1107
+        },
+        "West Dunbartonshire": {
+          "SAR": 350,
+          "1bed": 475,
+          "2bed": 595,
+          "3bed": 675,
+          "4bed": 950
+        },
+        "West Lothian": {
+          "SAR": 410,
+          "1bed": 500,
+          "2bed": 625,
+          "3bed": 750,
+          "4bed": 1112.5
+        }
+      }
+    },
+    "Wales": {
+      "units": "per calendar month",
+      "published": "monthly",
+      "source": "https://assets.publishing.service.gov.uk/media/69d6574a28142a9bd207ba09/wales-rates-2026-to-2027.csv",
+      "brma": {
+        "Blaenau Gwent": {
+          "SAR": 300,
+          "1bed": 325.89,
+          "2bed": 430,
+          "3bed": 490,
+          "4bed": 650
+        },
+        "Brecon and Radnor": {
+          "SAR": 332.41,
+          "1bed": 340,
+          "2bed": 440,
+          "3bed": 550,
+          "4bed": 650
+        },
+        "Bridgend": {
+          "SAR": 300,
+          "1bed": 400,
+          "2bed": 525,
+          "3bed": 575,
+          "4bed": 775
+        },
+        "Caerphilly": {
+          "SAR": 337.41,
+          "1bed": 350,
+          "2bed": 495,
+          "3bed": 550,
+          "4bed": 750
+        },
+        "Cardiff": {
+          "SAR": 366.1,
+          "1bed": 650,
+          "2bed": 825,
+          "3bed": 925,
+          "4bed": 1300
+        },
+        "Carmarthenshire": {
+          "SAR": 336.76,
+          "1bed": 400,
+          "2bed": 488.84,
+          "3bed": 535,
+          "4bed": 650
+        },
+        "Ceredigion": {
+          "SAR": 304.17,
+          "1bed": 420,
+          "2bed": 500,
+          "3bed": 550,
+          "4bed": 650
+        },
+        "Flintshire": {
+          "SAR": 380.21,
+          "1bed": 450,
+          "2bed": 595,
+          "3bed": 695,
+          "4bed": 925
+        },
+        "Merthyr Cynon": {
+          "SAR": 300,
+          "1bed": 434.52,
+          "2bed": 500,
+          "3bed": 550,
+          "4bed": 725
+        },
+        "Monmouthshire": {
+          "SAR": 337.41,
+          "1bed": 533.16,
+          "2bed": 700,
+          "3bed": 795,
+          "4bed": 1100
+        },
+        "Neath Port Talbot": {
+          "SAR": 375,
+          "1bed": 411.67,
+          "2bed": 450,
+          "3bed": 500,
+          "4bed": 575
+        },
+        "Newport": {
+          "SAR": 337.41,
+          "1bed": 440,
+          "2bed": 600,
+          "3bed": 650,
+          "4bed": 880
+        },
+        "North Clwyd": {
+          "SAR": 342.41,
+          "1bed": 395,
+          "2bed": 550,
+          "3bed": 650,
+          "4bed": 855
+        },
+        "North Powys": {
+          "SAR": 293.3,
+          "1bed": 325,
+          "2bed": 400,
+          "3bed": 550,
+          "4bed": 675
+        },
+        "North West Wales": {
+          "SAR": 342.41,
+          "1bed": 391.07,
+          "2bed": 550,
+          "3bed": 625,
+          "4bed": 750
+        },
+        "Pembrokeshire": {
+          "SAR": 297.41,
+          "1bed": 360,
+          "2bed": 460,
+          "3bed": 575,
+          "4bed": 700
+        },
+        "South Gwynedd": {
+          "SAR": 342.41,
+          "1bed": 350,
+          "2bed": 434.52,
+          "3bed": 543.15,
+          "4bed": 675
+        },
+        "Swansea": {
+          "SAR": 375,
+          "1bed": 525,
+          "2bed": 550,
+          "3bed": 600,
+          "4bed": 820
+        },
+        "Taff Rhondda": {
+          "SAR": 300,
+          "1bed": 375,
+          "2bed": 450,
+          "3bed": 495,
+          "4bed": 650
+        },
+        "Torfaen": {
+          "SAR": 300,
+          "1bed": 500,
+          "2bed": 564.88,
+          "3bed": 650,
+          "4bed": 750
+        },
+        "Vale of Glamorgan": {
+          "SAR": 300,
+          "1bed": 525.77,
+          "2bed": 666,
+          "3bed": 725,
+          "4bed": 1025
+        },
+        "Wrexham": {
+          "SAR": 391.31,
+          "1bed": 475,
+          "2bed": 525,
+          "3bed": 600,
+          "4bed": 750
+        }
+      }
+    },
+    "Northern Ireland": {
+      "units": "per week",
+      "published": "weekly",
+      "period_stated_on_page": "1 April 2026 to 31 March 2027",
+      "source": "https://www.nihe.gov.uk/housing-help/local-housing-allowance/current-lha-rent-levels",
+      "brma": {
+        "Belfast": {
+          "SAR": 75.75,
+          "1bed": 139.34,
+          "2bed": 155.77,
+          "3bed": 173.08,
+          "4bed": 219.76
+        },
+        "Lough Neagh Upper": {
+          "SAR": 71.08,
+          "1bed": 96.91,
+          "2bed": 118.56,
+          "3bed": 133.76,
+          "4bed": 141.62
+        },
+        "Lough Neagh Lower": {
+          "SAR": 83.49,
+          "1bed": 97.34,
+          "2bed": 121.15,
+          "3bed": 137.31,
+          "4bed": 150.25
+        },
+        "North": {
+          "SAR": 74.22,
+          "1bed": 119.79,
+          "2bed": 123.32,
+          "3bed": 133.48,
+          "4bed": 147.62
+        },
+        "North West": {
+          "SAR": 88.21,
+          "1bed": 99.23,
+          "2bed": 118.2,
+          "3bed": 133.34,
+          "4bed": 153.7
+        },
+        "South": {
+          "SAR": 65.49,
+          "1bed": 110.08,
+          "2bed": 124.61,
+          "3bed": 138.46,
+          "4bed": 164.81
+        },
+        "South East": {
+          "SAR": 79.7,
+          "1bed": 109.62,
+          "2bed": 144.23,
+          "3bed": 162.48,
+          "4bed": 199.12
+        },
+        "South West": {
+          "SAR": 71.28,
+          "1bed": 88.68,
+          "2bed": 105.16,
+          "3bed": 113.44,
+          "4bed": 133.27
+        }
+      },
+      "brma_monthly_derived": {
+        "Belfast": {
+          "SAR": 328.25,
+          "1bed": 603.81,
+          "2bed": 675,
+          "3bed": 750.01,
+          "4bed": 952.29
+        },
+        "Lough Neagh Upper": {
+          "SAR": 308.01,
+          "1bed": 419.94,
+          "2bed": 513.76,
+          "3bed": 579.63,
+          "4bed": 613.69
+        },
+        "Lough Neagh Lower": {
+          "SAR": 361.79,
+          "1bed": 421.81,
+          "2bed": 524.98,
+          "3bed": 595.01,
+          "4bed": 651.08
+        },
+        "North": {
+          "SAR": 321.62,
+          "1bed": 519.09,
+          "2bed": 534.39,
+          "3bed": 578.41,
+          "4bed": 639.69
+        },
+        "North West": {
+          "SAR": 382.24,
+          "1bed": 430,
+          "2bed": 512.2,
+          "3bed": 577.81,
+          "4bed": 666.03
+        },
+        "South": {
+          "SAR": 283.79,
+          "1bed": 477.01,
+          "2bed": 539.98,
+          "3bed": 599.99,
+          "4bed": 714.18
+        },
+        "South East": {
+          "SAR": 345.37,
+          "1bed": 475.02,
+          "2bed": 625,
+          "3bed": 704.08,
+          "4bed": 862.85
+        },
+        "South West": {
+          "SAR": 308.88,
+          "1bed": 384.28,
+          "2bed": 455.69,
+          "3bed": 491.57,
+          "4bed": 577.5
+        }
+      },
+      "derivation": "monthly = weekly x 52 / 12, computed here. NIHE publishes weekly only.",
+      "skipped": 0
+    }
   }
 }

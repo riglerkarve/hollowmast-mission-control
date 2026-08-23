@@ -66,16 +66,50 @@ try {
   LHA_TABLE = JSON.parse(fs.readFileSync(path.join(__dirname, '..', 'data', 'lha-rates.json'), 'utf8'));
 } catch { LHA_TABLE = null; }
 
-// --area resolves to a rate from the table and joins whatever --lha supplied, so the two can
-// be compared side by side rather than one silently winning.
+// ONE LOOKUP for the whole UK, and it is the only place that knows the file's shape.
+//
+// Northern Ireland is the reason this is a function rather than a subscript. NIHE publishes
+// WEEKLY; England, Scotland and Wales publish the Universal Credit MONTHLY figure. Everything
+// downstream compares against a monthly rent, so an NI weekly rate used raw would understate
+// the ceiling by a factor of 4.33 and still look like a plausible rent. The NI monthly column
+// is derived here-side by the fetcher and is flagged as derived wherever it is used.
+function lookupLHA(area, beds) {
+  if (!LHA_TABLE || !LHA_TABLE.nations) return null;
+  for (const [nation, n] of Object.entries(LHA_TABLE.nations)) {
+    // Case-insensitive so "oxford" works, but never fuzzy: a near-match on an area name
+    // would silently price a listing against the wrong town.
+    const key = Object.keys(n.brma).find((k) => k.toLowerCase() === String(area).toLowerCase());
+    if (!key) continue;
+    const monthlyRow = n.brma_monthly_derived ? n.brma_monthly_derived[key] : n.brma[key];
+    const value = monthlyRow ? monthlyRow[beds] : null;
+    if (value == null) return { nation, key, value: null, reason: `${key} is in the table but has no ${beds} rate` };
+    return { nation, key, value, derived: !!n.brma_monthly_derived, published: n.published, source: n.source };
+  }
+  return null;
+}
+
+function allAreas() {
+  if (!LHA_TABLE || !LHA_TABLE.nations) return [];
+  return Object.values(LHA_TABLE.nations).flatMap((n) => Object.keys(n.brma));
+}
+
 let lhaSource = null;
 if (AREA && LHA_TABLE) {
-  const row = LHA_TABLE.brma[AREA];
-  if (row && row[BEDS] != null) {
-    LHA.push(row[BEDS]);
-    lhaSource = `${AREA} ${BEDS}, ${LHA_TABLE.period}, from ${LHA_TABLE._source_page}`;
+  const hit = lookupLHA(AREA, BEDS);
+  if (hit && hit.value != null) {
+    LHA.push(hit.value);
+    lhaSource = `${hit.key} (${hit.nation}) ${BEDS}, ${LHA_TABLE.period}`
+      + (hit.derived ? `, DERIVED monthly from the published weekly rate (x52/12)` : ', as published monthly for Universal Credit')
+      + `\n  ${hit.source}`;
+  } else if (hit) {
+    lhaSource = `NOT USABLE: ${hit.reason}.`;
   } else {
-    lhaSource = `NOT FOUND: ${AREA} ${BEDS} is not in data/lha-rates.json. Areas held: ${Object.keys(LHA_TABLE.brma).join(', ')}. Add it from ${LHA_TABLE._source} rather than estimating it.`;
+    const all = allAreas();
+    const near = all.filter((a) => a.toLowerCase().includes(String(AREA).toLowerCase().slice(0, 4)));
+    lhaSource = `NOT FOUND: "${AREA}" is not a Broad Rental Market Area in data/lha-rates.json`
+      + ` (${all.length} areas held across ${Object.keys(LHA_TABLE.nations).length} nations).`
+      + (near.length ? ` Did you mean: ${near.slice(0, 6).join(', ')}?` : '')
+      + ` Rebuild with tools/fetch-lha-rates.cjs; do not estimate a rate.`;
   }
 }
 
@@ -345,7 +379,7 @@ if (!ucLatest) {
   // never saw each other, gov.uk and DWP. If they ever disagree, either the table is stale or
   // he is not on the category assumed, and both matter before the rate judges a listing.
   if (LHA_TABLE) {
-    const bmth = LHA_TABLE.brma.Bournemouth;
+    const bmth = (LHA_TABLE.nations && LHA_TABLE.nations.England) ? LHA_TABLE.nations.England.brma.Bournemouth : null;
     const observed = [...new Set(UC
       .filter((r) => (r.address || '').includes('Bournemouth') && ucLine(r, 'Housing'))
       .map((r) => ucLine(r, 'Housing').amount))];
@@ -378,8 +412,9 @@ if (!ucLatest) {
   // THE FINDING THAT MOVES THE ANSWER, and it only appears once the published rate sits
   // beside the awarded one. His current element EXCEEDS the private-sector cap for the area,
   // so the accommodation he is in is not LHA-capped — and a private tenancy would be.
-  if (LHA_TABLE && LHA_TABLE.brma.Oxford && ucLatest && (ucLatest.address || '').includes('Oxford')) {
-    const cap = LHA_TABLE.brma.Oxford['1bed'];
+  const oxfordRow = (LHA_TABLE && LHA_TABLE.nations && LHA_TABLE.nations.England) ? LHA_TABLE.nations.England.brma.Oxford : null;
+  if (oxfordRow && ucLatest && (ucLatest.address || '').includes('Oxford')) {
+    const cap = oxfordRow['1bed'];
     const el = (ucLine(ucLatest, 'Housing') || { amount: 0 }).amount;
     if (el > cap) {
       say('  WHAT WOULD CHANGE ON MOVING TO A PRIVATE TENANCY -- read this before any listing:');

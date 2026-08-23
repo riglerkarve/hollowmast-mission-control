@@ -88,11 +88,19 @@ function checkSourceCount() {
 
 // Last git commit for Survive/. Tab separator (%x09), NOT pipe, to avoid
 // Windows issues with pipe in command arguments.
+//
+// Survive/ is its OWN git repository nested inside the Claude Outputs tree,
+// not a subdirectory of the outer repo's history. `git log -- Survive/` run
+// with cwd=REPO_ROOT asks the OUTER repo for commits touching a path it does
+// not track (Survive/ isn't part of that repo's tree at all), so it silently
+// returns empty -- a false "no commit history" against a repo with hundreds
+// of real commits. Run git IN Survive/'s own working tree instead, with no
+// pathspec.
 function checkLastCommit() {
   try {
     const out = execSync(
-      'git log -1 --pretty=tformat:"%H%x09%ai%x09%s" -- Survive/',
-      { cwd: REPO_ROOT, encoding: 'utf8', stdio: ['pipe', 'pipe', 'ignore'], timeout: 5000 }
+      'git log -1 --pretty=tformat:"%H%x09%ai%x09%s"',
+      { cwd: SURVIVE_DIR, encoding: 'utf8', stdio: ['pipe', 'pipe', 'ignore'], timeout: 5000 }
     ).trim();
     if (!out) {
       return { name: 'Last commit recorded', status: 'fail',

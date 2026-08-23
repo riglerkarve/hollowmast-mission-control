@@ -372,8 +372,33 @@ function render(facts, prose) {
   // day, so by definition it is not an event, and a daily alert is one you learn to dismiss.
   // He already reads this file.
   if (facts.steering && facts.steering.length) {
-    L.push(`## Steering — ${facts.steering.length} question${facts.steering.length === 1 ? '' : 's'} for you\n`);
-    for (const q of facts.steering) {
+    // BOUNDED, AND THE RESIDUE IS PRINTED. M338.
+    //
+    // On 23 Aug this block rendered the SAME question three times -- 27, 27 and 32
+    // outstanding -- because ensureSteering composes one row per calendar day and an
+    // unresolved backlog regenerates it every morning (team.js:1628; the deeper cause
+    // is M348, where answering does not resolve the item it was composed from). Each
+    // copy cost roughly 900 characters of an 8,899-character file.
+    //
+    // The duplication is NOT fixed here and must not be papered over. This renders the
+    // newest STEERING_MAX and SAYS how many it withheld. A silent cap would turn "he
+    // is being asked the same thing every day" into a briefing that merely looks tidy,
+    // and that count is the only thing making the repetition visible to the person who
+    // has to authorise fixing it.
+    //
+    // Newest rather than oldest: an older duplicate carries the staler count, so the
+    // one worth answering is the current one.
+    const STEERING_MAX = 2;
+    const allSteering = facts.steering;
+    const shown = allSteering.length > STEERING_MAX ? allSteering.slice(-STEERING_MAX) : allSteering;
+    const withheld = allSteering.length - shown.length;
+    L.push(`## Steering — ${allSteering.length} question${allSteering.length === 1 ? '' : 's'} for you\n`);
+    if (withheld) {
+      L.push(`_Showing the newest ${shown.length}. **${withheld} older open question${withheld === 1 ? '' : 's'} not printed.** `
+        + 'The composer writes one per day and an unresolved backlog regenerates it, so these are usually the '
+        + 'same question with a staler count — see M348. `/api/team/steering` lists all of them._\n');
+    }
+    for (const q of shown) {
       L.push(`**${q.question}**\n`);
       if (q.options) {
         for (const o of q.options) {

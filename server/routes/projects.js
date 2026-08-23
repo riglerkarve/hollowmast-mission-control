@@ -62,7 +62,7 @@ const PROJECTS = [
   { id: 'high-society', name: 'high-society-420-tycoon', dir: 'high-society-420-tycoon', dash: null, entry: null,
     track: 'Game', note: 'Idle clicker. Kept and documented.' },
   { id: 'mini-games', name: 'Mini Games', dir: 'Mini Games', dash: null, entry: null,
-    track: 'Game', note: 'GIVE WAY. Kept and documented.' },
+    track: 'Game', note: 'GIVE WAY · PEAL · SHUNT · COPPICE. Kept and documented.' },
   { id: 'second-brain', name: 'SecondBrain', dir: 'SecondBrain', dash: null, entry: null,
     track: '—', note: 'Obsidian vault, effectively empty. The real second brain is the memory store.' },
 ];

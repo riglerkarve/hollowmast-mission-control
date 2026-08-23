@@ -20,18 +20,12 @@ const os = require('node:os');
 
 const router = express.Router();
 
-const PROJECTS = [
-  { name: 'HOLLOWMAST', desc: '3D browser survival game, single-file WebGL, zero dependencies' },
-  { name: 'PrintProfit', desc: '3D-print pricing income portfolio, live to the public' },
-  { name: 'Mission Control', desc: 'Express+SQLite dashboard running the workspace' },
-  { name: 'Dropshipping', desc: 'Registered track, nothing built yet' },
-  { name: 'Print Shop', desc: 'Registered track, physical 3D printing business' },
-  { name: 'Mini Games', desc: 'Collection of small browser games' },
-  { name: 'SecondBrain', desc: 'Obsidian vault and memory store' },
-  { name: 'Oxford AutoWorks', desc: 'Driving-first automotive career sim, UE5+C++' },
-  { name: 'thin-air', desc: 'Survival crafting on an unbreathable planet' },
-  { name: 'emberfall', desc: 'Guild RPG, kept and documented' },
-];
+// The workspace vocabulary has ONE owner: server/routes/projects.js (M272). This module
+// used to keep its own ten-name copy with hand-written descriptions — a second place the
+// truth lived, and it had already drifted (no Fallow, no Garage, no high-society). The
+// owner's `note` serves as the description; a pairing prompt needs nothing richer.
+const { PROJECTS: OWNED } = require('./projects');
+const PROJECTS = OWNED.map((p) => ({ name: p.name, desc: p.note || p.track || '' }));
 
 const CONNECTION_TEMPLATES = [
   '{a} meets {b}: what would the product look like?',

@@ -165,17 +165,26 @@ function fromBoard(needsYou, happened, moved, failed) {
     failed.push({ source: 'board:recent', reason: cap(e && e.message, 120) });
   }
 
-  // Items stuck >7 days — open backlog rows older than a week.
+  // Items stuck >7 days — open rows older than a week, oldest first. UNIONed across
+  // board_items (the external trackers -- HOLLOWMAST's BUGS.md and requests.jsonl, the
+  // bulk of what's actually tracked) and todo_items (the workspace backlog). Reading only
+  // todo_items here would never surface a stale HOLLOWMAST bug, which is most of the board.
   try {
-    const stuck = db.prepare(
-      `SELECT id, title, created_at FROM todo_items
-        WHERE status = 'open'
-          AND julianday('now','localtime') - julianday(created_at) > 7
-        ORDER BY created_at ASC LIMIT 10`
+    const stuck = db.prepare(`
+      SELECT id, title, created_at,
+             CAST(julianday('now','localtime') - julianday(created_at) AS INTEGER) AS days
+        FROM (
+          SELECT ref AS id, title, first_seen AS created_at FROM board_items
+           WHERE status IN ('open', 'unknown')
+          UNION ALL
+          SELECT id, title, created_at FROM todo_items WHERE status = 'open'
+        )
+       WHERE julianday('now','localtime') - julianday(created_at) > 7
+       ORDER BY created_at ASC LIMIT 10`
     ).all();
     for (const r of stuck) {
       moved.push({
-        text: cap(`${r.id}: ${r.title}`, 100),
+        text: cap(`${r.id}: ${r.title} (open ${r.days}d)`, 100),
         from: 'open',
         to: 'stuck >7d',
         when: r.created_at,
@@ -184,6 +193,47 @@ function fromBoard(needsYou, happened, moved, failed) {
   } catch (e) {
     failed.push({ source: 'board:stuck', reason: cap(e && e.message, 120) });
   }
+}
+
+// --- Stalest open item -----------------------------------------------------------------
+//
+// M131. Three separate sessions flagged the same gap on 20 Aug: the briefing showed what
+// was OPEN, not what had been stuck LONGEST. board:stuck (above) lists everything over the
+// 7-day threshold buried in the "moved" section, which the panel renders last -- so the
+// single oldest item on the whole board could sit behind ten newer ones and never stand out.
+//
+// This surfaces the ONE stalest item -- across both board_items (external trackers) and
+// todo_items (workspace backlog) -- in needsYou, called first in morningBriefing() below so
+// it leads the briefing rather than trailing it. A single fact, not a list: the point is
+// "here is the thing that has waited longest", not another ranked table to skim.
+function fromStalest(needsYou, failed) {
+  let row;
+  try {
+    row = db.prepare(`
+      SELECT id, title, project, origin,
+             CAST(julianday('now','localtime') - julianday(since) AS INTEGER) AS days
+        FROM (
+          SELECT ref AS id, title, project, first_seen AS since, 'board' AS origin
+            FROM board_items WHERE status IN ('open', 'unknown')
+          UNION ALL
+          SELECT id, title, NULL AS project, created_at AS since, 'backlog' AS origin
+            FROM todo_items WHERE status = 'open'
+        )
+       ORDER BY since ASC LIMIT 1`
+    ).get();
+  } catch (e) {
+    failed.push({ source: 'stalest', reason: cap(e && e.message, 120) });
+    return;
+  }
+  // Absence, not failure: an empty board and a broken query must not read the same, so a
+  // genuine throw above still lands in `failed` and only a real "nothing open" skips this.
+  if (!row || row.days == null || row.days < 1) return;
+  needsYou.push({
+    text: cap(`Stuck longest: ${row.id}: ${row.title} — open ${row.days}d`
+      + (row.project ? ` (${row.project})` : ''), 130),
+    source: row.origin,
+    urgency: 'P1',
+  });
 }
 
 function fromSessions(happened, failed) {
@@ -494,6 +544,7 @@ function morningBriefing() {
   const moved = [];
   const failed = [];
 
+  fromStalest(needsYou, failed);
   fromUnread(needsYou, happened, failed);
   fromBoard(needsYou, happened, moved, failed);
   fromSessions(happened, failed);

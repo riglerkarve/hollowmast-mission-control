@@ -16,9 +16,47 @@
 // and then disagree without either erroring — the exact failure the team route
 // was written to prevent.  So the report is the one owner of that truth, and this
 // route only paraphrases it.
+//
+// GIT ACTIVITY HAS THE SAME RULE, ONE OWNER LOWER DOWN. `projects.js` already
+// derives "what actually moved, per project" from git log for the briefing
+// (progressSince) — a second git-log pass here, scanning the same repos with
+// slightly different flags, is exactly the drift M258/M272 keep finding. This
+// route calls progressSince() directly (same process, no HTTP hop needed) and
+// reshapes its answer; it does not run git itself.
 const express = require('express');
+const { progressSince } = require('./projects');
 
 const router = express.Router();
+
+// Midnight local time, so "today's activity" means the calendar day the owner is
+// in, not a rolling 24h window that reads differently depending on what time he
+// opens the panel.
+function startOfToday() {
+  const d = new Date();
+  d.setHours(0, 0, 0, 0);
+  return d.toISOString();
+}
+
+// Turn progressSince()'s per-project rows into the same shape as the rest of the
+// digest: short plain-English lines, not a raw commit table. `unmeasurable` is
+// kept as a count with names, not folded into "quiet" — a project with no repo
+// and a project that had a quiet day are different facts (see projects.js).
+function gitActivitySummary() {
+  const progress = progressSince(startOfToday());
+  const moved = progress.moved.map((p) => ({
+    project: p.name,
+    commits: p.commits,
+    lastSubject: p.lastSubject || '',
+    lastAt: p.lastAt || null,
+  }));
+  return {
+    since: progress.since,
+    totalCommits: progress.totalCommits,
+    moved,
+    quietCount: progress.quiet.length,
+    unmeasurable: progress.unmeasurable.map((p) => ({ project: p.name, why: p.why })),
+  };
+}
 
 // Fetch JSON from a local API path, returning { ok, data, error } so the caller
 // can degrade gracefully without throwing across the internal hop.  A timeout
@@ -61,7 +99,7 @@ function gapToConcern(gap) {
 // Build the plain-language summary sentence from the report's counts.  The
 // sentence is assembled from the counts the report already computed — never
 // from a second pass over the rows — so it cannot disagree with the report.
-function summarise(report) {
+function summarise(report, git) {
   const c = report.counts || {};
   const parts = [];
 
@@ -70,6 +108,9 @@ function summarise(report) {
   if (c.assignments) parts.push(`${c.assignments} task${c.assignments === 1 ? '' : 's'} delegated`);
   if (c.decisions) parts.push(`${c.decisions} decision${c.decisions === 1 ? '' : 's'} recorded`);
   if (c.ownerAsks) parts.push(`${c.ownerAsks} ask${c.ownerAsks === 1 ? '' : 's'} for you`);
+  if (git && git.totalCommits) {
+    parts.push(`${git.totalCommits} commit${git.totalCommits === 1 ? '' : 's'} today across ${git.moved.length} project${git.moved.length === 1 ? '' : 's'}`);
+  }
 
   const gaps = (report.gaps || []).length;
   if (gaps) parts.push(`${gaps} gap${gaps === 1 ? '' : 's'} to look at`);
@@ -143,13 +184,27 @@ router.get('/', async (req, res) => {
   // If the team report failed we still return what we have, with a note, rather
   // than a 500 — the owner's digest should never be blank because one internal
   // hop stumbled.  The note is shown in the panel so the failure is visible.
+  // git activity is derived in-process (progressSince), so it cannot itself fail
+  // the way an HTTP hop can — but a project's own git log can, and progressSince
+  // already reports those as `unmeasurable` rather than swallowing them.
+  let git = null;
+  let gitError = null;
+  try {
+    git = gitActivitySummary();
+  } catch (e) {
+    gitError = e.message || 'git activity could not be read';
+  }
+
   if (!reportRes.ok) {
     const working = workingFrom(activeRes.ok ? activeRes.data.active : [], []);
+    const concerns = [{ text: reportRes.error || 'team report unavailable', severity: 'severe' }];
+    if (gitError) concerns.push({ text: `git activity unavailable: ${gitError}`, severity: 'note' });
     return res.json({
       summary: 'The team report could not be read, so this digest is incomplete.',
       highlights: [],
       working,
-      concerns: [{ text: reportRes.error || 'team report unavailable', severity: 'severe' }],
+      git,
+      concerns,
       generatedAt,
       note: reportRes.error || 'team report unavailable',
     });
@@ -160,11 +215,13 @@ router.get('/', async (req, res) => {
   const roster = report.roster || [];
 
   const concerns = (report.gaps || []).map(gapToConcern);
+  if (gitError) concerns.push({ text: `git activity unavailable: ${gitError}`, severity: 'note' });
 
   res.json({
-    summary: summarise(report),
+    summary: summarise(report, git),
     highlights: topHighlights(report),
     working: workingFrom(active, roster),
+    git,
     concerns,
     generatedAt,
   });

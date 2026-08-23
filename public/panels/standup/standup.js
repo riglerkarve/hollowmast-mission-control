@@ -52,6 +52,17 @@ function buildPlainText(d) {
     });
     lines.push('');
   }
+  if (d.git && (d.git.moved.length || d.git.totalCommits)) {
+    lines.push('GIT ACTIVITY (today)');
+    d.git.moved.forEach((p) => {
+      lines.push(`- ${p.project}: ${p.commits} commit${p.commits === 1 ? '' : 's'}${p.lastSubject ? ` — ${p.lastSubject}` : ''}`);
+    });
+    if (d.git.quietCount) lines.push(`- ${d.git.quietCount} other project(s) quiet today`);
+    if (d.git.unmeasurable && d.git.unmeasurable.length) {
+      lines.push(`- ${d.git.unmeasurable.length} project(s) unmeasurable: ${d.git.unmeasurable.map((p) => p.project).join(', ')}`);
+    }
+    lines.push('');
+  }
   if (d.concerns && d.considerations && d.concerns.length) {
     lines.push('CONCERNS');
     d.concerns.forEach((c) => lines.push(`- ${c}`));
@@ -91,6 +102,22 @@ function concernsHTML(items) {
   return items.map((c) => `<article class="su-item"><p class="su-text">${prose(typeof c === 'string' ? c : c.text || '')}</p></article>`).join('');
 }
 
+function gitHTML(git) {
+  if (!git || (!git.moved.length && !git.quietCount && !(git.unmeasurable && git.unmeasurable.length))) {
+    return '<p class="su-empty">No git activity data in this digest.</p>';
+  }
+  const rows = git.moved.map((p) => `<article class="su-item">
+      <p class="su-agent">${esc(p.project)} <span class="su-status">${p.commits} commit${p.commits === 1 ? '' : 's'}</span></p>
+      ${p.lastSubject ? `<p class="su-task">${prose(p.lastSubject)}</p>` : ''}
+    </article>`).join('');
+  const tail = [];
+  if (git.quietCount) tail.push(`<p class="su-empty">${esc(git.quietCount)} other project(s) quiet today.</p>`);
+  if (git.unmeasurable && git.unmeasurable.length) {
+    tail.push(`<p class="su-empty">${esc(git.unmeasurable.length)} project(s) unmeasurable: ${esc(git.unmeasurable.map((p) => p.project).join(', '))}.</p>`);
+  }
+  return rows + tail.join('');
+}
+
 function render() {
   if (!root || !state) return;
 
@@ -115,7 +142,8 @@ function render() {
 
   // Empty state: the digest returned but has no content at all.
   const hasContent = d.summary || (d.highlights && d.highlights.length) ||
-    (d.working && d.working.length) || (d.concerns && d.concerns.length);
+    (d.working && d.working.length) || (d.concerns && d.concerns.length) ||
+    (d.git && (d.git.moved.length || d.git.quietCount || (d.git.unmeasurable && d.git.unmeasurable.length)));
   if (!hasContent) {
     root.innerHTML = `<section class="panel su-panel">
       <h1>Daily standup</h1>
@@ -154,6 +182,9 @@ function render() {
 
     <h2 class="su-h2">Who is working</h2>
     ${workingHTML(d.working)}
+
+    <h2 class="su-h2">Git activity (today)</h2>
+    ${gitHTML(d.git)}
 
     <h2 class="su-h2">Concerns</h2>
     ${concernsHTML(d.concerns)}

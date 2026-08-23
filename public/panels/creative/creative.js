@@ -208,7 +208,21 @@ async function promoteIdea(id, btn) {
     if (!r.ok) {
       const e = await r.json().catch(() => ({}));
       if (btn) { btn.disabled = false; btn.textContent = 'Promote to board'; }
-      alert('Promotion failed: ' + (e.error || r.status));
+      // M141: business-shaped ideas need a priced viability scenario first.
+      // Hand off to Viability with the venture name pre-filled rather than
+      // just refusing -- the owner still has to type the numbers, but not
+      // the venture name too.
+      if (e.viabilityRequired) {
+        try { sessionStorage.setItem('mc_viability_prefill_venture', e.viabilityVenture); } catch {}
+        alert(`${e.error}\n\nOpening Viability now — the venture name is filled in for you.`);
+        // Not window.location.hash: shell.js has no hashchange listener, so
+        // setting the hash alone would change the URL without switching the
+        // panel. The nav button IS the mount trigger.
+        const navBtn = document.querySelector('.nav-item[data-panel="viability"]');
+        if (navBtn) navBtn.click();
+      } else {
+        alert('Promotion failed: ' + (e.error || r.status));
+      }
       return;
     }
     const d = await r.json();

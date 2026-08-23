@@ -307,6 +307,16 @@ Return ONLY the JSON array.`;
   }
 });
 
+// M141 -- the "business" tag is the one place an idea declares itself
+// business-shaped (it is also what tagToProject below routes to "Mission
+// Control"), so it is the one place this check reads from too. The venture
+// name is DERIVED from the idea id, never stored, so there is nowhere for it
+// to drift out of sync with the idea it names -- same discipline the M129
+// migration note above applies to promoted_item_id.
+function viabilityVenture(idea) {
+  return `Creative idea #${idea.id}`;
+}
+
 // Promote a developed idea to the board as a backlog item (M129)
 router.post('/ideas/:id/promote', async (req, res) => {
   const idea = db.prepare('SELECT * FROM creative_ideas WHERE id = ?').get(req.params.id);
@@ -324,6 +334,32 @@ router.post('/ideas/:id/promote', async (req, res) => {
       boardItemId: idea.promoted_item_id,
       ideaId: Number(req.params.id),
     });
+  }
+
+  const tags = JSON.parse(idea.tags || '[]');
+
+  // M141: a business-shaped idea gets a viability check before it reaches the
+  // board -- not a stub, an actual one. Requiring the row to exist would be
+  // satisfied by an empty scenario with no numbers in it, which is not a
+  // check, it's a formality; requiring price AND cost forces the unit-economics
+  // arithmetic to actually have happened, same as the sentence viability.js
+  // itself refuses to produce a margin without both.
+  if (tags.includes('business')) {
+    const venture = viabilityVenture(idea);
+    const scenario = db.prepare(
+      `SELECT id FROM viability_scenarios
+        WHERE venture = ? AND unit_price_pence IS NOT NULL AND unit_cost_pence IS NOT NULL
+        ORDER BY id DESC LIMIT 1`
+    ).get(venture);
+    if (!scenario) {
+      return res.status(409).json({
+        error: 'This looks business-shaped. Set a unit price and unit cost for it in '
+          + `Viability (venture "${venture}") before it goes to the board.`,
+        viabilityRequired: true,
+        viabilityVenture: venture,
+        ideaId: Number(req.params.id),
+      });
+    }
   }
 
   // Get the latest development for the idea, if any
@@ -346,7 +382,6 @@ router.post('/ideas/:id/promote', async (req, res) => {
     'life': null,
     'wild': null,
   };
-  const tags = JSON.parse(idea.tags || '[]');
   const project = tagToProject[tags[0]] || null;
   const kind = tags.includes('business') ? 'feature' : tags.includes('content') ? 'feature' : 'feature';
 

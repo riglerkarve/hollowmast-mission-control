@@ -448,8 +448,16 @@ if (!RENTS.length) {
       say('');
       say('  Look it up on gov.uk for the Broad Rental Market Area of the actual property.');
       say('  NO DEFAULT IS OFFERED. An invented LHA rate would decide the whole answer, and');
-      say('  the two areas in this record differ enormously: the element was GBP 332.41 at the');
-      say('  Shared Accommodation rate in Poole and is GBP 1646.36 in Oxford.');
+      // DERIVED from the statements, not typed. The first version wrote both figures into
+      // the string, which duplicates numbers that already have an owner and goes stale the
+      // first time the element is reassessed — silently, because prose does not throw.
+      const els = UC.map((r) => ucLine(r, 'Housing')).filter(Boolean).map((x) => x.amount);
+      if (els.length) {
+        const lo = Math.min(...els);
+        const hi = Math.max(...els);
+        say(`  the areas in this record differ enormously: the housing element has ranged from`);
+        say(`  GBP ${gbp(Math.round(lo * 100))} to GBP ${gbp(Math.round(hi * 100))} a month across ${els.length} statements that carried one.`);
+      }
     }
   }
 }

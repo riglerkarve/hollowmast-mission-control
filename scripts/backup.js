@@ -30,6 +30,7 @@ const path = require('node:path');
 const fs = require('node:fs');
 const { execFileSync } = require('node:child_process');
 const { DatabaseSync } = require('node:sqlite');
+const crypt = require('../tools/backup-crypt.cjs');
 
 const ROOT = path.join(__dirname, '..');
 const DATA_DIR = path.join(ROOT, 'data');
@@ -41,7 +42,7 @@ const DESTS = [
   { dir: path.join(ROOT, '..', '..', 'MissionControl-Backups'), label: 'out-of-tree (survives losing the project folder)' },
 ];
 if (process.env.MC_BACKUP_EXTRA) {
-  DESTS.push({ dir: process.env.MC_BACKUP_EXTRA, label: 'MC_BACKUP_EXTRA (off-machine if that folder syncs)' });
+  DESTS.push({ dir: process.env.MC_BACKUP_EXTRA, encrypt: true, label: 'MC_BACKUP_EXTRA (off-machine, ENCRYPTED)' });
 }
 
 // FILE FALLBACK, ADDED 23 AUG 2026 — the owner asked for a daily OneDrive copy of the
@@ -64,7 +65,7 @@ try {
       const dir = line.trim();
       if (!dir || dir.startsWith('#')) continue;
       if (DESTS.some((d) => path.resolve(d.dir) === path.resolve(dir))) continue;   // no double-write
-      DESTS.push({ dir, label: 'data/backup-extra.txt (off-machine if that folder syncs)' });
+      DESTS.push({ dir, encrypt: true, label: 'data/backup-extra.txt (off-machine, ENCRYPTED)' });
     }
   }
 } catch (e) {
@@ -94,6 +95,34 @@ if (!fs.existsSync(dbPath)) {
       const db = new DatabaseSync(dbPath);
       db.exec(`VACUUM INTO '${out.replace(/'/g, "''")}'`);
       db.close();
+
+      // ENCRYPT ONLY WHAT LEAVES THE MACHINE. Owner instruction, 23 Aug 2026.
+      //
+      // The two default destinations stay PLAINTEXT on purpose. They are on his own disk
+      // behind his own login, and encrypting them would add a way to lose the data — a
+      // forgotten passphrase — while defending against nothing the machine does not already
+      // cover. The copy that goes to a third party's servers is the one that needs it, and
+      // it is the only one that gets it.
+      //
+      // A FAILURE HERE DELETES THE PLAINTEXT AND COUNTS THE DESTINATION AS FAILED. It must
+      // never leave an unencrypted database sitting in OneDrive because encryption threw —
+      // that is precisely the outcome the instruction exists to prevent, arrived at by
+      // accident, and it would look like a successful backup while being the opposite.
+      if (d.encrypt) {
+        try {
+          crypt.encrypt(out, out + '.enc', crypt.passphrase());
+          fs.unlinkSync(out);
+          const mbE = (fs.statSync(out + '.enc').size / 1048576).toFixed(1);
+          console.log(`  db enc  ${mbE} MB -> ${out}.enc`);
+          dbOk += 1;
+          continue;
+        } catch (e) {
+          try { if (fs.existsSync(out)) fs.unlinkSync(out); } catch { /* nothing else to do */ }
+          problems.push(`db to ${d.dir}: encryption failed, PLAINTEXT REMOVED, nothing written — ${e.message}`);
+          continue;
+        }
+      }
+
       const mb = (fs.statSync(out).size / 1048576).toFixed(1);
       console.log(`  db      ${mb} MB -> ${out}`);
       dbOk += 1;

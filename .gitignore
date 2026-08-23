@@ -94,3 +94,6 @@ data/dash-password.txt
 # remembering to ignore it, and that window is how a key gets committed for good.
 data/reports-admin-key.txt
 data/ga-service-account.json
+
+# The passphrase for the encrypted off-machine backup. Never committed.
+data/backup-key.txt

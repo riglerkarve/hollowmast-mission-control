@@ -52,11 +52,32 @@ const argOf = (name) => {
 const SAVE = process.argv.includes('--save');
 const RENTS = (argOf('--rent') || '')
   .split(',').map((s) => Number(String(s).trim())).filter((n) => Number.isFinite(n) && n > 0);
-// The Local Housing Allowance rate for the property's Broad Rental Market Area. Supplied by
-// the owner from gov.uk, never guessed: it decides the whole answer, and the two areas in
-// this record differ by a factor of five.
+// The Local Housing Allowance rate for the property's Broad Rental Market Area. Either given
+// explicitly with --lha, or looked up from data/lha-rates.json, which carries the gov.uk URL
+// it was taken from and the date. Still never guessed: an area not in that file is reported
+// as absent rather than estimated.
 const LHA = (argOf('--lha') || '')
   .split(',').map((s) => Number(String(s).trim())).filter((n) => Number.isFinite(n) && n > 0);
+const AREA = argOf('--area');
+const BEDS = argOf('--beds') || '1bed';
+
+let LHA_TABLE = null;
+try {
+  LHA_TABLE = JSON.parse(fs.readFileSync(path.join(__dirname, '..', 'data', 'lha-rates.json'), 'utf8'));
+} catch { LHA_TABLE = null; }
+
+// --area resolves to a rate from the table and joins whatever --lha supplied, so the two can
+// be compared side by side rather than one silently winning.
+let lhaSource = null;
+if (AREA && LHA_TABLE) {
+  const row = LHA_TABLE.brma[AREA];
+  if (row && row[BEDS] != null) {
+    LHA.push(row[BEDS]);
+    lhaSource = `${AREA} ${BEDS}, ${LHA_TABLE.period}, from ${LHA_TABLE._source_page}`;
+  } else {
+    lhaSource = `NOT FOUND: ${AREA} ${BEDS} is not in data/lha-rates.json. Areas held: ${Object.keys(LHA_TABLE.brma).join(', ')}. Add it from ${LHA_TABLE._source} rather than estimating it.`;
+  }
+}
 
 // ---------------------------------------------------------------- the window
 // The last period is ALWAYS partial: the ledger is an import and stops mid-month, so
@@ -319,6 +340,28 @@ if (!ucLatest) {
   say('');
 
   // The shortfall history is the part that actually generalises to a new tenancy.
+  // THE TABLE CHECKS ITSELF AGAINST THE STATEMENTS. Bournemouth's published 1-bed rate should
+  // equal the housing element actually awarded there — the same figure from two sources that
+  // never saw each other, gov.uk and DWP. If they ever disagree, either the table is stale or
+  // he is not on the category assumed, and both matter before the rate judges a listing.
+  if (LHA_TABLE) {
+    const bmth = LHA_TABLE.brma.Bournemouth;
+    const observed = [...new Set(UC
+      .filter((r) => (r.address || '').includes('Bournemouth') && ucLine(r, 'Housing'))
+      .map((r) => ucLine(r, 'Housing').amount))];
+    if (bmth && observed.length) {
+      const agrees = observed.includes(bmth['1bed']);
+      say('  CROSS-CHECK of the published table against these statements:');
+      say(`    gov.uk Bournemouth 1-bed   GBP ${gbp(Math.round(bmth['1bed'] * 100))}`);
+      say(`    element actually awarded   ${observed.map((v) => 'GBP ' + gbp(Math.round(v * 100))).join(', ')}`);
+      say(`    ${agrees
+        ? 'AGREE. Two independent sources, one figure -- so the table is current AND he was'
+        : 'DISAGREE. Do not use the table until this is explained.'}`);
+      if (agrees) say('    assessed on the 1-bedroom category, not the lower Shared Accommodation Rate.');
+      say('');
+    }
+  }
+
   const capped = UC.filter((r) => r.lha_shortfall);
   if (capped.length) {
     const last = capped[capped.length - 1];
@@ -332,6 +375,32 @@ if (!ucLatest) {
     say('    every month, out of the GBP ' + gbp(Math.round(ucLatest.total_payment * 100)) + ' that actually reaches you.');
     say('');
   }
+  // THE FINDING THAT MOVES THE ANSWER, and it only appears once the published rate sits
+  // beside the awarded one. His current element EXCEEDS the private-sector cap for the area,
+  // so the accommodation he is in is not LHA-capped — and a private tenancy would be.
+  if (LHA_TABLE && LHA_TABLE.brma.Oxford && ucLatest && (ucLatest.address || '').includes('Oxford')) {
+    const cap = LHA_TABLE.brma.Oxford['1bed'];
+    const el = (ucLine(ucLatest, 'Housing') || { amount: 0 }).amount;
+    if (el > cap) {
+      say('  WHAT WOULD CHANGE ON MOVING TO A PRIVATE TENANCY -- read this before any listing:');
+      say(`    element now                GBP ${gbp(Math.round(el * 100))}   (rent + service charges, covered in full)`);
+      say(`    Oxford 1-bed LHA ceiling   GBP ${gbp(Math.round(cap * 100))}   (private rented, ${LHA_TABLE.period})`);
+      say(`    difference                 GBP ${gbp(Math.round((el - cap) * 100))} a month`);
+      say('');
+      say('    The current element is ABOVE the private-sector ceiling for this area, so the');
+      say('    accommodation he is in is not LHA-capped. UC pays rent AND service charges for a');
+      say('    housing association or council tenancy, and caps a private one at the LHA rate.');
+      say('    A move into private renting therefore does not just add a rent -- it lowers the');
+      say(`    ceiling on housing support to GBP ${gbp(Math.round(cap * 100))}, whatever the rent is.`);
+      say('');
+      say('    WHAT THIS DOES NOT ESTABLISH: which category the current tenancy is in. Social,');
+      say('    supported, specified and temporary accommodation are treated differently from');
+      say('    each other, and the statement does not name which applies. That is a question');
+      say('    for the landlord or the work coach, and it decides how much is actually at risk.');
+      say('');
+    }
+  }
+
   const noHousing = UC.filter((r) => !ucLine(r, 'Housing'));
   if (noHousing.length) {
     say(`  AND IT IS NOT AUTOMATIC: ${noHousing.length} of ${UC.length} statements carry NO housing element at all`);
@@ -440,9 +509,21 @@ if (!RENTS.length) {
         }
       }
       say('');
-      say('  The LHA rate is YOURS to supply from gov.uk for the actual Broad Rental Market');
-      say('  Area. It is not derivable from this ledger and is not guessed here.');
+      // Where the rate came from, printed every time. A rate with no stated source is
+      // indistinguishable from one somebody made up, and this is the figure that decides
+      // whether a listing is affordable.
+      if (lhaSource) {
+        say(`  Rate source: ${lhaSource}`);
+        if (LHA_TABLE) say(`  Retrieved ${LHA_TABLE._retrieved}. Frozen at 2024/25 levels for 2025/26 and 2026/27.`);
+      } else {
+        say('  Rate as supplied on the command line. Check it against gov.uk for the actual');
+        say('  Broad Rental Market Area, or pass --area to use the recorded table instead.');
+      }
     } else {
+      // An --area that resolved to nothing must SAY so. Falling through to the generic
+      // "supply a rate" text would read as though no area had been asked for, which is the
+      // failure where a request quietly does nothing and looks like it was never made.
+      if (lhaSource) { say(`  ${lhaSource}`); say(''); }
       say('  Supply the LHA rate for the area and this will do that arithmetic:');
       say(`      node tools/rent-affordability.cjs --rent ${RENTS[0] || 850} --lha 900`);
       say('');

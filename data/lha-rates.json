@@ -1,0 +1,16 @@
+{
+  "_what": "Local Housing Allowance rates — the ceiling on the Universal Credit housing element for a PRIVATE rented tenancy, by Broad Rental Market Area.",
+  "_source": "https://www.gov.uk/csv-preview/69d654a2e1430e837a86f64a/england-rates-2026-to-2027.csv",
+  "_source_page": "https://www.gov.uk/government/publications/universal-credit-local-housing-allowance-rates-2026-to-2027",
+  "_retrieved": "2026-08-23",
+  "_units": "pounds per calendar month",
+  "_why_monthly": "These are the UNIVERSAL CREDIT monthly figures, not the weekly Housing Benefit ones. UC assessment periods are monthly and the statements quote monthly, so mixing in a weekly rate would be wrong by a factor of about 4.33 while still looking like a plausible rent.",
+  "_frozen": "Rates from 1 April 2026 were set by The Rent Officers (Housing Benefit and Universal Credit Functions) (Modification) Order 2026 (SI 2026/5) and are the SAME rates that came into force on 1 April 2024. LHA has been frozen at 2024/25 levels for 2025/26 and 2026/27. That is why the observed Bournemouth element does not move across two years of statements — it is a policy freeze, not a stale figure.",
+  "_residue": "Only the two BRMAs relevant to this record were taken from the CSV. England alone has around 150 more, and Scotland and Wales are separate files. A BRMA that is not listed here is NOT looked up and must not be guessed — add it from the source above.",
+  "_categories": "SAR is the Shared Accommodation Rate. Which category applies to a single person depends on age and on exemptions, which are NOT recorded here because they are facts about the claimant rather than about the area.",
+  "period": "2026-04-01 to 2027-03-31",
+  "brma": {
+    "Oxford": { "SAR": 550.00, "1bed": 900.00, "2bed": 1125.00, "3bed": 1325.00, "4bed": 1750.00 },
+    "Bournemouth": { "SAR": 426.33, "1bed": 695.00, "2bed": 875.00, "3bed": 1150.00, "4bed": 1550.00 }
+  }
+}

@@ -585,6 +585,29 @@ db.migrate('team', [
     if (!cols.includes('asked_by')) db.exec('ALTER TABLE team_steering ADD COLUMN asked_by TEXT');
     if (!cols.includes('source')) db.exec('ALTER TABLE team_steering ADD COLUMN source TEXT');
   },
+
+  // A QUESTION MUST REMEMBER WHAT IT WAS COMPOSED FROM. M348.
+  //
+  // Measured 23 Aug: he answered steering #7 on 20 Aug, himself, the same day. The system
+  // then asked him the SAME question on the 21st, 22nd and 23rd. Not because the composer
+  // duplicates -- because his answer wrote team_steering.answer and stopped. The item it
+  // was composed from (team_owner_items #2, filing_count 5) still reads resolved_at NULL,
+  // openOwnerItems() still returns it as the oldest open item, and the composer correctly
+  // regenerates the identical question from data that is correctly still open.
+  //
+  // So the missing edge is answer -> resolve, and the first thing it needs is a link that
+  // does not currently exist: the INSERT recorded asked_at, shift, question, options,
+  // recommend, asked_by and source, and nothing about WHICH rows produced it.
+  //
+  // RECORDED AT COMPOSITION, NOT RE-DERIVED AT ANSWER TIME, and that is the whole point.
+  // Re-deriving "the oldest open item" when the answer arrives would resolve whatever is
+  // oldest THEN -- which after three days of drift is a different row. It would look like
+  // it worked and close the wrong item silently, which is worse than closing none.
+  (db) => {
+    const cols = db.prepare("SELECT name FROM pragma_table_info('team_steering')").all().map(r => r.name);
+    if (!cols.includes('ref_kind')) db.exec('ALTER TABLE team_steering ADD COLUMN ref_kind TEXT');
+    if (!cols.includes('ref_ids')) db.exec('ALTER TABLE team_steering ADD COLUMN ref_ids TEXT');
+  },
 ]);
 
 // A shift label both a human and a script can produce without consulting anything.
@@ -1047,7 +1070,78 @@ router.post('/steering/:id/answer', express.json(), (req, res) => {
   if (row.answer) return res.status(409).json({ error: 'already answered — a changed decision is a new question, not an edit' });
   db.prepare('UPDATE team_steering SET answer = ?, answered_at = ?, by_whom = ? WHERE id = ?')
     .run(answer, new Date().toISOString(), req.by || 'unknown', req.params.id);
-  res.json({ ok: true, by: req.by || 'unknown' });
+
+  // ---------------------------------------------------------------------------------------
+  // M348 — THE ANSWER -> RESOLVE EDGE. Until this existed, answering wrote the answer and
+  // stopped: he answered steering #7 himself on 20 August, the item it was composed from
+  // stayed open, openOwnerItems() kept returning it, and the composer correctly regenerated
+  // the identical question on the 21st, 22nd and 23rd. The loop had no exit.
+  //
+  // IT RESOLVES ONLY WHAT THE CALLER NAMES. `resolves` is an explicit list of owner-item
+  // ids. Free text is never parsed for intent -- "take the oldest first" cannot be mapped
+  // to a row without guessing, and closing the WRONG item is worse than closing none,
+  // because a wrongly-closed item stops being asked about and nobody looks again.
+  //
+  // THREE CONSTRAINTS, each refusing rather than silently doing less:
+  //   1. Owner only. Same rule and same reasoning as the resolve-owner endpoint: a session
+  //      clearing his queue on his behalf is what produced "42 open, 0 resolved by him".
+  //   2. Only ids this question actually offered, from ref_ids recorded at composition. A
+  //      caller cannot close an arbitrary row through the steering channel.
+  //   3. Only ref_kind 'owner_item'. A due DECISION is revisited by taking a new decision
+  //      that supersedes it -- clearing a revisit date is not the same act and must not be
+  //      reachable from here.
+  const out = { ok: true, by: req.by || 'unknown' };
+  const asked = Array.isArray((req.body || {}).resolves) ? (req.body || {}).resolves.map(Number) : [];
+
+  if (!asked.length) {
+    // NOT an error, and deliberately distinguished from a failed resolve: most answers are
+    // prose and close nothing. Saying so is what stops "resolved: 0" reading as a fault.
+    out.resolved = { count: 0, why: 'no resolves[] sent — the answer was recorded and no item was closed' };
+    return res.json(out);
+  }
+
+  const meta = db.prepare('SELECT ref_kind, ref_ids FROM team_steering WHERE id = ?').get(req.params.id);
+  let offered = [];
+  try { offered = JSON.parse(meta && meta.ref_ids ? meta.ref_ids : '[]'); } catch { offered = []; }
+
+  if (req.by !== 'you') {
+    out.resolved = { count: 0, refused: 'owner-only',
+      why: 'Resolving is the owner adjudicating. A session recording his answer should send the '
+         + 'answer alone; if he also cleared items, he clears them. This is the same rule as '
+         + 'the resolve-owner endpoint and for the same reason.' };
+    return res.json(out);
+  }
+  if (meta && meta.ref_kind !== 'owner_item') {
+    out.resolved = { count: 0, refused: 'not-resolvable',
+      why: `this question is about ${meta.ref_kind || 'nothing recorded'}; only owner items can be `
+         + 'closed by answering. A due decision is revisited by taking a new one that supersedes it.' };
+    return res.json(out);
+  }
+  if (!offered.length) {
+    // The pre-M348 rows have no ref_ids and must not be silently treated as "offered nothing".
+    out.resolved = { count: 0, refused: 'no-link-recorded',
+      why: 'this question was composed before ref_ids existed, so what it was about was never '
+         + 'recorded. Resolve the item directly rather than through this channel.' };
+    return res.json(out);
+  }
+
+  const now = new Date().toISOString();
+  const note = 'Resolved by the owner answering steering #' + req.params.id;
+  const upd = db.prepare('UPDATE team_owner_items SET resolved_at=?, resolved_by=?, resolved_note=? '
+                       + 'WHERE id=? AND resolved_at IS NULL');
+  const closed = [], skipped = [];
+  db.withTransaction(() => {
+    for (const id of asked) {
+      if (!offered.includes(id)) { skipped.push({ id, why: 'not offered by this question' }); continue; }
+      const r = upd.run(now, 'owner', note, id);
+      if (r.changes) closed.push(id);
+      else skipped.push({ id, why: 'already resolved, or no such item' });
+    }
+  });
+
+  out.resolved = { count: closed.length, ids: closed };
+  if (skipped.length) out.resolved.skipped = skipped;
+  res.json(out);
 });
 
 function openSteering() {
@@ -1801,6 +1895,10 @@ function ensureSteering(opts) {
   }
 
   let question, options, recommend;
+  // M348: what this question is ABOUT, recorded at composition so answering can resolve it.
+  // The ids are in the same order as `options`, so option[n] is refIds[n] -- the caller
+  // answering with a choice can name exactly what it closed without re-deriving anything.
+  let refKind = null, refIds = [];
 
   if (items.length) {
     const oldest = items[0];
@@ -1814,6 +1912,8 @@ function ensureSteering(opts) {
               + 'the earliest first_seen_at of ' + items.length + ' unresolved rows, chosen because it has '
               + 'been waiting longest and for no other reason. If another matters more, that is exactly '
               + 'the steer this question exists to collect.';
+    refKind = 'owner_item';
+    refIds = items.slice(0, 4).map(i => i.id);
   } else {
     const d = due[0];
     question = due.length + ' decision' + (due.length === 1 ? '' : 's') + ' reached the date it was marked '
@@ -1822,13 +1922,20 @@ function ensureSteering(opts) {
     options = due.slice(0, 4).map(x => '#' + x.id + ' (' + x.revisit_when + ') ' + clip(x.decision, 100));
     recommend = 'Revisit #' + d.id + ' first -- it is the earliest revisit_when that has passed. Arithmetic, '
               + 'not a view about which matters most.';
+    // Decisions are NOT given a ref_kind that answering can act on. A due decision is
+    // revisited by taking a new decision that supersedes it, which is a judgement with a
+    // rationale -- not a row to mark closed. Recording it as resolvable would invite the
+    // answer path to clear a revisit date and call that a decision having been revisited.
+    refKind = 'decision_due';
+    refIds = due.slice(0, 4).map(x => x.id);
   }
 
   const info = db.prepare(
-    'INSERT INTO team_steering (asked_at, shift, question, options, recommend, asked_by, source) '
-  + 'VALUES (?,?,?,?,?,?,?)'
+    'INSERT INTO team_steering (asked_at, shift, question, options, recommend, asked_by, source, ref_kind, ref_ids) '
+  + 'VALUES (?,?,?,?,?,?,?,?,?)'
   ).run(now.toISOString(), shiftLabel(), question, JSON.stringify(options), recommend,
-        'briefing-auto', 'composed from SQL, not written by a session');
+        'briefing-auto', 'composed from SQL, not written by a session',
+        refKind, JSON.stringify(refIds));
 
   return { asked: true, id: info.lastInsertRowid, question, recommend, options,
            note: 'Composed by the briefing pass, not by a manager. The recommendation is arithmetic.' };

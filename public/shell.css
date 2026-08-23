@@ -1,7 +1,7 @@
 :root {
-  --bg: #f4f3ef;
-  --card: #ffffff;
-  --ink: #1f2320;
+  --bg: #080909;
+  --card: #121411;
+  --ink: #eff2ed;
   --muted: #5f665d;   /* Was #6a7167, tuned to 4.53:1 AGAINST --bg — correctly measured and
                           deployed on the wrong grounds. Audited 18 Aug: on --ring-bg it is
                           4.03:1 (45 elements) and on --accent-soft 3.88:1 (11), both under AA.
@@ -11,8 +11,8 @@
                           is better everywhere, not traded off. Darkening cannot hurt: every
                           light-theme ground is lighter than the text. The sidebar is unaffected;
                           it has its own --sidebar-muted. Re-check with /tools/contrast.html. */
-  --accent: #d9663d;
-  --accent-soft: #f6ddd0;
+  --accent: #d4ff38;
+  --accent-soft: #293016;
   /* THE ACCENT PLAYS TWO ROLES THAT PULL OPPOSITE WAYS, so it is two tokens.
      --accent is the accent as INK -- text, borders, bar fills. On the DARK theme it sits on
      dark grounds, so it must stay light: darkening it there took accent-on---bg from 6.49:1
@@ -23,14 +23,14 @@
      smallest darkening along the same hue that clears 4.5:1 (light 4.54, dark 4.51).
      Use --accent-fill ONLY where white text sits on it. Two rules do: .btn.primary and
      .nav-item.active. */
-  --accent-fill: #bb5834;
+  --accent-fill: #d4ff38;
   /* --accent-text is the accent as SMALL TEXT ON A CARD, the third role and the one the
      two above cannot both serve: --accent on --card is 3.55:1 in the light theme (fails)
      and 5.75 in the dark (passes); --accent-fill on --card is 4.61 light (passes) and
      3.43 dark (fails). So the light theme borrows the fill and the dark theme keeps the
      ink. Used by .bar-col.is-today .bar-label; use it for any other accent-coloured
      text under 18px that sits on a card. */
-  --accent-text: #bb5834;
+  --accent-text: #d4ff38;
   /* --accent-text is only rated for --card (4.61:1) -- on --bg it is 4.15, which is where
      finance.css's own .fin-pnl-row .fin-neg override already found it short by hand. Three
      more sites need exactly that pairing (fin-nw-stale, prj-open, prj-dirty, all recessed
@@ -38,38 +38,38 @@
      darker again clears BOTH grounds (card 5.53, bg 4.98). Dark theme's ember already
      clears 7.29:1 on the near-black --bg unchanged, matching the .fin-neg override's own
      dark fallback. */
-  --accent-text-bg: #a84e2e;
-  --work: #d9663d;
+  --accent-text-bg: #d4ff38;
+  --work: #ff5ee4;
   --short: #4d8b6f;
   /* --short as small text: 4.01:1 on --card, 3.20 on --bg (found auditing finance's
      "spending down" figures and projects/brain elsewhere in the ember hue). One step
      darker along the same hue clears both at once (card 5.14, bg 4.63), so -- like
      --accent-text -- one token serves either ground. Dark theme is untouched: --short
      carries no dark override today and already passes every dark ground measured. */
-  --short-text: #42785f;
-  --long: #3f6fa6;
-  --ring-bg: #e8e6df;
-  --border: #e5e3db;
+  --short-text: #4d8b6f;
+  --long: #8a68ff;
+  --ring-bg: #212420;
+  --border: #353834;
   /* The sidebar rail is dark in EITHER page theme -- an existing decision, not a new one --
      so it is the one token below moved as part of the station-console pass even though the
      rest of this light block is untouched: it now matches dash/'s own --ink exactly, so the
      rail reads the same whichever page theme is active. Verified against the new sidebar
      text colours: --sidebar-ink 18.36:1, --sidebar-muted 7.34:1 on it -- both improved. */
-  --sidebar-bg: #03050a;
-  --sidebar-ink: #f4f3ef;
-  --sidebar-muted: #9a9c94;
-  --shadow: 0 1px 2px rgba(20, 20, 15, 0.04), 0 8px 24px rgba(20, 20, 15, 0.06);
+  --sidebar-bg: #080909;
+  --sidebar-ink: #eff2ed;
+  --sidebar-muted: #b5bbb2;
+  --shadow: 0 1px 2px rgba(0, 0, 0, 0.5);
   /* The shadow scale is two steps: --shadow at rest, --shadow-lift on hover. A third would
      be a third opinion about how far off the page a card sits. */
-  --shadow-lift: 0 2px 4px rgba(20, 20, 15, 0.05), 0 14px 32px rgba(20, 20, 15, 0.09);
+  --shadow-lift: 0 1px 2px rgba(0, 0, 0, 0.55), 0 0 0 1px rgba(212, 255, 56, 0.16);
   /* The edge a card or a field takes on hover: the same neutral as --border, one step
      darker in light and one step lighter in dark, so "brighter edge" means the same thing
      in both themes -- more contrast against the card, never a new hue. */
-  --border-strong: #d3d0c6;
+  --border-strong: #50524f;
   /* The accent at low alpha, for halos ONLY -- focus glow, badge glow, the primary
      button's hover bloom. It never carries text and never sits under it, so the
      --accent / --accent-fill contrast rules above are untouched by it. */
-  --accent-glow: rgba(217, 102, 61, 0.16);
+  --accent-glow: rgba(212, 255, 56, 0.20);
   /* Motion. Enter on --t-slow, leave on --t-fast, everything on one ease-out curve, so
      every surface in the app moves like the same material. Set the transition on the base
      rule (that is the EXIT) and re-set --t-slow on the :hover rule (that is the ENTER):
@@ -84,7 +84,37 @@
   --mono: ui-monospace, "SF Mono", SFMono-Regular, "Cascadia Mono", "Segoe UI Mono", Menlo, Consolas, monospace;
   --r-card: 10px;
   --r-btn: 6px;
-  color-scheme: light;
+
+  /* MINDVIRUS PASS -- the palette is the brand kit's own tokens, applied to the
+     roles this file already defines. Every pairing recomputed against these exact
+     hexes rather than carried over: bone eff2ed on void 080909 is 17.65:1 and on
+     carbon 121411 16.40:1; fog b5bbb2 9.45:1 on card; acid d4ff38 as INK 16.02:1
+     on card, 17.24:1 on bg.
+
+     THE ONE ROLE THAT INVERTS. --accent-fill was documented above as "the accent as
+     a GROUND UNDER WHITE TEXT", and three rules hardcoded color:#fff on it. White on
+     acid is 1.02:1 -- invisible. The brand's accent is a LIGHT colour, so the text on
+     it must be dark, which is the opposite of the derivation that produced a85c1a.
+     Darkening acid until white worked would have destroyed the one colour being
+     mirrored, so the ink became a token instead: void on acid is 17.24:1.
+
+     --long was #3f6fa6 and is 3.56:1 on carbon -- it FAILS on this ground. Mapping it
+     to the brand violet 8a68ff is 4.85:1, so mirroring the brand also repairs a
+     contrast failure rather than introducing one. --short 4d8b6f re-measured at
+     4.62:1 and stays.
+
+     FONTS ARE STACKS, NOT A DEPENDENCY. The MindVirus site pulls Syne / DM Sans /
+     DM Mono from Google. Mission Control makes ZERO external requests today and is a
+     local ops dashboard that must work offline, so the brand kit's own declared
+     fallbacks are used verbatim and nothing is fetched. Syne and DM Sans are not
+     installed on this machine, so the display face renders as Arial Black. Getting
+     the real faces means self-hosting the woff2 files -- an owner decision, not one
+     to take by adding a link tag. */
+  --accent-fill-ink: #080909;
+  --font-display: "Syne", "Arial Black", sans-serif;
+  --font-body: "DM Sans", Arial, sans-serif;
+  --font-mono: "DM Mono", "Courier New", monospace;
+  color-scheme: dark;
 }
 
 /* STATION CONSOLE -- 18 Aug 2026. The dark theme now carries HOLLOWMAST's dash/ control-
@@ -114,30 +144,30 @@
    12.81:1. */
 @media (prefers-color-scheme: dark) {
   :root {
-    --bg: #03050a;
-    --card: #0b1017;
-    --ink: #dde4ec;
-    --muted: #8d98a6;
-    --accent: #e0842e;
-    --accent-soft: #251e1a;
-    --accent-fill: #a85c1a;
-    --accent-text: #e0842e;
+    --bg: #080909;
+    --card: #121411;
+    --ink: #eff2ed;
+    --muted: #b5bbb2;
+    --accent: #d4ff38;
+    --accent-soft: #293016;
+    --accent-fill: #d4ff38;
+    --accent-text: #d4ff38;
     /* Re-verified against these tokens, not carried over: 7.29:1 on --bg, 6.82 on --card. */
-    --accent-text-bg: #e0842e;
+    --accent-text-bg: #d4ff38;
     /* --short is undarkened in dark mode -- 5.09:1 on --bg, 4.76 on --card, both already
        clear, so --short-text is the same value rather than a second number to keep in
        step. */
     --short-text: #4d8b6f;
-    --ring-bg: #0e141c;
-    --border: #1c2530;
-    --sidebar-bg: #03050a;
+    --ring-bg: #212420;
+    --border: #353834;
+    --sidebar-bg: #080909;
     /* dash/ carries no soft blurred shadow anywhere -- depth there comes from a 1px
        border and a 2px accent rule, not a glow. Flattened to match: a hairline definition
        edge at rest, and hover adds a thin ember ring rather than a bigger, softer blur. */
     --shadow: 0 1px 2px rgba(0, 0, 0, 0.5);
-    --shadow-lift: 0 1px 2px rgba(0, 0, 0, 0.55), 0 0 0 1px rgba(224, 132, 46, 0.18);
-    --border-strong: #2a3542;
-    --accent-glow: rgba(224, 132, 46, 0.22);
+    --shadow-lift: 0 1px 2px rgba(0, 0, 0, 0.55), 0 0 0 1px rgba(212, 255, 56, 0.16);
+    --border-strong: #50524f;
+    --accent-glow: rgba(212, 255, 56, 0.20);
     color-scheme: dark;
   }
 }
@@ -153,20 +183,20 @@
   /* Group labels and the footer clock: dimmer than the item text, but measured against
      the column -- #8f928b on #1f2320 is 5.04:1 (light theme column) and on #0f1011 6.03:1,
      measured; the labels are 10.6px so they need the full 4.5. */
-  --sidebar-label: #8f928b;
+  --sidebar-label: #b5bbb2;
   --sidebar-hover: rgba(255, 255, 255, 0.06);
   --sidebar-line: rgba(255, 255, 255, 0.08);
   /* The canvas glow: the accent at very low alpha, top-left, one translucent image over
      the opaque --bg. ONE image layer, deliberately -- the contrast audit models a single
      translucent layer over an opaque colour exactly and two stacked layers not at all. */
-  --canvas-glow: rgba(217, 102, 61, 0.07);
+  --canvas-glow: rgba(212, 255, 56, 0.06);
 }
 
 @media (prefers-color-scheme: dark) {
   :root {
     --sidebar-hover: rgba(255, 255, 255, 0.05);
     --sidebar-line: rgba(255, 255, 255, 0.06);
-    --canvas-glow: rgba(229, 130, 89, 0.09);
+    --canvas-glow: rgba(212, 255, 56, 0.06);
   }
 }
 
@@ -280,7 +310,7 @@ body {
   height: 34px;
   border-radius: 6px;
   background: var(--accent-fill);
-  color: #fff;
+  color: var(--accent-fill-ink);
   font-size: 0.78rem;
   font-weight: 800;
   letter-spacing: 0.02em;
@@ -386,7 +416,7 @@ body {
 
 .nav-item.active {
   background: var(--accent-fill);
-  color: #fff;
+  color: var(--accent-fill-ink);
   /* Lifted a hair off the column so the current page reads as the one raised control. The
      halo is the accent's own hue at low alpha; the text is white on --accent-fill, which is
      the pair the token exists for -- nothing here changes what the text sits on. */
@@ -547,6 +577,24 @@ body {
 .quiet-h1 { font-size: 1.2rem; font-weight: 700; margin: 0 0 0.4rem; }
 .quiet-p { font-size: 0.9rem; margin: 0 0 0.5rem; }
 .quiet-sub { font-size: 0.78rem; color: var(--muted); margin: 0 0 1rem; }
+
+/* Nudge bar — lives above #panelRoot so a panel switch never clears it. Empty and
+   collapsed (no min-height) when there is nothing to ask, so it costs zero layout space
+   on every visit that isn't the 1st of the month or a meal-less evening. */
+#nudgeBar:not(:empty) { display: flex; flex-direction: column; gap: 6px; margin: 0 0 12px; }
+.nudge-item {
+  display: flex; align-items: center; justify-content: space-between; gap: 12px;
+  padding: 8px 12px; border-radius: 8px;
+  background: var(--accent-soft); border: 1px solid var(--accent-glow);
+}
+.nudge-text { font-size: 0.85rem; }
+.nudge-actions { display: flex; align-items: center; gap: 6px; flex-shrink: 0; }
+.nudge-btn { padding: 4px 10px; font-size: 0.8rem; }
+.nudge-close {
+  background: none; border: none; cursor: pointer; font-size: 1rem; line-height: 1;
+  color: var(--muted); padding: 2px 4px;
+}
+.nudge-close:hover { color: var(--ink); }
 
 /* Chart tooltips are removed on narrow screens, and that is a fix rather than a
    concession. They are opacity:0 until :hover, but an invisible absolutely-positioned

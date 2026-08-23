@@ -159,7 +159,7 @@
      rather than a darker --accent. */
   background: var(--accent-fill);
   border-color: var(--accent-fill);
-  color: #fff;
+  color: var(--accent-fill-ink);
   min-width: 96px;
 }
 
@@ -530,24 +530,24 @@
    that genuinely need attention.  The rule applies at the shared layer so every mounted
    panel gets the same hierarchy without duplicating a second design system. */
 :root {
-  --bg: #f3f7f6;
-  --card: #fbfdfc;
-  --ink: #142126;
-  --muted: #4c6067;
-  --accent: #087c74;
-  --accent-fill: #087069;
-  --accent-text: #087069;
-  --accent-text-bg: #07655f;
-  --accent-soft: #d9f1ee;
-  --ring-bg: #e8f0ef;
-  --border: #d6e3e0;
-  --border-strong: #abc7c2;
-  --sidebar-bg: #0b171d;
-  --sidebar-ink: #f2f8f7;
-  --sidebar-muted: #a8bbb9;
-  --sidebar-label: #b0c4c2;
-  --accent-glow: rgba(8, 124, 116, 0.18);
-  --canvas-glow: rgba(8, 124, 116, 0.10);
+  --bg: #080909;
+  --card: #121411;
+  --ink: #eff2ed;
+  --muted: #b5bbb2;
+  --accent: #d4ff38;
+  --accent-fill: #d4ff38;
+  --accent-text: #d4ff38;
+  --accent-text-bg: #d4ff38;
+  --accent-soft: #293016;
+  --ring-bg: #212420;
+  --border: #353834;
+  --border-strong: #50524f;
+  --sidebar-bg: #080909;
+  --sidebar-ink: #eff2ed;
+  --sidebar-muted: #b5bbb2;
+  --sidebar-label: #b5bbb2;
+  --accent-glow: rgba(212, 255, 56, 0.20);
+  --canvas-glow: rgba(212, 255, 56, 0.06);
   --r-card: 16px;
   --r-btn: 9px;
   --shadow: 0 1px 2px rgba(14, 46, 51, 0.03), 0 14px 34px rgba(14, 46, 51, 0.07);
@@ -556,24 +556,24 @@
 
 @media (prefers-color-scheme: dark) {
   :root {
-    --bg: #071018;
-    --card: #0d1b27;
-    --ink: #edf7f6;
-    --muted: #afbec7;
-    --accent: #58d6c5;
-    --accent-fill: #187c75;
-    --accent-text: #58d6c5;
-    --accent-text-bg: #58d6c5;
-    --accent-soft: #133b3f;
-    --ring-bg: #102633;
-    --border: #203946;
-    --border-strong: #315461;
-    --sidebar-bg: #071018;
-    --sidebar-ink: #edf7f6;
-    --sidebar-muted: #afbec7;
-    --sidebar-label: #a7b9c2;
-    --accent-glow: rgba(88, 214, 197, 0.20);
-    --canvas-glow: rgba(88, 214, 197, 0.10);
+    --bg: #080909;
+    --card: #121411;
+    --ink: #eff2ed;
+    --muted: #b5bbb2;
+    --accent: #d4ff38;
+    --accent-fill: #d4ff38;
+    --accent-text: #d4ff38;
+    --accent-text-bg: #d4ff38;
+    --accent-soft: #293016;
+    --ring-bg: #212420;
+    --border: #353834;
+    --border-strong: #50524f;
+    --sidebar-bg: #080909;
+    --sidebar-ink: #eff2ed;
+    --sidebar-muted: #b5bbb2;
+    --sidebar-label: #b5bbb2;
+    --accent-glow: rgba(212, 255, 56, 0.20);
+    --canvas-glow: rgba(212, 255, 56, 0.06);
     --shadow: 0 1px 2px rgba(0, 0, 0, 0.32), 0 14px 34px rgba(0, 0, 0, 0.22);
     --shadow-lift: 0 2px 5px rgba(0, 0, 0, 0.38), 0 18px 46px rgba(0, 0, 0, 0.32);
   }
@@ -582,7 +582,7 @@
 body {
   background-image:
     radial-gradient(980px 620px at 14% -8%, var(--canvas-glow), transparent 70%),
-    radial-gradient(780px 460px at 95% 104%, rgba(8, 124, 116, 0.045), transparent 72%);
+    radial-gradient(780px 460px at 95% 104%, rgba(138, 104, 255, 0.05), transparent 72%);
 }
 
 .sidebar {

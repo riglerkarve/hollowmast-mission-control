@@ -202,10 +202,17 @@ function fromBoard(needsYou, happened, moved, failed) {
 // 7-day threshold buried in the "moved" section, which the panel renders last -- so the
 // single oldest item on the whole board could sit behind ten newer ones and never stand out.
 //
-// This surfaces the ONE stalest item -- across both board_items (external trackers) and
-// todo_items (workspace backlog) -- in needsYou, called first in morningBriefing() below so
-// it leads the briefing rather than trailing it. A single fact, not a list: the point is
-// "here is the thing that has waited longest", not another ranked table to skim.
+// This surfaces the ONE stalest item -- across board_items (external trackers), todo_items
+// (workspace backlog), AND new-venture decisions still pending (M134) -- in needsYou, called
+// first in morningBriefing() below so it leads the briefing rather than trailing it. A single
+// fact, not a list: the point is "here is the thing that has waited longest", not another
+// ranked table to skim.
+//
+// M134 extends M131 rather than duplicating it: a new-venture decision (niche, spend
+// ceiling) that has sat undecided since registration is exactly the same shape of fact as a
+// board item stuck since first_seen -- something is waiting, dated, and nobody is looking at
+// it. It goes through the SAME comparison and the SAME single-line output, on the SAME
+// owner-facing question ("what has waited longest"), not a second parallel section.
 function fromStalest(needsYou, failed) {
   let row;
   try {
@@ -225,13 +232,42 @@ function fromStalest(needsYou, failed) {
     failed.push({ source: 'stalest', reason: cap(e && e.message, 120) });
     return;
   }
-  // Absence, not failure: an empty board and a broken query must not read the same, so a
-  // genuine throw above still lands in `failed` and only a real "nothing open" skips this.
-  if (!row || row.days == null || row.days < 1) return;
+
+  // New-venture decisions (M134) go through the same "oldest wins" comparison as the SQL
+  // row above, not a second surfaced fact. projects.js owns the one query for how long a
+  // venture has been waiting; this only compares its answer against the board/backlog one.
+  let ventureRow = null;
+  try {
+    const projects = require('./projects');
+    const pending = projects.pendingVentureDecisions();
+    for (const v of pending) {
+      if (v.days == null || v.days < 1) continue;
+      if (!ventureRow || v.days > ventureRow.days) {
+        ventureRow = {
+          id: v.id,
+          title: `${v.name} decision pending: ${v.pendingDecisions.join(', ')}`,
+          project: v.name,
+          origin: 'venture',
+          days: v.days,
+        };
+      }
+    }
+  } catch (e) {
+    failed.push({ source: 'stalest:ventures', reason: cap(e && e.message, 120) });
+  }
+
+  const winner = !row || row.days == null || row.days < 1
+    ? ventureRow
+    : (ventureRow && ventureRow.days > row.days ? ventureRow : row);
+
+  // Absence, not failure: an empty board/backlog/venture list and a broken query must not
+  // read the same, so a genuine throw above still lands in `failed` and only a real
+  // "nothing waiting" skips this.
+  if (!winner || winner.days == null || winner.days < 1) return;
   needsYou.push({
-    text: cap(`Stuck longest: ${row.id}: ${row.title} — open ${row.days}d`
-      + (row.project ? ` (${row.project})` : ''), 130),
-    source: row.origin,
+    text: cap(`Stuck longest: ${winner.id}: ${winner.title} — open ${winner.days}d`
+      + (winner.project ? ` (${winner.project})` : ''), 130),
+    source: winner.origin,
     urgency: 'P1',
   });
 }

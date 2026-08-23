@@ -44,9 +44,11 @@ const PROJECTS = [
   { id: 'printprofit', name: 'PrintProfit', dir: 'income-portfolio', dash: 'dashboard', live: 'https://riglerkarve.github.io/profitprint/', entry: 'index.html',
     track: 'Income', note: 'Live to the public, £0 earned. Blocked on distribution.' },
   { id: 'dropshipping', name: 'Dropshipping', dir: 'dropshipping', dash: null, entry: null,
-    track: 'Dropshipping', note: 'Registered 18 Aug 2026 as its own track. Nothing built: niche, platform, supplier and budget ceiling are all undecided. First project here that cannot run on zero.' },
+    track: 'Dropshipping', note: 'Registered 18 Aug 2026 as its own track. Nothing built: niche, platform, supplier and budget ceiling are all undecided. First project here that cannot run on zero.',
+    registeredAt: '2026-08-18', pendingDecisions: ['niche', 'platform', 'supplier', 'budget ceiling'] },
   { id: 'print-shop', name: 'Print Shop', dir: 'print-shop', dash: null, entry: null,
-    track: 'Print Shop', note: 'Registered 20 Aug 2026 as its own track, explicitly not a PrintProfit replacement. Nothing built: equipment, niche, storefront and budget ceiling are all undecided; own cost model waits on M125 research validation.' },
+    track: 'Print Shop', note: 'Registered 20 Aug 2026 as its own track, explicitly not a PrintProfit replacement. Nothing built: equipment, niche, storefront and budget ceiling are all undecided; own cost model waits on M125 research validation.',
+    registeredAt: '2026-08-20', pendingDecisions: ['equipment', 'niche', 'storefront', 'budget ceiling'] },
   { id: 'mission-control', name: 'Mission Control', dir: 'mission-control', dash: null, entry: null,
     track: 'Ops', note: 'This. Its control centre is the thing you are looking at.' },
   { id: 'garage', name: 'The Garage', dir: '.garage', dash: null, entry: null,
@@ -245,6 +247,34 @@ function progressSince(sinceISO) {
 }
 
 
+// New-venture decisions still undecided (M134), so the stuck-longest mechanism can treat
+// them the same way it treats board/backlog items -- extends M131, doesn't duplicate it.
+//
+// A venture with no `registeredAt` is not a new venture (Mission Control, HOLLOWMAST, the
+// established tracks) and is excluded rather than reported as zero days stuck: those two
+// facts must not look the same. A venture with `registeredAt` but no `pendingDecisions` has
+// nothing outstanding and is excluded for the same reason -- absence, not silence.
+//
+// ONE OWNER for "how long has this venture been waiting on a decision": this function, read
+// by briefing.js's fromStalest() and nowhere else recomputes it.
+function pendingVentureDecisions() {
+  const today = new Date();
+  return PROJECTS.filter((p) => p.registeredAt && p.pendingDecisions && p.pendingDecisions.length)
+    .map((p) => {
+      const since = new Date(`${p.registeredAt}T00:00:00`);
+      const days = Math.floor((today.getTime() - since.getTime()) / 86400000);
+      return {
+        id: p.id,
+        name: p.name,
+        track: p.track,
+        registeredAt: p.registeredAt,
+        pendingDecisions: p.pendingDecisions,
+        days,
+      };
+    });
+}
+
 module.exports = router;
 module.exports.PROJECTS = PROJECTS;
 module.exports.progressSince = progressSince;
+module.exports.pendingVentureDecisions = pendingVentureDecisions;

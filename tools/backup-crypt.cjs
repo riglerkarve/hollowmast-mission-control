@@ -149,15 +149,21 @@ function selftest() {
   process.exitCode = fail ? 1 : 0;
 }
 
-const [cmd, a, b] = process.argv.slice(2);
-try {
-  if (cmd === 'selftest') { selftest(); }
-  else if (cmd === 'encrypt') { const r = encrypt(a, b, passphrase()); console.log(`encrypted ${r.bytesIn} -> ${r.bytesOut} bytes`); }
-  else if (cmd === 'decrypt') { const r = decrypt(a, b, passphrase()); console.log(`decrypted -> ${r.bytesOut} bytes`); }
-  else { console.log('usage: backup-crypt.cjs encrypt|decrypt <in> <out>   |   selftest'); process.exitCode = 2; }
-} catch (e) {
-  console.error('FAILED: ' + e.message);
-  process.exitCode = 1;
+// GUARDED, because scripts/backup.js REQUIRES this module and without the guard the CLI
+// dispatch ran on import: every nightly backup printed a spurious "usage:" line into its own
+// log. Harmless in itself, and exactly the kind of noise that gets a log skimmed instead of
+// read — which is where the next real message goes unnoticed.
+if (require.main === module) {
+  const [cmd, a, b] = process.argv.slice(2);
+  try {
+    if (cmd === 'selftest') { selftest(); }
+    else if (cmd === 'encrypt') { const r = encrypt(a, b, passphrase()); console.log(`encrypted ${r.bytesIn} -> ${r.bytesOut} bytes`); }
+    else if (cmd === 'decrypt') { const r = decrypt(a, b, passphrase()); console.log(`decrypted -> ${r.bytesOut} bytes`); }
+    else { console.log('usage: backup-crypt.cjs encrypt|decrypt <in> <out>   |   selftest'); process.exitCode = 2; }
+  } catch (e) {
+    console.error('FAILED: ' + e.message);
+    process.exitCode = 1;
+  }
 }
 
 module.exports = { encrypt, decrypt, passphrase, KEY_FILE, PLACEHOLDER };

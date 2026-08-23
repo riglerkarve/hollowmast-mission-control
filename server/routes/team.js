@@ -1306,6 +1306,91 @@ router.get('/decisions', (req, res) => {
   res.json({ state: 'ok', decisions: db.prepare('SELECT * FROM team_decisions ORDER BY id DESC LIMIT 100').all() });
 });
 
+// ------------------------------------------------------------------- arbitrations
+//
+// M340. team_arbitrations was created at :386 and NOTHING has ever been able to
+// write to it: zero INSERTs, zero routes, in the whole server tree. The Team
+// Manager hit it personally -- they tried to record the M76 Claude-versus-Codex
+// arbitration, went looking for the route, and reported the ruling in prose
+// because no mechanism existed.
+//
+// BUILT RATHER THAN DROPPED, on the evidence rather than on sentiment. The
+// schema's own comment beside `arbiter_engine` says it exists "so a lean toward
+// its own engine is countable" -- that is a designed measurement, and it only
+// ever works if rows accumulate. A table with one attempted use and a stated
+// analytical purpose is not the dormant-mechanism shape the project rules
+// against; a table nobody has ever reached for would be.
+//
+// WHAT THE TALLY CAN AND CANNOT SAY, stated here because the number will outlive
+// this comment. `arbiter_engine` makes engine self-preference COUNTABLE, not
+// PROVEN: an arbiter upholding a finding from its own engine may be right. The
+// GET returns the counts and refuses to compute a rate, because a bias figure off
+// a handful of rulings is exactly the forecast-from-thin-data this workspace
+// forbids. Read the rulings; the tally only tells you where to look.
+router.post('/arbitration', express.json(), (req, res) => {
+  const b = req.body || {};
+  for (const f of ['finding', 'claimed_by', 'disputed_by', 'arbiter', 'ruling', 'because']) {
+    if (!String(b[f] || '').trim()) return res.status(400).json({ error: `${f} is required` });
+  }
+  const ruling = String(b.ruling).trim().toLowerCase();
+  if (!['upheld', 'rejected'].includes(ruling)) {
+    return res.status(400).json({ error: "ruling must be 'upheld' or 'rejected'" });
+  }
+  // The arbiter must not be either disputant. An arbitration decided by one of
+  // the two sides is not an arbitration, and the row would still read like one
+  // afterwards -- which is worse than refusing it now.
+  const arbiter = String(b.arbiter).trim();
+  if (arbiter === String(b.claimed_by).trim() || arbiter === String(b.disputed_by).trim()) {
+    return res.status(409).json({
+      error: 'the arbiter may not be one of the disputants',
+      why: `${arbiter} is a side in this dispute. A ruling by a party to it reads identically to a `
+         + 'neutral one once written down, so it is refused rather than recorded and caveated.',
+    });
+  }
+  // NOT resolved by lookup alone: engineOf returns null for a retired or
+  // unregistered session, and null must not silently become "unknown engine" in a
+  // column whose entire purpose is counting engines. Take the caller's value when
+  // the roster cannot answer, and say which it was.
+  const looked = engineOf(arbiter);
+  const arbiterEngine = looked || String(b.arbiter_engine || '').trim();
+  if (!arbiterEngine) {
+    return res.status(400).json({
+      error: 'arbiter_engine could not be established',
+      why: `${arbiter} is not on the roster, so the engine cannot be looked up. Pass arbiter_engine `
+         + 'explicitly, or register the session. An arbitration with an unknown engine cannot answer '
+         + 'the one question this table exists to answer.',
+    });
+  }
+  const info = db.prepare(`
+    INSERT INTO team_arbitrations (at, review_id, finding, claimed_by, disputed_by,
+                                   arbiter, arbiter_engine, ruling, because)
+    VALUES (?,?,?,?,?,?,?,?,?)`)
+    .run(new Date().toISOString(), b.review_id || null, String(b.finding).trim(),
+      String(b.claimed_by).trim(), String(b.disputed_by).trim(), arbiter, arbiterEngine,
+      ruling, String(b.because).trim());
+  res.json({ ok: true, id: info.lastInsertRowid, arbiter_engine: arbiterEngine,
+    engine_source: looked ? 'roster' : 'supplied by caller' });
+});
+
+router.get('/arbitrations', (req, res) => {
+  const rows = db.prepare('SELECT * FROM team_arbitrations ORDER BY id DESC LIMIT 100').all();
+  // Counts, never a rate. See the note above the POST.
+  const sameEngine = rows.filter((r) => engineOf(r.claimed_by) === r.arbiter_engine);
+  res.json({
+    state: 'ok',
+    arbitrations: rows,
+    tally: {
+      total: rows.length,
+      upheld: rows.filter((r) => r.ruling === 'upheld').length,
+      rejected: rows.filter((r) => r.ruling === 'rejected').length,
+      arbiter_shared_engine_with_claimant: sameEngine.length,
+      upheld_where_arbiter_shared_claimant_engine: sameEngine.filter((r) => r.ruling === 'upheld').length,
+      note: 'Counts only. No rate is computed: a self-preference figure off a handful of rulings '
+          + 'would be a forecast from thin data. These say where to read, not what happened.',
+    },
+  });
+});
+
 
 // ---------------------------------------------------------------------------
 // THE SCRIBE -- owner decision, 20 August 2026.
@@ -1621,6 +1706,38 @@ function openOwnerItems() {
   };
 }
 
+// TRUNCATE ON A BOUNDARY, NOT A CHARACTER COUNT. M338.
+//
+// The steering question quotes the oldest owner item and closed the quote after a
+// raw slice(0,160), so every rendering ended mid-sentence on an open quotation
+// mark -- twelve times across the three blocks in the 23 Aug briefing. A cut like
+//
+//     "- **Chrome extension has been unreachable since ~15:20**, so both itch
+//      items above (upload, description) could n
+//
+// reads as corruption rather than as an excerpt, and the reader cannot tell
+// whether the sentence mattered.
+//
+// Prefer a sentence end, then a word boundary, and only fall back to a hard cut
+// when a single token is longer than the budget. The ellipsis is what makes it an
+// excerpt: without a visible marker a boundary-truncated line reads as the whole
+// item, which is a worse failure than an ugly one -- it is a silent one.
+//
+// The search window is the last 40% of the budget. Cutting back further to reach
+// a full stop would drop more than it keeps, and an excerpt that discards half
+// its content to look tidy is optimising the wrong thing.
+function clip(s, max) {
+  const t = String(s == null ? '' : s).replace(/\s+/g, ' ').trim();
+  if (t.length <= max) return t;
+  const window = Math.floor(max * 0.6);
+  const head = t.slice(0, max);
+  const sentence = Math.max(head.lastIndexOf('. '), head.lastIndexOf('? '), head.lastIndexOf('! '));
+  if (sentence >= window) return head.slice(0, sentence + 1);
+  const word = head.lastIndexOf(' ');
+  if (word >= window) return head.slice(0, word).replace(/[,;:\-*\s]+$/, '') + '…';
+  return head.replace(/[,;:\-*\s]+$/, '') + '…';
+}
+
 function ensureSteering(opts) {
   const now = new Date();
   const today = now.toISOString().slice(0, 10);
@@ -1666,8 +1783,8 @@ function ensureSteering(opts) {
     // was raised, and it printed '0 days' for an ask filed yesterday. The count is the claim.
     question = items.length + ' owner item' + (items.length === 1 ? '' : 's') + ' raised in handovers '
              + 'are still outstanding. The earliest is: "'
-             + String(oldest.text || oldest.title).replace(/\s+/g, ' ').trim().slice(0, 160) + '"';
-    options = items.slice(0, 4).map(i => String(i.text || i.title).replace(/\s+/g, ' ').trim().slice(0, 120));
+             + clip(oldest.text || oldest.title, 160) + '"';
+    options = items.slice(0, 4).map(i => clip(i.text || i.title, 120));
     recommend = 'Take the oldest first (#' + oldest.id + '). This is arithmetic, not judgement: it is '
               + 'the earliest first_seen_at of ' + items.length + ' unresolved rows, chosen because it has '
               + 'been waiting longest and for no other reason. If another matters more, that is exactly '
@@ -1676,8 +1793,8 @@ function ensureSteering(opts) {
     const d = due[0];
     question = due.length + ' decision' + (due.length === 1 ? '' : 's') + ' reached the date it was marked '
              + 'for revisiting. The earliest is #' + d.id + ' (' + d.revisit_when + '): "'
-             + String(d.decision).replace(/\s+/g, ' ').trim().slice(0, 160) + '"';
-    options = due.slice(0, 4).map(x => '#' + x.id + ' (' + x.revisit_when + ') ' + String(x.decision).slice(0, 100));
+             + clip(d.decision, 160) + '"';
+    options = due.slice(0, 4).map(x => '#' + x.id + ' (' + x.revisit_when + ') ' + clip(x.decision, 100));
     recommend = 'Revisit #' + d.id + ' first -- it is the earliest revisit_when that has passed. Arithmetic, '
               + 'not a view about which matters most.';
   }

@@ -70,6 +70,27 @@ function sourceFiles(dir, out = []) {
 const SCHEMA_RE = /CREATE\s+(TABLE|INDEX|UNIQUE)|ALTER\s+TABLE|DROP\s+TABLE|addColumn/i;
 const WRITE_RE = /\bINSERT\s+(OR\s+\w+\s+)?INTO\b|\bUPDATE\b|\bDELETE\s+FROM\b/i;
 
+// A READER IS NOT EVIDENCE OF DEMAND, AND THIS DISTINCTION COST A WRONG
+// CONCLUSION THE HOUR THIS TOOL SHIPPED.
+//
+// The census reported `team_arbitrations` as having readers, and I wrote "so
+// something already expects rows there -- build the route". The reader was
+// `tools/verify-liveness-rule.cjs:291`:
+//
+//     add('8e', 'team_arbitrations (the only true orphan)', 0,
+//         () => n('SELECT count(*) c FROM team_arbitrations'), false,
+//         'the one table the report says is safe to delete');
+//
+// The `0` is the EXPECTED value. That reader asserts the table is EMPTY and its
+// own note calls it safe to delete -- the exact opposite of expecting rows. The
+// count was right; the meaning I attached to it was inverted.
+//
+// So a reader inside a checker may be asserting ABSENCE. This tool cannot parse
+// intent and does not try: it flags such readers separately and prints the line,
+// because the fix for "good at counting, unreliable at what the count means" is
+// to make the reader look, not to guess better.
+const ASSERT_FILE_RE = /(^|\/)(tools|scripts)\/[^/]*(verify|check|test|audit|census|probe)[^/]*\.(c?js|mjs|ps1)$/i;
+
 function scan(files, table) {
   const refs = [];
   // Word-boundary either side so `browsing_news_topics` never matches
@@ -130,8 +151,8 @@ function main() {
   const rowsOf = t => { try { return db.prepare(`SELECT COUNT(*) c FROM ${t}`).get().c; } catch { return -1; } };
 
   console.log('');
-  console.log('  rows  readers  writers  table');
-  console.log('  ----  -------  -------  ' + '-'.repeat(34));
+  console.log('  rows  readers  writers  asserts  table');
+  console.log('  ----  -------  -------  -------  ' + '-'.repeat(30));
 
   const flagged = [];
   for (const t of tables) {
@@ -140,11 +161,16 @@ function main() {
     const refs = scan(files, t);
     const real = refs.filter(r => !r.schema);
     const writers = real.filter(r => r.write);
-    const readers = real.filter(r => !r.write);
+    const allReaders = real.filter(r => !r.write);
+    // Split, because they mean opposite things. A consumer reader is evidence
+    // the table is wanted; an assertion reader may be evidence it is not.
+    const asserts = allReaders.filter(r => ASSERT_FILE_RE.test(r.file));
+    const readers = allReaders.filter(r => !ASSERT_FILE_RE.test(r.file));
     console.log(
-      String(n).padStart(6) + String(readers.length).padStart(9) + String(writers.length).padStart(9) + '  ' + t
+      String(n).padStart(6) + String(readers.length).padStart(9) + String(writers.length).padStart(9) +
+      String(asserts.length ? asserts.length : '').padStart(8) + '  ' + t
     );
-    if (n === 0) flagged.push({ t, readers: readers.length, writers: writers.length, refs: real });
+    if (n === 0) flagged.push({ t, readers: readers.length, writers: writers.length, asserts, refs: real });
   }
 
   if (!flagged.length) return;
@@ -160,8 +186,16 @@ function main() {
     console.log('    ' + cause);
     if (f.writers) f.refs.filter(r => r.write).slice(0, 3)
       .forEach(r => console.log('      writer  ' + r.file + ':' + r.line));
-    if (f.readers) f.refs.filter(r => !r.write).slice(0, 3)
+    if (f.readers) f.refs.filter(r => !r.write && !ASSERT_FILE_RE.test(r.file)).slice(0, 3)
       .forEach(r => console.log('      reader  ' + r.file + ':' + r.line));
+    // Printed with the line, never as a bare count. An assertion reader may be
+    // asserting the table stays EMPTY, in which case it is evidence against the
+    // table rather than for it -- and it will FAIL the day the table is used.
+    if (f.asserts.length) {
+      console.log('      ASSERTION READER(S) — read the line before treating these as demand:');
+      f.asserts.slice(0, 3).forEach(r => console.log('        ' + r.file + ':' + r.line + '  ' + r.text));
+      console.log('        if one expects 0, the first row ever written will fail it. Update it in the same change.');
+    }
     console.log('');
   }
   console.log('  A table with readers is NOT a deletion candidate however empty it is.');

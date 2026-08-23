@@ -31,6 +31,13 @@ data/*.db
 data/*.db-shm
 data/*.db-wal
 
+# Universal Credit statements, parsed from the PDFs on the owner's desktop. Each record
+# carries the award breakdown, the deductions, the rent and service charges AND the home
+# address off the statement head. This is not merely financial, it is benefit and health
+# data — LCWRA is on every row — so it is excluded by name rather than left to a *.db rule
+# that would never have matched a .jsonl.
+data/uc-statements.jsonl
+
 # 41 MB of VACUUM INTO copies of exactly the same thing.
 /backups/
 

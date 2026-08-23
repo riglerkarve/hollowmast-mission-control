@@ -1,120 +1,112 @@
 'use strict';
 //
-// git-heatmap.js — cross-project git activity heatmap for the workspace root.
+// git-heatmap.js — M250. Cross-project git activity: which projects are moving.
 //
-// GET /api/git-heatmap — returns { days: [{ date, total, projects: { Dir: count } }],
-//   totalCommits, daysWithCommits }
+// GET /api/git-heatmap — { days: [{ date, total, projects: { Name: count } }],
+//   totalCommits, daysWithCommits, projectsCounted, skipped: [{ project, why }] }
 //
-// Reads `git log` in the workspace root for the last 30 days. One commit can
-// carry files from multiple top-level directories, so the per-day project map
-// is built from --name-only output, not from the commit message.
+// WHAT WAS WRONG, because the failure mode is the interesting part.
+//
+// This route ran ONE `git log` in the workspace root. The workspace root is not a
+// repository containing the projects — each project is its own repo, and the root
+// is a separate, nearly-empty one. So the route answered 200 with a well-formed
+// 30-day array holding **4 commits in total** and `projects: {}` on every single
+// day, while /api/workspace — same server, same disk — reported 346 commits in
+// seven days for HOLLOWMAST alone and 281 for Mission Control.
+//
+// That is the worst shape a defect can take: a valid response, a plausible
+// structure, and a panel rendering a near-empty grid that reads as "not much
+// happened lately" rather than "this is measuring the wrong thing". The root
+// repo's 30-day count is exactly 4, which is what identified it.
+//
+// THE PROJECT LIST HAS ONE OWNER. projects.js declares it and its own comment
+// says so: a second list of projects is a second place the truth lives.
+// workspace.js was fixed to read from it (M258); this file now does the same
+// rather than scanning directories or keeping its own array. M272 is that rule
+// already broken six times over — this must not become the seventh.
+//
+// Attribution is by REPOSITORY, not by top-level file path. The old code derived
+// the project from the first path segment of --name-only output, which cannot
+// work when the log comes from a repo whose paths are relative to its own root.
+// Each commit belongs to the project whose repo produced it.
 const express = require('express');
-const { execSync } = require('node:child_process');
+const { execFileSync } = require('node:child_process');
+const fs = require('node:fs');
 const path = require('node:path');
 
 const router = express.Router();
 
-const WORKSPACE = 'C:/Users/jcwhi/Claude Outputs';
+const ROOT = path.join(__dirname, '..', '..', '..');
+const DAYS = 30;
+const { PROJECTS } = require('./projects');
 
-function topDir(filePath) {
-  if (!filePath) return null;
-  const cleaned = String(filePath).replace(/\\/g, '/');
-  const parts = cleaned.split('/').filter(Boolean);
-  if (!parts.length) return null;
-  return parts[0];
-}
-
-function dateKey(iso) {
-  return String(iso || '').slice(0, 10);
+// execFileSync with an argv array rather than execSync with a string: the old
+// code carried a comment about Windows cmd mangling %-patterns in --pretty
+// formats, which is a problem that only exists when the command goes through a
+// shell. Not going through one removes it rather than working around it.
+function gitDates(cwd) {
+  return execFileSync(
+    'git',
+    ['log', '--since=' + DAYS + '.days.ago', '--pretty=tformat:%ad', '--date=short'],
+    { cwd, encoding: 'utf8', maxBuffer: 8 * 1024 * 1024, stdio: ['ignore', 'pipe', 'pipe'] }
+  );
 }
 
 router.get('/', (req, res) => {
-  let logOut;
-  let nameOut;
-  try {
-    // Use --pretty=tformat with tab separator to avoid Windows cmd interpreting | as a pipe.
-    // %H and %ai are git format specs, not Windows env vars, but cmd still mangles %...% patterns.
-    // The safest path on Windows is to write the format to a temp approach: use --pretty with
-    // explicit field delimiters that don't involve pipe characters.
-    logOut = execSync(
-      'git log --since="30 days ago" --pretty=tformat:"%H%x09%ai%x09%s"',
-      { cwd: WORKSPACE, encoding: 'utf8', maxBuffer: 4 * 1024 * 1024 }
-    );
-  } catch (e) {
-    return res.status(500).json({
-      error: e.message ? String(e.message).split('\n')[0] : 'git log failed',
-    });
-  }
-  try {
-    nameOut = execSync(
-      'git log --since="30 days ago" --pretty=tformat:"%ai" --name-only',
-      { cwd: WORKSPACE, encoding: 'utf8', maxBuffer: 8 * 1024 * 1024 }
-    );
-  } catch (e) {
-    return res.status(500).json({
-      error: e.message ? String(e.message).split('\n')[0] : 'git log --name-only failed',
-    });
-  }
-
-  // Build the set of all dates in the last 30 days so empty days appear too.
+  // Every day in the window exists up front, so a quiet day is a zero rather
+  // than a gap — a missing key and a zero count must not look the same.
   const dayMap = new Map();
   const today = new Date();
-  for (let i = 29; i >= 0; i--) {
+  for (let i = DAYS - 1; i >= 0; i--) {
     const d = new Date(today);
     d.setDate(today.getDate() - i);
     const key = d.toISOString().slice(0, 10);
     dayMap.set(key, { date: key, total: 0, projects: {} });
   }
 
+  // A filter that drops candidates must report what it dropped, or the surviving
+  // evidence looks cleaner than it is. `skipped` says why a project is absent:
+  // "not on disk", "not a repo" and "git refused" are different facts, and an
+  // empty heatmap with an empty skipped list means something different from an
+  // empty heatmap with thirteen entries in it.
+  const skipped = [];
   let totalCommits = 0;
 
-  // Parse the SHA<TAB>date<TAB>message log (tab-separated to avoid Windows pipe issues).
-  const commits = [];
-  for (const line of String(logOut).split('\n')) {
-    if (!line.trim()) continue;
-    const parts = line.split('\t');
-    if (parts.length < 2) continue;
-    const [sha, date, ...msgParts] = parts;
-    if (!sha || !date) continue;
-    commits.push({ sha, date, message: msgParts.join('\t') });
-    const key = dateKey(date);
-    if (dayMap.has(key)) {
-      dayMap.get(key).total += 1;
-    }
-    totalCommits += 1;
-  }
+  for (const proj of PROJECTS) {
+    const dir = path.join(ROOT, proj.dir);
+    if (!fs.existsSync(dir)) { skipped.push({ project: proj.name, why: 'directory not found' }); continue; }
+    if (!fs.existsSync(path.join(dir, '.git'))) { skipped.push({ project: proj.name, why: 'not a git repository' }); continue; }
 
-  // Parse the date + --name-only output. The format is:
-  //   2026-08-20 10:30:00 +0100
-  //   path/to/file1
-  //   path/to/file2
-  //   <blank>
-  //   2026-08-19 ...
-  let currentDate = null;
-  for (const line of String(nameOut).split('\n')) {
-    if (line.trim() === '') {
-      currentDate = null;
+    let out;
+    try {
+      out = gitDates(dir);
+    } catch (e) {
+      // A repo with no commits yet exits non-zero on `git log`. That is a real
+      // and empty repo, not a broken one, and it is recorded rather than
+      // swallowed into a zero.
+      skipped.push({ project: proj.name, why: String(e.message || 'git log failed').split('\n')[0].slice(0, 120) });
       continue;
     }
-    // A date line starts with a digit and contains a time (has a colon near the start).
-    if (/^\d{4}-\d{2}-\d{2}/.test(line) && line.includes(':')) {
-      currentDate = dateKey(line);
-      continue;
+
+    for (const line of String(out).split('\n')) {
+      const day = line.trim();
+      if (!day) continue;
+      const slot = dayMap.get(day);
+      if (!slot) continue;          // outside the window: --since is inclusive at the edge
+      slot.total += 1;
+      slot.projects[proj.name] = (slot.projects[proj.name] || 0) + 1;
+      totalCommits += 1;
     }
-    if (!currentDate) continue;
-    const dir = topDir(line);
-    if (!dir) continue;
-    const day = dayMap.get(currentDate);
-    if (!day) continue;
-    day.projects[dir] = (day.projects[dir] || 0) + 1;
   }
 
-  const days = Array.from(dayMap.values()).sort((a, b) =>
-    a.date < b.date ? -1 : a.date > b.date ? 1 : 0
-  );
-  const daysWithCommits = days.filter((d) => d.total > 0).length;
-
-  res.json({ days, totalCommits, daysWithCommits });
+  const days = [...dayMap.values()];
+  res.json({
+    days,
+    totalCommits,
+    daysWithCommits: days.filter(d => d.total > 0).length,
+    projectsCounted: PROJECTS.length - skipped.length,
+    skipped,
+  });
 });
 
 module.exports = router;

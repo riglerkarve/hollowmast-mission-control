@@ -126,12 +126,18 @@ Node 24 and there is no package to install: `better-sqlite3` is absent from
 because reaching for it is the reflex, and the `MODULE_NOT_FOUND` that follows reads
 as a broken environment rather than as the wrong tool.
 
-**`node:sqlite` hands out ONE connection process-wide**, which is why `server/db.js`
-marks itself the only place `BEGIN` should appear. Two overlapping transactions throw,
-and the naive catch after a bare `BEGIN` rolls back whichever transaction is actually
-open — discarding writes the failing caller never made. That was a real defect in the
-todo `PATCH` on 18 Aug. A script opening its own handle is not getting the isolation it
-looks like it has.
+**`node:sqlite` hands out ONE connection process-wide, and the rule that follows from
+it is `fn` must be FULLY SYNCHRONOUS.** Use `db.withTransaction(fn)`; it is the only
+place `BEGIN` appears, and it refuses an `AsyncFunction` at the door rather than
+letting it fail somewhere else later. Await anything inside a transaction and the
+event loop can run another request between `BEGIN` and `COMMIT` — *that* is the
+overlap. Do the async work first, then call it with the synchronous writes.
+
+Two overlapping transactions throwing is the visible instance, not the rule. It is
+also not the expensive part: the naive catch after a bare `BEGIN` rolls back whichever
+transaction is *actually* open, discarding writes the failing caller never made. A real
+defect in the todo `PATCH` on 18 Aug, 1 → 0 on an outer write. "Two transactions throw"
+sounds like something you would notice; "an unrelated caller's write vanished" does not.
 
 **Never take a testable copy of the database with `cp`.** It is WAL-mode with a server
 holding it open, so the `.db` file is stale by however long since the last checkpoint —

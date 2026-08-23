@@ -48,10 +48,31 @@ const UNIX = `(last_visit_time/1000000 - ${EPOCH})`;
 const VISIT_UNIX = `(v.visit_time/1000000 - ${EPOCH})`;
 
 // Domain out of a URL, in SQL, so no URL is ever selected into this process.
-const DOMAIN = `
-  CASE WHEN instr(substr(url, instr(url,'://')+3), '/') > 0
-       THEN substr(substr(url, instr(url,'://')+3), 1, instr(substr(url, instr(url,'://')+3), '/')-1)
-       ELSE substr(url, instr(url,'://')+3) END`;
+//
+// TAKES A QUALIFIER, AND THAT IS NOT TIDINESS. M346.
+//
+// This was a bare `url`, which is unambiguous in `FROM urls` and AMBIGUOUS the
+// moment a query joins `visits`, because Chromium's `visits` table also has a
+// column called `url` -- an INTEGER foreign key, not the text. SQLite refuses the
+// join with "ambiguous column name: url" AT PREPARE TIME.
+//
+// That is what has kept browsing_domain_days empty since 20 Aug. The daily query
+// added in 033f1e0 has never returned a row because it has never been prepared,
+// and the importer has not been run since: every browsing_domains row still
+// carries imported_at 2026-08-18 01:38:27, from the version before the daily
+// query existed.
+//
+// The failure is worse than an empty table, and it is still latent. The throw
+// happens before the transaction opens, so running the importer today writes
+// NOTHING -- it would not merely fail to fill browsing_domain_days, it would
+// abandon the browsing_domains refresh too. The commit that introduced it is
+// titled "commit working block".
+const domainExpr = (q = '') => `
+  CASE WHEN instr(substr(${q}url, instr(${q}url,'://')+3), '/') > 0
+       THEN substr(substr(${q}url, instr(${q}url,'://')+3), 1, instr(substr(${q}url, instr(${q}url,'://')+3), '/')-1)
+       ELSE substr(${q}url, instr(${q}url,'://')+3) END`;
+const DOMAIN = domainExpr();        // FROM urls -- one table, no qualifier needed
+const DOMAIN_U = domainExpr('u.');  // FROM visits v JOIN urls u -- MUST be qualified
 
 function readSource(label, file) {
   if (!fs.existsSync(file)) return { label, present: false, rows: [], dailyRows: [] };
@@ -77,7 +98,7 @@ function readSource(label, file) {
     // current counter, while this preserves the day each visit occurred. DOMAIN stays in
     // SQL, so a URL never crosses into JavaScript or the Mission Control database.
     const dailyRows = src.prepare(`
-      SELECT ${DOMAIN} AS domain,
+      SELECT ${DOMAIN_U} AS domain,
              date(${VISIT_UNIX}, 'unixepoch') AS day,
              COUNT(*) AS visits,
              COUNT(DISTINCT u.id) AS pages

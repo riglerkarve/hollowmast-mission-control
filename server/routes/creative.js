@@ -167,6 +167,18 @@ router.get('/spark', (req, res) => {
   res.json(SPARKS[i]);
 });
 
+// The morning briefing needs the SAME spark all day, same reason serendipity does:
+// a line that changes on every reload is noise, not a spark. Deterministic on the
+// date, same technique as serendipity.js's dailySeed() (kept as a separate copy
+// rather than a shared import, because the two pick from different arrays and
+// coupling them would make one module's shape depend on the other's).
+function dailySpark() {
+  const today = new Date().toISOString().slice(0, 10);
+  let h = 0;
+  for (const c of today) h = (h * 31 + c.charCodeAt(0)) & 0x7fffffff;
+  return { ...SPARKS[h % SPARKS.length], date: today };
+}
+
 // Develop an idea — use Ollama to turn a raw idea into a structured concept
 router.post('/ideas/:id/develop', async (req, res) => {
   const idea = db.prepare('SELECT * FROM creative_ideas WHERE id = ?').get(req.params.id);
@@ -375,3 +387,4 @@ router.post('/ideas/:id/promote', async (req, res) => {
 });
 
 module.exports = router;
+module.exports.dailySpark = dailySpark;

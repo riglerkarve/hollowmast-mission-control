@@ -52,7 +52,12 @@ function pick(arr, seed) {
   return arr[seed % arr.length];
 }
 
-router.get('/', async (req, res) => {
+// The template-based half of the connection: deterministic, synchronous, no Ollama.
+// This is what the morning briefing reads (via dailyConnection()) — the briefing
+// calls sources through their exported function, never a live model, so it stays
+// fast even when Ollama is down. The GET route below layers the optional Ollama
+// enrichment on top of this same base for the panel.
+function dailyConnection() {
   const seed = dailySeed();
   const a = pick(PROJECTS, seed);
   const b = pick(PROJECTS, seed >> 8);
@@ -67,6 +72,15 @@ router.get('/', async (req, res) => {
   const text = template
     .replace(/\{a\}/g, a.name)
     .replace(/\{b\}/g, bFinal.name);
+
+  return {
+    a, bFinal, template, text, seed,
+    date: new Date().toISOString().slice(0, 10),
+  };
+}
+
+router.get('/', async (req, res) => {
+  const { a, bFinal, template, text, seed } = dailyConnection();
 
   // Try Ollama for a richer connection
   let richText = text;
@@ -110,3 +124,4 @@ Be specific and concrete, not generic. Return ONLY the sentence.`;
 });
 
 module.exports = router;
+module.exports.dailyConnection = dailyConnection;

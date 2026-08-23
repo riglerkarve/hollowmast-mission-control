@@ -114,6 +114,8 @@ router.post('/speak', async (req, res) => {
 const board = require('./board');
 const team = require('./team');
 const brain = require('./brain');
+const serendipity = require('./serendipity');
+const creative = require('./creative');
 
 function cap(text, max) {
   const s = String(text == null ? '' : text).replace(/\s+/g, ' ').trim();
@@ -446,6 +448,46 @@ function fromUnread(needsYou, happened, failed) {
   }
 }
 
+// --- Serendipity + Creative spark ----------------------------------------------------
+//
+// M219. Both Serendipity (daily cross-project connection) and Creative spark (idea
+// prompt) already generate one thing per day and previously required a separate panel
+// visit to see. This is not a new module -- it reads what dailyConnection()/dailySpark()
+// already compute, the same deterministic-per-day value the panels show, so the line in
+// the briefing and the line on the panel never disagree.
+//
+// OPTIONAL means what it says: this can add nothing (no PROJECTS configured) without
+// that reading as a failure, so a genuine throw still goes to `failed` and an empty
+// project list just contributes zero lines -- the same absence/failure split every
+// other source here keeps.
+function fromSerendipity(happened, failed) {
+  try {
+    const c = serendipity.dailyConnection();
+    if (c && c.text) {
+      happened.push({
+        text: cap(`Serendipity: ${c.text}`, 140),
+        who: 'serendipity',
+        when: isoNow(),
+      });
+    }
+  } catch (e) {
+    failed.push({ source: 'serendipity', reason: cap(e && e.message, 120) });
+  }
+
+  try {
+    const s = creative.dailySpark();
+    if (s && s.text) {
+      happened.push({
+        text: cap(`Creative spark: ${s.text}`, 140),
+        who: 'creative',
+        when: isoNow(),
+      });
+    }
+  } catch (e) {
+    failed.push({ source: 'creative', reason: cap(e && e.message, 120) });
+  }
+}
+
 function morningBriefing() {
   const needsYou = [];
   const happened = [];
@@ -460,6 +502,7 @@ function morningBriefing() {
   fromFinance(happened, failed);
   fromSchedule(needsYou, moved, failed);
   fromBrain(needsYou, failed);
+  fromSerendipity(happened, failed);
 
   return { needsYou, happened, moved, failed };
 }

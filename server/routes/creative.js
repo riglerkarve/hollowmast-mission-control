@@ -54,6 +54,30 @@ db.migrate('creative', [
       );
     `);
   },
+  // M129 shipped without an idempotence guard, and it cost a duplicate: creative
+  // idea #8 was promoted on 20 Aug and again on 22 Aug, producing M157 and M270 --
+  // identical in every field but created_at. M270 was closed as a duplicate on
+  // 23 Aug and this is the cause being fixed rather than the symptom.
+  //
+  // The old code set `developed = 1` on promote, but `developed` is ALSO what
+  // /develop sets, so the two states were collapsed into one boolean and neither
+  // could be read as "already promoted". This adds the column that can be, and
+  // records WHICH item the idea became, so the panel can link idea to work and a
+  // second promote has something to refuse against.
+  (d) => {
+    d.exec('ALTER TABLE creative_ideas ADD COLUMN promoted_item_id TEXT');
+    // Backfill DERIVED from the rows themselves rather than typed: every board
+    // item promoted from an idea carries "Promoted from creative idea #N." in its
+    // rationale. Earliest wins, which is the same survivor rule used when M270 was
+    // closed into M157 -- so the two agree by construction rather than by luck.
+    d.exec(`
+      UPDATE creative_ideas SET promoted_item_id = (
+        SELECT t.id FROM todo_items t
+         WHERE t.rationale LIKE 'Promoted from creative idea #' || creative_ideas.id || '.%'
+         ORDER BY t.created_at ASC LIMIT 1
+      ) WHERE promoted_item_id IS NULL
+    `);
+  },
 ]);
 
 // --- helpers ---
@@ -102,6 +126,20 @@ router.get('/ideas', (req, res) => {
 router.get('/ideas/:id', (req, res) => {
   const idea = db.prepare('SELECT * FROM creative_ideas WHERE id = ?').get(req.params.id);
   if (!idea) return res.status(404).json({ error: 'Idea not found.' });
+
+  // IDEMPOTENT. Promoting twice used to create a second board row every time,
+  // silently, because nothing here read any flag on the way in -- see the
+  // migration note above. 409 rather than 200 so a caller cannot mistake a
+  // refusal for a success, and the existing item id comes back so the UI can go
+  // there instead of guessing.
+  if (idea.promoted_item_id) {
+    return res.status(409).json({
+      error: 'Already promoted to the board.',
+      alreadyPromoted: true,
+      boardItemId: idea.promoted_item_id,
+      ideaId: Number(req.params.id),
+    });
+  }
   const dev = db.prepare(
     'SELECT * FROM creative_developments WHERE idea_id = ? ORDER BY created_at DESC'
   ).all(req.params.id);
@@ -315,9 +353,12 @@ router.post('/ideas/:id/promote', async (req, res) => {
     }
     const d = await r.json();
     // Mark the idea as promoted
+    // Record WHICH item it became, not merely that it happened. That is what the
+    // guard above reads, and it is why a second promote can now name the row the
+    // caller should be looking at instead of quietly making another one.
     db.prepare(
-      'UPDATE creative_ideas SET developed = 1, updated_at = datetime(\'now\',\'localtime\') WHERE id = ?'
-    ).run(req.params.id);
+      'UPDATE creative_ideas SET developed = 1, promoted_item_id = ?, updated_at = datetime(\'now\',\'localtime\') WHERE id = ?'
+    ).run(d.item && d.item.id ? String(d.item.id) : null, req.params.id);
     res.json({
       promoted: true,
       boardItem: d.item,

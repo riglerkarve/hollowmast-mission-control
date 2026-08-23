@@ -27,6 +27,9 @@ const panelUsageRouter = require('./routes/panel-usage');
 // fetched a 404 and rendered empty. A panel that renders is not a panel that works.
 const habitTrackerRouter = require('./routes/habit-tracker');
 const launchReadinessRouter = require('./routes/launch-readiness');
+// M148: the SEPARATE, later question — go commercial once HOLLOWMAST has shipped and been
+// played. launch-readiness.js checks fitness to ship; phase5.js is not that route extended.
+const phase5Router = require('./routes/phase5');
 const garageRouter = require('./routes/garage');
 const safetyRouter = require('./routes/safety');
 const browsingRouter = require('./routes/browsing');
@@ -72,6 +75,7 @@ const browsingRecallRouter = require('./routes/browsing-recall');
 const safetyRetroRouter = require('./routes/safety-retro');
 const claudeTimelineRouter = require('./routes/claude-timeline');
 const socialRouter = require('./routes/social');
+const weeklySynthesisRouter = require('./routes/weekly-synthesis');
 const heartbeat = require('./heartbeat');
 const gate = require('./gate');
 const provenance = require('./provenance');
@@ -135,6 +139,7 @@ app.use('/api/servers', serversRouter);
 app.use('/api/panels', panelUsageRouter);
 app.use('/api/habit-tracker', habitTrackerRouter);
 app.use('/api/launch-readiness', launchReadinessRouter);
+app.use('/api/phase5', phase5Router);
 app.use('/api/safety', safetyRouter);
 app.use('/api/browsing', browsingRouter);
 app.use('/api/atlas', atlasRouter);
@@ -179,6 +184,7 @@ app.use('/api/browsing-recall', browsingRecallRouter);
 app.use('/api/safety-retro', safetyRetroRouter);
 app.use('/api/claude-timeline', claudeTimelineRouter);
 app.use('/api/social', socialRouter);
+app.use('/api/weekly-synthesis', weeklySynthesisRouter);
 app.use('/garage', garageRouter);
 
 app.use(express.static(path.join(__dirname, '..', 'public')));

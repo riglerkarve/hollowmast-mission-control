@@ -3,6 +3,7 @@ const PANELS = {
   servers: () => import('/panels/servers/servers.js'),
   'habit-tracker': () => import('/panels/habit-tracker/habit-tracker.js'),
   'launch-readiness': () => import('/panels/launch-readiness/launch-readiness.js'),
+  phase5: () => import('/panels/phase5/phase5.js'),
   'team-digest': () => import('/panels/team-digest/team-digest.js'),
   'todo': () => import('/panels/todo/todo.js'),
   'unsigned': () => import('/panels/unsigned/unsigned.js'),
@@ -71,6 +72,7 @@ const PANELS = {
   'browsing-recall': () => import('/panels/browsing-recall/browsing-recall.js'),
   'safety-retro': () => import('/panels/safety-retro/safety-retro.js'),
   'claude-timeline': () => import('/panels/claude-timeline/claude-timeline.js'),
+  'weekly-synthesis': () => import('/panels/weekly-synthesis/weekly-synthesis.js'),
 };
 
 const panelRoot = document.getElementById('panelRoot');

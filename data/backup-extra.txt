@@ -1,0 +1,12 @@
+# Extra backup destinations, one per line. Read by scripts/backup.js on every run.
+# Blank lines and # comments ignored. A path here that cannot be written is reported
+# as a failed destination, never silently skipped.
+#
+# Added 23 Aug 2026 on the owner's instruction: a daily off-machine copy of the
+# database. OneDrive syncs this folder, which is what makes it off-machine -- the
+# other two destinations are both on the single fixed drive this laptop has.
+#
+# NOTE this is the DATABASE only. It holds 6,839 real bank transactions plus health
+# and wellbeing entries, and it is going to Microsoft's servers unencrypted. That was
+# the owner's call, made knowing it; it is written here so the next reader knows too.
+C:/Users/jcwhi/OneDrive/MissionControl-Backups

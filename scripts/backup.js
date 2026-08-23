@@ -44,6 +44,36 @@ if (process.env.MC_BACKUP_EXTRA) {
   DESTS.push({ dir: process.env.MC_BACKUP_EXTRA, label: 'MC_BACKUP_EXTRA (off-machine if that folder syncs)' });
 }
 
+// FILE FALLBACK, ADDED 23 AUG 2026 — the owner asked for a daily OneDrive copy of the
+// database, and the env var above could not carry it without changing something worse.
+//
+// A scheduled task does not take an environment variable. Setting a USER-LEVEL env var is a
+// system settings change, and rewriting MissionControl-Backup's action to wrap node in a
+// shell that exports one means editing a task CLAUDE.md lists as must-keep-working, to pass
+// a string. Both are heavier than the thing being configured. A file the script reads is
+// none of those: no task edit, no env var, no elevation, and it is visible on disk rather
+// than living in a process environment nobody can inspect afterwards.
+//
+// The path is TRIMMED and existence is NOT required here -- an unreachable destination is
+// counted as a failure further down and reported, which is the behaviour that already keeps
+// "wrote nowhere" from passing as success.
+try {
+  const extraFile = path.join(DATA_DIR, 'backup-extra.txt');
+  if (fs.existsSync(extraFile)) {
+    for (const line of fs.readFileSync(extraFile, 'utf8').split(/\r?\n/)) {
+      const dir = line.trim();
+      if (!dir || dir.startsWith('#')) continue;
+      if (DESTS.some((d) => path.resolve(d.dir) === path.resolve(dir))) continue;   // no double-write
+      DESTS.push({ dir, label: 'data/backup-extra.txt (off-machine if that folder syncs)' });
+    }
+  }
+} catch (e) {
+  // Deliberately non-fatal and LOUD. A missing or unreadable config must not stop the two
+  // destinations that already work -- but it must not be silent either, or the owner
+  // believes he has an off-machine copy he does not have.
+  console.error('backup-extra.txt could not be read, so any destination it names is NOT being written: ' + e.message);
+}
+
 const stamp = new Date().toISOString().replace(/[:.]/g, '-');
 const dbPath = path.join(DATA_DIR, 'dashboard.db');
 
@@ -131,9 +161,28 @@ if (problems.length) {
   console.log('\n  PROBLEMS:');
   problems.forEach((p) => console.log(`    ${p}`));
 }
-console.log('\n  All destinations are on the same physical disk. This survives losing the project');
-console.log('  folder; it does not survive the disk failing. Set MC_BACKUP_EXTRA to a synced');
-console.log('  folder, or give the repository a remote, for that.');
+// THIS PARAGRAPH USED TO BE UNCONDITIONAL AND IS NOW A CLAIM THAT CAN BE WRONG.
+//
+// It printed "All destinations are on the same physical disk" every run. True when written,
+// and false the moment an off-machine destination was configured -- a backup telling him he
+// has no off-machine copy when he does is the same class of defect as one telling him he has
+// one when he does not. Both are the tool describing a state it has stopped measuring.
+//
+// The test is WHETHER AN EXTRA DESTINATION WAS NOMINATED, not whether a path looks like a
+// cloud folder. Guessing from the string would key on something it cannot observe -- OneDrive
+// can be paused, a synced folder can be renamed -- so it says what it knows (a destination
+// beyond the defaults was named and written) and leaves the rest stated rather than claimed.
+const extraDests = DESTS.length - 2;
+if (extraDests > 0) {
+  console.log(`\n  ${extraDests} destination(s) beyond the two defaults were written. If those folders`);
+  console.log('  sync off this machine, this survives the disk failing. That is a property of the');
+  console.log('  FOLDER, not of this script: it can see the file was written and cannot see that it');
+  console.log('  was uploaded. Check the sync client if it matters.');
+} else {
+  console.log('\n  All destinations are on the same physical disk. This survives losing the project');
+  console.log('  folder; it does not survive the disk failing. Set MC_BACKUP_EXTRA, add a line to');
+  console.log('  data/backup-extra.txt, or give the repository a remote, for that.');
+}
 
 if (fs.existsSync(dbPath) && dbOk === 0) {
   console.log('\n  NOTHING WAS BACKED UP. Exiting non-zero so this cannot pass silently.');

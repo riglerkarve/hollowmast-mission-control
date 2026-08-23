@@ -283,10 +283,16 @@ async function renderDecisions() {
 
   const today = new Date().toISOString().slice(0, 10);
 
+  // Same honesty check as the notes list above: whether this reaches Claude is a fact
+  // about the generated file, not an assumption from "the save request returned 201".
+  const reach = d.reachesClaude === null
+    ? `<span class="brain-warn">${esc(d.reachesNote)}</span>`
+    : `<span class="brain-dim">${esc(d.reachesNote)}</span>`;
+
   box.innerHTML = !decisions.length
-    ? '<p class="empty-hint">No owner decisions logged yet.</p>'
+    ? `<p class="empty-hint">No owner decisions logged yet. ${reach}</p>`
     : `<p class="brain-meta">${decisions.length} decision${decisions.length === 1 ? '' : 's'} across
-         ${d.ventures.length} venture${d.ventures.length === 1 ? '' : 's'}</p>
+         ${d.ventures.length} venture${d.ventures.length === 1 ? '' : 's'} · ${reach}</p>
        <ul class="brain-note-list">${decisions.map((row) => {
     const superseded = supersededBy.has(row.id);
     const due = !superseded && row.recheck_at && row.recheck_at <= today;

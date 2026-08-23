@@ -463,7 +463,23 @@ router.get('/decisions', (req, res) => {
   const rows = venture
     ? db.prepare('SELECT * FROM brain_decisions WHERE venture = ? ORDER BY id DESC').all(venture)
     : db.prepare('SELECT * FROM brain_decisions ORDER BY id DESC').all();
-  return res.json({ state: 'ok', decisions: rows, ventures: [...new Set(db.prepare('SELECT venture FROM brain_decisions ORDER BY venture').all().map((r) => r.venture))] });
+
+  // Same honesty check as /notes: whether this actually reached the file Claude reads is
+  // a fact about the filesystem, not an assumption from "the insert succeeded".
+  let reaches = null;
+  try { reaches = fs.existsSync(path.join(MEMORY_DIR, '_decisions.md')); } catch { reaches = null; }
+
+  return res.json({
+    state: 'ok',
+    decisions: rows,
+    ventures: [...new Set(db.prepare('SELECT venture FROM brain_decisions ORDER BY venture').all().map((r) => r.venture))],
+    reachesClaude: reaches,
+    reachesNote: reaches === null
+      ? 'Could not check whether the generated file exists — that is a failure to look.'
+      : reaches
+        ? 'Written to _decisions.md in the memory directory, which Claude reads alongside its own.'
+        : 'Nothing written yet, so no file exists. It appears with your first entry.',
+  });
 });
 
 router.post('/decisions', express.json(), (req, res) => {
@@ -552,3 +568,8 @@ router.get('/:name', (req, res) => {
 });
 
 module.exports = router;
+// Exported rather than left as a route-only computation: the morning briefing needs the
+// same "is anything due" fact and must get it by calling this module's own function, not
+// by querying brain_decisions itself. One owner for the query, same as team.js's
+// dueDecisions() export that briefing.js already calls for team_decisions.
+module.exports.dueOwnerDecisions = dueOwnerDecisions;

@@ -113,6 +113,7 @@ router.post('/speak', async (req, res) => {
 // that reads as "finance is fine".
 const board = require('./board');
 const team = require('./team');
+const brain = require('./brain');
 
 function cap(text, max) {
   const s = String(text == null ? '' : text).replace(/\s+/g, ' ').trim();
@@ -343,6 +344,32 @@ function fromSchedule(needsYou, moved, failed) {
   }
 }
 
+// The owner's own cross-venture decisions (brain_decisions), not the AI team's
+// (team_decisions -- already surfaced via fromTeam/ensureSteering). recheck_at only becomes
+// a reminder if something reads it; before this, dueOwnerDecisions() had no caller at all,
+// so a dated recheck sat in the panel doing nothing unless you happened to open it.
+//
+// Summarised as one line, not one push per decision -- the same choice fromUnread makes for
+// owner items, for the same reason: a briefing that grows one line per stale reminder trains
+// you to stop reading it.
+function fromBrain(needsYou, failed) {
+  let due;
+  try {
+    due = brain.dueOwnerDecisions();
+  } catch (e) {
+    failed.push({ source: 'brain', reason: cap(e && e.message, 120) });
+    return;
+  }
+  if (!due.items.length) return;
+  const earliest = due.items.slice().sort((a, b) => (a.recheck_at < b.recheck_at ? -1 : 1))[0];
+  needsYou.push({
+    text: cap(`${due.items.length} owner decision${due.items.length === 1 ? '' : 's'} due for `
+      + `recheck. Earliest: ${earliest.venture} — ${earliest.decision}`, 100),
+    source: 'brain',
+    urgency: 'P2',
+  });
+}
+
 // THE READING END OF THE TEAM, WHICH DID NOT EXIST.
 //
 // Measured 20 Aug 2026: 51 of 51 handovers had never been read, 3 owner-facing asks were
@@ -432,6 +459,7 @@ function morningBriefing() {
   fromStats(happened, failed);
   fromFinance(happened, failed);
   fromSchedule(needsYou, moved, failed);
+  fromBrain(needsYou, failed);
 
   return { needsYou, happened, moved, failed };
 }

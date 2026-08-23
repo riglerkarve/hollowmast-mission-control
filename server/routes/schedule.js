@@ -292,7 +292,9 @@ function freeBusy(events, today, days) {
 }
 
 // ---------------------------------------------------------------------------- GET /
-router.get('/', (req, res) => {
+// async only so the social module can be ASKED for its outstanding posts. Nothing about
+// the schedule's own reads changed; see the `suggested` key at the bottom of the response.
+router.get('/', async (req, res) => {
   let today; let now; let events;
   try {
     ({ today, now, events } = readAll());
@@ -307,9 +309,38 @@ router.get('/', (req, res) => {
     });
   }
 
+  // Outstanding social posts, from the module that owns them. A failure here must never
+  // take the schedule down with it: the schedule is the load-bearing thing on this page and
+  // the posts are an addition to it, so anything that goes wrong degrades to an empty list
+  // with a stated reason.
+  let suggested = { source: 'social', items: [], note: null };
+  try {
+    const { pendingQueue } = require('./social');
+    const q = await pendingQueue();
+    suggested = {
+      source: 'social',
+      items: q.available
+        ? q.pending.filter((p) => p.suggestedFor).map((p) => ({
+            n: p.n, suggestedFor: p.suggestedFor, text: p.text,
+            hasImage: Boolean(p.image), composeUrl: p.composeUrl,
+          }))
+        : [],
+      note: 'Bluesky posts written but not yet out. THESE ARE NOT DIARY ENTRIES. The day is '
+        + 'arithmetic from the cadence written in SOCIAL-POSTS.md and the date of the last actual '
+        + 'post, so it moves when you post. Nothing here is stored in schedule_events, and nothing '
+        + 'here counts as overdue.',
+    };
+    if (q.available && q.feedState !== 'ok') {
+      suggested.note += ' WARNING: the account feed could not be read, so posts already out may still be listed.';
+    }
+  } catch (err) {
+    suggested.note = `Could not read the social queue: ${err.message}. This is a failed read, not an empty queue.`;
+  }
+
   if (!events.length) {
     return res.json({
       state: 'empty',
+      suggested,
       today,
       now,
       message: 'Nothing in the schedule yet. Add the first thing with a date on it — a passport '
@@ -391,6 +422,8 @@ router.get('/', (req, res) => {
       pastResolved: events.filter((e) => e.state === 'past').length,
       cancelledInWindow: inWindow.filter((e) => e.status === 'cancelled').length,
     },
+
+    suggested,
 
     derived: 'daysUntil, state, overdueByDays, lead time and the free/busy shape are computed '
       + 'from starts_at and today on every request. None of it is stored, so none of it can go stale. '

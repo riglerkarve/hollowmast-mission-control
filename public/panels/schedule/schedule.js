@@ -60,6 +60,11 @@ const TEMPLATE = `
         <div id="scShape"></div>
       </section>
     </div>
+
+    <section class="card" id="scPostsCard">
+      <h2 class="sc-h2">Posts to send</h2>
+      <div id="scPosts"></div>
+    </section>
   </div>
 `;
 
@@ -233,6 +238,35 @@ function renderShape(d) {
   `;
 }
 
+// Outstanding social posts. NOT diary entries, and the difference is carried in the markup
+// as well as the words: a separate card, its own muted styling, and no action buttons, so a
+// suggested day can never be mistaken for a slot you booked. The route's own note is printed
+// verbatim — paraphrasing a caveat is how a caveat gets lost.
+function renderPosts(d) {
+  const el = root.querySelector('#scPosts');
+  const sug = d.suggested;
+  if (!sug) { el.innerHTML = '<p class="sc-quiet">No post queue in this response.</p>'; return; }
+  if (!sug.items.length) {
+    // Empty and broken must read differently — the note says which this is.
+    el.innerHTML = `<p class="sc-quiet">${esc(sug.note || 'Nothing outstanding.')}</p>`;
+    return;
+  }
+  const rows = sug.items.slice(0, 6).map((p) => `
+    <li class="sc-post">
+      <span class="sc-post-when">${esc(p.suggestedFor)}</span>
+      <span class="sc-post-body">
+        <span class="sc-post-n">#${p.n}</span>
+        <span class="sc-post-text">${esc(p.text.split('\n')[0])}</span>
+        ${p.hasImage ? '' : '<span class="sc-post-noimg">no image cut yet</span>'}
+      </span>
+      <a class="sc-post-go" href="${esc(p.composeUrl)}" target="_blank" rel="noopener noreferrer">Compose ↗</a>
+    </li>`).join('');
+  el.innerHTML = `
+    <ul class="sc-posts">${rows}</ul>
+    ${sug.items.length > 6 ? `<p class="sc-hint sc-dim">${sug.items.length - 6} more in the Social panel.</p>` : ''}
+    <p class="sc-hint sc-dim">${esc(sug.note)}</p>`;
+}
+
 // --------------------------------------------------------------------------- wiring
 function wire(el) {
   el.querySelectorAll('.sc-act').forEach((b) => b.addEventListener('click', async () => {
@@ -292,6 +326,7 @@ async function load() {
       This is a failed read, not an empty diary — nothing below was computed, and nothing here means "nothing is overdue".</p>`;
     root.querySelector('#scAgenda').innerHTML = `<p class="sc-error">Could not read the schedule: ${esc(err.message)}</p>`;
     root.querySelector('#scShape').innerHTML = `<p class="sc-error">No free/busy shape — the read failed.</p>`;
+    root.querySelector('#scPosts').innerHTML = `<p class="sc-error">Post queue not read — this is a failed read, not an empty queue.</p>`;
     return;
   }
   if (mine !== token) return;
@@ -309,6 +344,7 @@ async function load() {
   renderOverdue(d);
   renderAgenda(d);
   renderShape(d);
+  renderPosts(d);
 }
 
 export default {

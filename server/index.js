@@ -71,6 +71,7 @@ const goalStalenessRouter = require('./routes/goal-staleness');
 const browsingRecallRouter = require('./routes/browsing-recall');
 const safetyRetroRouter = require('./routes/safety-retro');
 const claudeTimelineRouter = require('./routes/claude-timeline');
+const socialRouter = require('./routes/social');
 const heartbeat = require('./heartbeat');
 const gate = require('./gate');
 const provenance = require('./provenance');
@@ -177,6 +178,7 @@ app.use('/api/goal-staleness', goalStalenessRouter);
 app.use('/api/browsing-recall', browsingRecallRouter);
 app.use('/api/safety-retro', safetyRetroRouter);
 app.use('/api/claude-timeline', claudeTimelineRouter);
+app.use('/api/social', socialRouter);
 app.use('/garage', garageRouter);
 
 app.use(express.static(path.join(__dirname, '..', 'public')));

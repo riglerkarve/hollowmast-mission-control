@@ -1,0 +1,158 @@
+/* social — uses shell.css tokens only, so it follows the dashboard's theme rather than
+   carrying its own palette. No colour is written literally except the two status hues, and
+   those are stated once here. */
+
+.soc-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
+  gap: 14px;
+  /* Rows stretch on purpose. With align-items:start a short card leaves page ground beside
+     it, which reads as a panel that failed to render rather than one with room to spare. */
+  align-items: stretch;
+}
+
+.soc-card {
+  background: var(--card);
+  border: 1px solid var(--border);
+  border-radius: var(--r-card);
+  padding: 14px 16px;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.soc-card-head { display: flex; justify-content: space-between; align-items: flex-start; gap: 10px; }
+.soc-card h3 { margin: 0; font: 600 15px/1.2 var(--font-display, var(--font-body)); color: var(--ink); }
+.soc-account { margin: 2px 0 0; font: 400 12px/1.4 var(--font-mono, var(--mono)); color: var(--muted); word-break: break-word; }
+
+/* --accent-text and --accent-text-bg are the SAME colour in this theme, measured at a
+   contrast ratio of 1.00 — the label was invisible on the button. --accent-fill against
+   --accent-fill-ink is the pair that carries text; it measures 17.24. */
+.soc-open {
+  font: 600 12px/1 var(--font-body);
+  color: var(--accent-fill-ink);
+  background: var(--accent-fill);
+  border: 1px solid transparent;
+  border-radius: var(--r-btn);
+  padding: 6px 10px;
+  text-decoration: none;
+  white-space: nowrap;
+}
+.soc-open:hover { filter: brightness(1.08); }
+
+/* The "no link" case must not look like a button you can press. */
+.soc-open.soc-muted {
+  background: transparent;
+  color: var(--muted);
+  border-color: var(--border);
+}
+
+.soc-metrics { display: flex; flex-wrap: wrap; gap: 16px; }
+.soc-metric { display: flex; flex-direction: column; gap: 2px; }
+.soc-metric-value { font: 700 22px/1 var(--font-display, var(--font-body)); color: var(--ink); }
+.soc-metric-label { font: 400 11px/1 var(--font-body); color: var(--muted); text-transform: uppercase; letter-spacing: .06em; }
+
+.soc-chip { font: 600 11px/1 var(--font-body); margin-top: 3px; }
+.soc-chip-up { color: #3f9d5a; }
+.soc-chip-down { color: #b4553f; }
+.soc-chip-flat { color: var(--muted); font-weight: 400; }
+
+/* Flags are the point of the panel: an account can be live, correct and completely inert. */
+.soc-flags { display: flex; flex-wrap: wrap; gap: 6px; }
+.soc-flag {
+  font: 600 11px/1 var(--font-body);
+  color: #b4553f;
+  border: 1px solid currentColor;
+  border-radius: 999px;
+  padding: 3px 8px;
+  opacity: .9;
+}
+
+.soc-owner { margin: 0; font: 400 11px/1.5 var(--font-body); color: var(--muted); }
+.soc-posted { margin-left: 8px; }
+.soc-muted { color: var(--muted); font: 400 12px/1.5 var(--font-body); margin: 0; }
+.soc-warn { color: #b4553f; font: 400 12px/1.5 var(--font-body); margin: 0; }
+.soc-residue { margin: 14px 0 0; font: 400 11px/1.6 var(--font-body); color: var(--muted); }
+
+.soc-refresh {
+  font: 600 12px/1 var(--font-body);
+  background: var(--accent-fill);
+  color: var(--accent-fill-ink);
+  border: none;
+  border-radius: var(--r-btn);
+  padding: 8px 14px;
+  cursor: pointer;
+}
+.soc-refresh:hover { filter: brightness(1.08); }
+
+@media (max-width: 640px) {
+  .soc-grid { grid-template-columns: 1fr; }
+}
+
+/* ---------------------------------------------------------------- the post queue */
+
+.socq { margin: 4px 0 22px; }
+.socq-bar { display: flex; align-items: baseline; gap: 12px; flex-wrap: wrap; }
+.socq-bar h2 { margin: 0; font: 600 16px/1.2 var(--font-display, var(--font-body)); color: var(--ink); }
+.socq-count { font: 400 12px/1 var(--font-body); color: var(--muted); }
+.socq-toggle {
+  margin-left: auto;
+  font: 600 12px/1 var(--font-body);
+  background: transparent; color: var(--ink);
+  border: 1px solid var(--border); border-radius: var(--r-btn);
+  padding: 6px 12px; cursor: pointer;
+}
+.socq-toggle:empty { display: none; }
+.socq-toggle:hover { border-color: var(--border-strong); }
+
+.socq-note { margin: 8px 0 14px; font: 400 12px/1.6 var(--font-body); color: var(--muted); max-width: 90ch; }
+
+.socq-list { display: flex; flex-direction: column; gap: 12px; }
+.socq-hidden { display: none; }
+
+.socq-item {
+  background: var(--card);
+  border: 1px solid var(--border);
+  border-radius: var(--r-card);
+  padding: 12px 14px;
+  display: flex; flex-direction: column; gap: 8px;
+}
+/* Only the next one is emphasised. Highlighting all fifteen would be the same as
+   highlighting none, and the queue is meant to answer "what now", not "what eventually". */
+.socq-next { border-color: var(--accent); }
+
+.socq-head { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; }
+.socq-n { font: 700 13px/1 var(--font-mono, var(--mono)); color: var(--muted); }
+.socq-badge {
+  font: 700 10px/1 var(--font-body); letter-spacing: .08em; text-transform: uppercase;
+  background: var(--accent-fill); color: var(--accent-fill-ink);
+  border-radius: 999px; padding: 4px 8px;
+}
+.socq-when { margin-left: auto; font: 400 11px/1 var(--font-body); color: var(--muted); }
+
+/* The post text is shown in full, wrapped as it will actually appear. Truncating it would
+   mean copying something you had not read. */
+.socq-text {
+  margin: 0; padding: 10px 12px;
+  background: var(--bg); border: 1px solid var(--border); border-radius: var(--r-btn);
+  font: 400 13px/1.6 var(--font-body); color: var(--ink);
+  white-space: pre-wrap; word-break: break-word;
+}
+
+.socq-img { font: 400 11px/1.5 var(--font-body); }
+.socq-img-ready { color: var(--ink); }
+.socq-img-none { color: #b4553f; }
+.socq-img code { font-family: var(--font-mono, var(--mono)); }
+
+.socq-actions { display: flex; gap: 8px; flex-wrap: wrap; }
+.socq-copy, .socq-compose {
+  font: 600 12px/1 var(--font-body);
+  border-radius: var(--r-btn); padding: 8px 12px; cursor: pointer;
+  text-decoration: none; border: 1px solid var(--border);
+  background: transparent; color: var(--ink);
+}
+/* --accent-fill against --accent-fill-ink is the pair that carries text in this theme;
+   --accent-text on --accent-text-bg measures 1.00 and is invisible. See the .soc-open note. */
+.socq-compose { background: var(--accent-fill); color: var(--accent-fill-ink); border-color: transparent; }
+.socq-copy:hover { border-color: var(--border-strong); }
+.socq-compose:hover { filter: brightness(1.08); }

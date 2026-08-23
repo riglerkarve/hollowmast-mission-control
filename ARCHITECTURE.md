@@ -1008,3 +1008,111 @@ arrears payment would otherwise set a monthly number that never occurs.
 calculation divided distinct months by a *rounded* span and produced impossible
 percentages. A figure over 100 is proof the denominator is wrong, not evidence of a strong
 signal, and it was fixed before anything was built on it.
+
+## 17. The Social module — one place to reach every account, 23 Aug 2026
+
+Asked for by the owner: *"create a section on mission control so i can access all social media
+accounts easy, this section should also track any analytics."*
+
+The obvious build is a table of profile links. **That build is rejected by the workspace
+gate** — a hand-typed list of accounts only accepts input and shows it back, is stale the
+first time a handle changes, and is wrong in the flattering direction. So nothing on this
+panel is typed:
+
+| What | Where it comes from |
+| --- | --- |
+| the accounts | `Survive/LAUNCH.md`'s identity table — already the one place that answers *which account owns this* |
+| what has been posted | `Survive/dash/posted.jsonl`, the file the REACH probes read |
+| the figures | public APIs that need **no credential at all** |
+
+Reading another project's files read-only is the pattern `trackers.js` and `/api/board`
+already use: the project's file stays the place to WRITE, the dashboard is one place to LOOK.
+This module is **not** a second copy of the identity table and never writes to it.
+
+### Only free numbers, and a blank that explains itself
+
+Two surfaces can be measured with no credential: **Bluesky** via `public.api.bsky.app`
+(followers, following, posts) and **Discord** via the invite API with `?with_counts=true`
+(members, online). itch, YouTube, Reddit and Google Analytics cannot, and each says why in
+its own words rather than rendering an empty figure.
+
+**Absence and failure must not look the same**, which is the rule the whole render hangs on.
+A new account with no followers and an endpoint that timed out both want to draw as `0`, and
+the second is the one worth noticing. Every metric therefore carries a state — `ok`,
+`unreachable`, `no-public-api` — and anything that is not `ok` renders as *words*, never as a
+number.
+
+There is deliberately **no engagement score and no ranking**. A figure assembled from weights
+someone chose is the one number nobody can audit, which this workspace rules out in writing.
+Counts, and change since the last *different* reading. Both are arithmetic you can check.
+
+### `Boolean(profile.avatar)` is the wrong test, and it cost a wrong claim the same day
+
+The panel flags accounts that are live but inert — never posted, no banner, no avatar — which
+is the condition that had gone unreported on Bluesky for as long as the account existed.
+
+The avatar check is the interesting one. **`Boolean(p.avatar)` returns true for an account
+with no avatar**, because Bluesky uploads its blank green "@" as a *real blob* at signup. The
+field holds a genuine CDN URL; the picture is the placeholder. I read that field on 23 Aug,
+concluded an avatar had been uploaded, wrote it into a handover, and was wrong — the profile
+was still blank. Asking *is the field set* answers a narrower question than *is this profile
+dressed*, which is the claim it was being used for.
+
+The fix keys on the image instead of the field. Blob URLs are content-addressed, so the
+placeholder carries the same CID wherever it appears and an exact match is auditable rather
+than heuristic. **The scope is stated in the source**: that CID was verified by downloading
+the image and looking at it, it identifies that one picture, and a different or new default
+will read as a real avatar until somebody checks again.
+
+### Notes for whoever touches it next
+
+- `social_metrics` stores snapshots; **deltas are derived, never stored**. A stored delta is a
+  second owner for the same fact and goes wrong silently the first time a backfill lands.
+- The delta compares against the last **different** value, not the last row. Polling twice in
+  a minute would otherwise report "no change since a minute ago" — true, and useless.
+- Every load takes a snapshot, so the panel polls at ten minutes rather than continuously.
+- The parser reports its residue: identity rows it could not read, `posted.jsonl` lines it
+  could not parse, and surfaces it could not build a link for.
+- `--accent-text` and `--accent-text-bg` are **the same colour** in the current theme —
+  measured contrast 1.00, which made the "Open" button label invisible. `--accent-fill` with
+  `--accent-fill-ink` is the pair that carries text, at 17.24.
+
+### The post queue, and why it is not in your diary
+
+Owner ask, same day: *"show the pending posts, allow me to manually post these as the time
+comes, ensure they are shown in my schedule."*
+
+**There is no "mark as posted" button, deliberately.** `Survive/SOCIAL-POSTS.md` holds
+nineteen written Bluesky posts; which are still outstanding is decided by comparing them
+against **the account's own feed**. Post something and it leaves the queue on the next load.
+A tick box would be a second place the same fact lives, and the tick box is always the copy
+that goes stale. Matching normalises hard (case, punctuation, wrapping) and compares a
+60-character prefix; measured against the real bank it resolved exactly posts 1–4 as
+published, 15 pending, with no unread entries.
+
+If the feed cannot be read, **every post looks pending** — which would invite reposting things
+already out. That case is called out in words at the top of the queue rather than rendered as
+a clean list.
+
+"Manually post" is served by Bluesky's compose intent, `bsky.app/intent/compose?text=…`, which
+pre-fills the text. It **cannot attach an image** — a platform limit, not an oversight — so
+each row names the file to attach, or says plainly that no image has been cut yet. Only posts
+1–4 have images; 5–19 do not, and the queue is red about it.
+
+**The schedule integration is a separate key, and nothing is written to `schedule_events`.**
+That module refuses seeded events in its own words — *"an invented date in a schedule is
+indistinguishable from one you set"* — and these days are arithmetic from the cadence stated
+in the bank (`Three to four a week`, read from the file, lower end taken) plus the date of the
+last real post. So the schedule route **asks** the social module via an exported
+`pendingQueue()` and returns the result under `suggested`, never merged into `events`, `days`
+or any count. The panel renders them in their own card with **dashed** borders and no action
+buttons, and prints the route's caveat verbatim. If a suggested day ever looks like a booked
+slot, that styling has failed.
+
+Two mechanical notes for the next session:
+
+- `module.exports.pendingQueue` is attached **after** `module.exports = router`, because the
+  assignment replaces the object. Hung on beforehand it is silently dropped and the schedule
+  shows no posts with no error.
+- The panel is an ES module and Chrome caches it hard. A change that "did not take" is
+  usually a stale module, not a broken edit — hard-reload before debugging the code.

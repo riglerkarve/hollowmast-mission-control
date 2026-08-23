@@ -1,4 +1,5 @@
 const PANELS = {
+  social: () => import('/panels/social/social.js'),
   servers: () => import('/panels/servers/servers.js'),
   'habit-tracker': () => import('/panels/habit-tracker/habit-tracker.js'),
   'launch-readiness': () => import('/panels/launch-readiness/launch-readiness.js'),

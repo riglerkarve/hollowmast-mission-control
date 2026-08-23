@@ -22,6 +22,7 @@ const lifestyleRouter = require('./routes/lifestyle');
 const wellbeingRouter = require('./routes/wellbeing');
 const healthRouter = require('./routes/health');
 const serversRouter = require('./routes/servers');
+const panelUsageRouter = require('./routes/panel-usage');
 // Both route files existed with endpoints and were never mounted, so their panels
 // fetched a 404 and rendered empty. A panel that renders is not a panel that works.
 const habitTrackerRouter = require('./routes/habit-tracker');
@@ -130,6 +131,7 @@ app.use('/api/lifestyle', lifestyleRouter);
 app.use('/api/wellbeing', wellbeingRouter);
 app.use('/api/health', healthRouter);
 app.use('/api/servers', serversRouter);
+app.use('/api/panels', panelUsageRouter);
 app.use('/api/habit-tracker', habitTrackerRouter);
 app.use('/api/launch-readiness', launchReadinessRouter);
 app.use('/api/safety', safetyRouter);

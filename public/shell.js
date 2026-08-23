@@ -126,6 +126,24 @@ export function panelStyles(name) {
 async function mountPanel(name) {
   const loader = PANELS[name];
   if (!loader) return;
+
+  // M342 — record that this panel was opened. Fire and forget: a telemetry write must
+  // never be able to break a panel mount, so it is not awaited and its failure is
+  // swallowed. Nothing is asked of him; there is no panel for this and never will be.
+  //
+  // A CLAUDE SESSION DRIVING THIS SHELL SHOULD SET localStorage.mc_agent = '1'. Without
+  // it, agent opens are recorded as his — the same defect as team_handovers.read_at,
+  // which is populated on 99 of 103 rows and cannot tell his hand from ours. The flag is
+  // opt-in and will sometimes be forgotten, which is why /usage reports the split and
+  // never a single blended total.
+  try {
+    fetch('/api/panels/open', {
+      method: 'POST',
+      headers: { 'content-type': 'application/json',
+                 'x-mc-by': localStorage.getItem('mc_agent') ? 'claude' : 'you' },
+      body: JSON.stringify({ panel: name }),
+    }).catch(() => {});
+  } catch { /* localStorage can throw in a locked-down context; never block the mount */ }
   const token = ++mountToken;
 
   if (activePanel && typeof activePanel.unmount === 'function') {

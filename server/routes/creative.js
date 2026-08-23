@@ -69,11 +69,16 @@ db.migrate('creative', [
     // Backfill DERIVED from the rows themselves rather than typed: every board
     // item promoted from an idea carries "Promoted from creative idea #N." in its
     // rationale. Earliest wins, which is the same survivor rule used when M270 was
+    // Declined rows are excluded: a closed duplicate must never win the
+    // earliest-wins race. Without this a fresh database could backfill onto the
+    // very row that was closed FOR being a duplicate, which is the same bug one
+    // level down and would look perfectly reasonable in the data.
     // closed into M157 -- so the two agree by construction rather than by luck.
     d.exec(`
       UPDATE creative_ideas SET promoted_item_id = (
         SELECT t.id FROM todo_items t
          WHERE t.rationale LIKE 'Promoted from creative idea #' || creative_ideas.id || '.%'
+           AND t.status <> 'declined'
          ORDER BY t.created_at ASC LIMIT 1
       ) WHERE promoted_item_id IS NULL
     `);
@@ -126,20 +131,6 @@ router.get('/ideas', (req, res) => {
 router.get('/ideas/:id', (req, res) => {
   const idea = db.prepare('SELECT * FROM creative_ideas WHERE id = ?').get(req.params.id);
   if (!idea) return res.status(404).json({ error: 'Idea not found.' });
-
-  // IDEMPOTENT. Promoting twice used to create a second board row every time,
-  // silently, because nothing here read any flag on the way in -- see the
-  // migration note above. 409 rather than 200 so a caller cannot mistake a
-  // refusal for a success, and the existing item id comes back so the UI can go
-  // there instead of guessing.
-  if (idea.promoted_item_id) {
-    return res.status(409).json({
-      error: 'Already promoted to the board.',
-      alreadyPromoted: true,
-      boardItemId: idea.promoted_item_id,
-      ideaId: Number(req.params.id),
-    });
-  }
   const dev = db.prepare(
     'SELECT * FROM creative_developments WHERE idea_id = ? ORDER BY created_at DESC'
   ).all(req.params.id);
@@ -308,6 +299,20 @@ Return ONLY the JSON array.`;
 router.post('/ideas/:id/promote', async (req, res) => {
   const idea = db.prepare('SELECT * FROM creative_ideas WHERE id = ?').get(req.params.id);
   if (!idea) return res.status(404).json({ error: 'Idea not found.' });
+
+  // IDEMPOTENT. Promoting twice used to create a second board row every time,
+  // silently, because nothing here read any flag on the way in -- see the
+  // migration note above. 409 rather than 200 so a caller cannot mistake a
+  // refusal for a success, and the existing item id comes back so the UI can go
+  // there instead of guessing.
+  if (idea.promoted_item_id) {
+    return res.status(409).json({
+      error: 'Already promoted to the board.',
+      alreadyPromoted: true,
+      boardItemId: idea.promoted_item_id,
+      ideaId: Number(req.params.id),
+    });
+  }
 
   // Get the latest development for the idea, if any
   const dev = db.prepare(

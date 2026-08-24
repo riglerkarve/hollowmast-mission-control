@@ -50,9 +50,336 @@ const esc = (s) => String(s == null ? '' : s)
 const STATUSES = ['planned', 'generated', 'rejected', 'published'];
 const OUTCOMES = ['usable', 'unusable', 'unreviewed'];
 
+// FIRST-BATCH WALKTHROUGH (kanban t_7888fb1b) — a hand-held, one-step-at-a-time
+// panel for the specific Signal Sickness / "The Diagnostician" 5-track test batch.
+// This is NOT a rebuild of the prompt library/queue below (those stay generic,
+// reusable for whatever the owner writes next) — it's a fixed, read-only copy of
+// what Lena (niche) and Nadia (prompts) already produced, reused verbatim per the
+// task brief ("don't re-derive"). Source of truth:
+//   reports/mindvirus-test-batch-niche-recommendation.md
+//   reports/mindvirus-test-batch-suno-prompts.md
+// If the owner starts a different batch later, this section is superseded by a
+// new one — it is not meant to be edited in place into something generic.
+const WALK_NICHE = {
+  title: 'Signal Sickness — "The Diagnostician"',
+  lines: [
+    'Dark industrial electro-rock. A cold, clinical male voice reads out '
+      + '"case files" that build into anthemic, half-shouted choruses.',
+    'He reports what he observes — he never pitches, sells, or invites. That\u2019s '
+      + 'the one rule every lyric below is written to.',
+    '5 tracks, numbered CASE ###/SYMPTOM LOG style, all built from one base '
+      + 'style prompt with a per-track mood tag.',
+  ],
+};
+
+// One shared base style prompt (Lena's), reused per track with a mood tag appended —
+// kept here as plain text so Step 2's per-track style boxes don't have to repeat a
+// 500-character string five times in the DOM by hand; they're built from this.
+const WALK_BASE_STYLE = 'Dark industrial electro-rock, aggressive synth-driven bassline, distorted '
+  + 'analog synth stabs, glitchy digital artifacts and signal-interference texture throughout. '
+  + 'Confident, sharp-tongued male vocalist with a slight vocal-fry rasp \u2014 speaks more than sings '
+  + 'on verses, breaks into a hooky half-shouted melodic chorus. Cold, clinical verses (like a '
+  + 'diagnosis being read aloud) building into an anthemic, distorted-but-euphoric chorus. '
+  + 'Mid-tempo, 110-120 BPM, minor key. Production: tight, modern, radio-ready low end, sparse '
+  + 'verse arrangement that explodes into a wall-of-synth chorus.';
+
+const WALK_TRACKS = [
+  {
+    title: 'CASE 001',
+    track: 'Case File 001',
+    mood: 'cold intake report building to anthemic release',
+    style: WALK_BASE_STYLE + ' Mood: clinical intake report escalating to anthemic release. '
+      + 'Exclude: acoustic instruments, orchestral strings, lo-fi/bedroom production.',
+    lyrics: `[Intro - sparse synth pulse, signal-interference crackle]
+
+[Verse 1 - spoken, cold, unhurried]
+Subject presents at oh-two-hundred hours
+Pulse steady, pupils fine
+Symptoms logged: attention drifting
+Every third thought isn't mine
+I don't diagnose to worry you
+I diagnose because it's there
+A pattern under the pattern
+Cataloged, filed, aware
+
+[Pre-Chorus - building, half-shouted]
+Case open. Case open.
+Nothing here that needs your yes.
+
+[Chorus - anthemic, distorted, euphoric]
+This is Case File Zero-Zero-One
+Read it back, it's already done
+Not a pitch, not a cure, not a cause
+Just the shape of what the signal was
+Case File Zero-Zero-One
+
+[Verse 2 - spoken, clinical]
+No hook in this, no hand held out
+I'm not asking you to stay
+I report what the scan is showing
+Then the scan looks away
+File it under "observed, not caused"
+File it under "true"
+
+[Chorus - anthemic, distorted, euphoric]
+This is Case File Zero-Zero-One
+Read it back, it's already done
+Not a pitch, not a cure, not a cause
+Just the shape of what the signal was
+Case File Zero-Zero-One
+
+[Bridge - half-spoken, half-shouted, tension building]
+I don't need you to believe me
+I already wrote it down
+
+[Outro - wall of synth fading into interference static]
+Case closed. Case open. Case closed.`,
+  },
+  {
+    title: 'SYMPTOM LOG',
+    track: 'Useful Is Not Memorable',
+    mood: 'dry clinical needling, deadpan-to-defiant',
+    style: WALK_BASE_STYLE + ' Mood: dry deadpan needling turning defiant. Exclude: acoustic '
+      + 'instruments, orchestral strings, lo-fi/bedroom production.',
+    lyrics: `[Intro - glitch stutter, single synth stab repeating]
+
+[Verse 1 - spoken, flat, clinical]
+You built a life that runs on time
+Efficient, tidy, clean
+Nothing in it snags the eye
+Nothing in it's seen
+Useful things get used and shelved
+Useful isn't loud
+Symptom noted: you optimized
+The part that stood out from the crowd
+
+[Pre-Chorus - rising, half-shouted]
+Not an insult. Not a warning.
+Just the log. Just the log.
+
+[Chorus - anthemic, distorted, euphoric]
+Useful is not memorable
+That's not a verdict, that's a fact
+Sand smooths everything the same shape
+Until there's nothing left to catch
+Useful is not memorable
+I'm not telling you to change
+
+[Verse 2 - spoken, clinical]
+I watched you round your own edges
+Called it growing up
+I logged it, didn't flinch at it
+I don't hand you a cup
+Drink or don't. Not my concern.
+The data's what I'm here to earn
+
+[Chorus - anthemic, distorted, euphoric]
+Useful is not memorable
+That's not a verdict, that's a fact
+Sand smooths everything the same shape
+Until there's nothing left to catch
+Useful is not memorable
+I'm not telling you to change
+
+[Bridge - half-spoken, tension, building]
+Smooth things don't scar
+Scars are the only thing that lasts
+
+[Outro - wall of synth collapsing into static]
+Filed. Filed. Filed under: forgettable.`,
+  },
+  {
+    title: 'CASE 002',
+    track: 'Everyone I Know Is Selling Something',
+    mood: 'contemptuous clinical observation of manipulation in others, never performing it himself',
+    style: WALK_BASE_STYLE + ' Mood: contemptuous, clipped observation curdling into anthemic '
+      + 'disgust. Exclude: acoustic instruments, orchestral strings, lo-fi/bedroom production.',
+    lyrics: `[Intro - signal-interference static, distant synth stab]
+
+[Verse 1 - spoken, cold, clipped]
+Everyone I scan today
+Is running the same little script
+Smile first, ask your name second
+Third move: here's the pitch
+I'm not built like that. I don't have a close.
+I don't need you to say yes
+I just log what I'm observing:
+Everyone's a business, more or less
+
+[Pre-Chorus - rising, half-shouted]
+Not me. Not me.
+I don't have anything to sell you.
+
+[Chorus - anthemic, distorted, euphoric]
+Everyone I know is selling something
+A version, a system, a "just hear me out"
+I take notes. I don't take orders.
+I report the noise, I am not the mouth
+Everyone I know is selling something
+I'm just telling you what I found
+
+[Verse 2 - spoken, clinical]
+Watched a man sell you his sadness
+Watched a girl sell you her name
+Watched a hundred feeds this morning
+Running the exact same game
+I don't do that. Read the file.
+No offer here. No close. No frame.
+
+[Chorus - anthemic, distorted, euphoric]
+Everyone I know is selling something
+A version, a system, a "just hear me out"
+I take notes. I don't take orders.
+I report the noise, I am not the mouth
+Everyone I know is selling something
+I'm just telling you what I found
+
+[Bridge - half-spoken, half-shouted, building]
+This isn't a pitch against pitching
+It's just what the scan came back with
+
+[Outro - wall of synth into interference static]
+Nothing for sale. Nothing for sale. Filed.`,
+  },
+  {
+    title: 'SYMPTOM LOG',
+    track: 'The Ordinary Fights Back',
+    mood: 'confrontational, escalating clinical-to-combative',
+    style: WALK_BASE_STYLE + ' Mood: confrontational, escalating from clinical calm to combative '
+      + 'anthem. Exclude: acoustic instruments, orchestral strings, lo-fi/bedroom production.',
+    lyrics: `[Intro - low synth throb, glitch artifacts panning]
+
+[Verse 1 - spoken, flat, direct]
+They said the ordinary breaks first
+Said it folds, said it bends
+I've been logging the ordinary
+Longer than most trends
+It gets up. It clocks in.
+It doesn't post about the fight
+It just does the exact same thing again
+The morning after last night
+
+[Pre-Chorus - rising, half-shouted]
+Watch it. Watch it.
+It's still standing. It's still standing.
+
+[Chorus - anthemic, distorted, euphoric]
+The ordinary fights back
+No cape, no headline, no name
+It just keeps showing up
+Long after the extraordinary flames out and fades
+The ordinary fights back
+That's the whole diagnosis. That's the whole case.
+
+[Verse 2 - spoken, clinical, harder edge]
+I've seen the loud ones burn out fast
+I've seen the quiet ones remain
+No signal I've traced is louder
+Than the same hand doing the same thing again
+This isn't a call to arms
+I don't recruit. I just record what stays
+
+[Chorus - anthemic, distorted, euphoric]
+The ordinary fights back
+No cape, no headline, no name
+It just keeps showing up
+Long after the extraordinary flames out and fades
+The ordinary fights back
+That's the whole diagnosis. That's the whole case.
+
+[Bridge - half-spoken, half-shouted, building]
+Nobody sold me on this conclusion
+The data just kept saying it
+
+[Outro - wall of synth collapsing into static]
+Still here. Still here. Filed: still here.`,
+  },
+  {
+    title: 'CASE 003',
+    track: 'Strategic Chaos',
+    mood: 'verse-as-clinical-explanation, chorus-as-the-chaos-itself',
+    style: WALK_BASE_STYLE + ' chorus should feel like the chaos being described actually '
+      + 'happening in the mix (heavier glitch stutter, denser synth stacking). Mood: explanation '
+      + 'detonating into engineered chaos. Exclude: acoustic instruments, orchestral strings, '
+      + 'lo-fi/bedroom production.',
+    lyrics: `[Intro - sparse synth pulse, single glitch tick, count building]
+
+[Verse 1 - spoken, precise, unhurried]
+Every system needs a variable
+It can't fully control
+That's not an accident, that's design
+That's the oldest trick in the protocol
+I'm not the one who built this pattern
+I just noticed it was there
+A little planned disorder
+Dropped in on purpose, everywhere
+
+[Pre-Chorus - rising, half-shouted, glitch stutter intensifying]
+Watch the count. Watch the count.
+Three. Two. One\u2014
+
+[Chorus - anthemic, distorted, chaotic, dense wall of synth]
+Strategic chaos. Nothing random. Every crack accounted for.
+Strategic chaos. Watch the static tear the signal to the core.
+I don't start it. I just clock it.
+I don't fix it. I just log the roar.
+Strategic chaos.
+
+[Verse 2 - spoken, clinical]
+People think disorder's a mistake
+Something that got loose
+I've traced this signal seven ways
+There's a reason for the noise
+It isn't chosen for you. It isn't aimed.
+I'm reporting what the pattern does
+Not asking you to join the game
+
+[Chorus - anthemic, distorted, chaotic, dense wall of synth]
+Strategic chaos. Nothing random. Every crack accounted for.
+Strategic chaos. Watch the static tear the signal to the core.
+I don't start it. I just clock it.
+I don't fix it. I just log the roar.
+Strategic chaos.
+
+[Bridge - half-spoken, glitch stutter dominant, tension peaking]
+This isn't an invitation
+This is just what the noise looks like up close
+
+[Outro - full wall of synth and interference static collapsing to silence]
+Logged. Logged. Case closed. Signal lost.`,
+  },
+];
+
+const WALK_CHECKLIST = [
+  { id: 'generate', label: 'Generate on suno.com — paste the Style box and Lyrics box for the track you\u2019re on.' },
+  { id: 'log', label: 'Log the take — add it to the queue below (or a new queue row) so it has a record.' },
+  { id: 'tag', label: 'Tag outcome — mark it usable, unusable, or leave unreviewed until you\u2019ve listened.' },
+];
+
+const WALK_STORAGE_KEY = 'suno_walk_state_v1';
+
+function loadWalkState() {
+  try {
+    const raw = localStorage.getItem(WALK_STORAGE_KEY);
+    if (!raw) return { openStep: 1, checklist: {} };
+    const parsed = JSON.parse(raw);
+    return {
+      openStep: [1, 2, 3].includes(parsed.openStep) ? parsed.openStep : 1,
+      checklist: parsed.checklist && typeof parsed.checklist === 'object' ? parsed.checklist : {},
+    };
+  } catch (e) {
+    return { openStep: 1, checklist: {} };
+  }
+}
+
+function saveWalkState() {
+  try { localStorage.setItem(WALK_STORAGE_KEY, JSON.stringify(walkState)); } catch (e) { /* best-effort only */ }
+}
+
 let root = null;
 let state = null;
 let tickTimer = null;
+let walkState = loadWalkState();
 
 function optionsHTML(values, selected) {
   return values.map((v) => `<option value="${esc(v)}" ${v === selected ? 'selected' : ''}>${esc(v)}</option>`).join('');
@@ -152,6 +479,76 @@ function queueRowHTML(item) {
   </tr>`;
 }
 
+// One step's HTML: a clickable header (always visible) plus a body that only
+// renders open (not just hidden with CSS) when it's the open step — per the task
+// spec this must show one step "visible/expandable at a time (not all at once, so
+// it never overwhelms)", so the other two steps' bodies aren't in the DOM at all
+// while collapsed, not merely display:none.
+function walkStepHTML(n, title, bodyHTML) {
+  const isOpen = walkState.openStep === n;
+  return `<div class="suno-walk-step${isOpen ? ' suno-walk-step-open' : ''}" data-walk-step="${n}">
+    <button class="suno-walk-step-head" data-walk-toggle="${n}" aria-expanded="${isOpen ? 'true' : 'false'}">
+      <span class="suno-walk-step-num">Step ${n}</span>
+      <span class="suno-walk-step-title">${esc(title)}</span>
+      <span class="suno-walk-step-chevron">${isOpen ? '\u2212' : '+'}</span>
+    </button>
+    ${isOpen ? `<div class="suno-walk-step-body">${bodyHTML}</div>` : ''}
+  </div>`;
+}
+
+function walkTrackCardHTML(t, i) {
+  return `<div class="suno-walk-track">
+    <div class="suno-walk-track-head">
+      <span class="suno-walk-track-title">${esc(t.title)} — ${esc(t.track)}</span>
+      <span class="suno-walk-track-mood">${esc(t.mood)}</span>
+    </div>
+    <div class="suno-walk-track-field">
+      <div class="suno-walk-track-field-head">
+        <span>Style box</span>
+        <button class="suno-btn suno-btn-copy" data-copy="${esc(t.style)}">Copy</button>
+      </div>
+      <pre class="suno-walk-track-text">${esc(t.style)}</pre>
+    </div>
+    <div class="suno-walk-track-field">
+      <div class="suno-walk-track-field-head">
+        <span>Lyrics box</span>
+        <button class="suno-btn suno-btn-copy" data-copy="${esc(t.lyrics)}">Copy</button>
+      </div>
+      <pre class="suno-walk-track-text suno-walk-track-lyrics">${esc(t.lyrics)}</pre>
+    </div>
+  </div>`;
+}
+
+function walkChecklistHTML() {
+  return `<ul class="suno-walk-checklist">
+    ${WALK_CHECKLIST.map((c) => {
+      const checked = Boolean(walkState.checklist[c.id]);
+      return `<li class="suno-walk-checklist-item${checked ? ' suno-walk-checklist-done' : ''}">
+        <label>
+          <input type="checkbox" data-walk-check="${c.id}" ${checked ? 'checked' : ''} />
+          <span>${esc(c.label)}</span>
+        </label>
+      </li>`;
+    }).join('')}
+  </ul>
+  <p class="suno-walk-checklist-note">Repeat per track — this checklist doesn't reset itself
+    between tracks, it's just a reminder of the three things to do each time.</p>`;
+}
+
+function renderWalkthrough() {
+  const step1 = `<p class="suno-walk-p">${esc(WALK_NICHE.lines.join(' '))}</p>`;
+  const step2 = WALK_TRACKS.map(walkTrackCardHTML).join('');
+  const step3 = walkChecklistHTML();
+  return `<section class="suno-walk">
+    <h2>First batch walkthrough — ${esc(WALK_NICHE.title)}</h2>
+    <div class="suno-walk-steps">
+      ${walkStepHTML(1, 'The niche, in brief', step1)}
+      ${walkStepHTML(2, 'The 5 prompts, ready to paste', step2)}
+      ${walkStepHTML(3, 'Checklist — generate, log, tag', step3)}
+    </div>
+  </section>`;
+}
+
 function render() {
   if (!root || !state) return;
 
@@ -180,6 +577,8 @@ function render() {
     <p class="suno-lede">A staging area for suno.com — a prompt library, a per-take queue, and a
       credit rollup. Not an embed, not auto-generation: you still click generate yourself. This
       just cuts the round trip between "which prompt was that" and "did it work".</p>
+
+    ${renderWalkthrough()}
 
     <div class="suno-summary${s.over_cap ? ' suno-summary-over' : ''}">
       <span class="suno-summary-label">Credits today</span>
@@ -243,6 +642,28 @@ function wireTicker() {
 }
 
 function wireEvents() {
+  // Walkthrough: step toggles (accordion — clicking the open step's own header
+  // closes it back to none-open rather than trapping the owner on one step) and
+  // per-track checklist checkboxes. Both just flip walkState and re-render; state
+  // persists to localStorage so a reload doesn't dump the owner back to Step 1
+  // mid-batch.
+  root.querySelectorAll('[data-walk-toggle]').forEach((btn) => {
+    btn.addEventListener('click', () => {
+      const n = Number(btn.dataset.walkToggle);
+      walkState.openStep = walkState.openStep === n ? 0 : n;
+      saveWalkState();
+      render();
+    });
+  });
+  root.querySelectorAll('[data-walk-check]').forEach((cb) => {
+    cb.addEventListener('change', () => {
+      const id = cb.dataset.walkCheck;
+      walkState.checklist[id] = cb.checked;
+      saveWalkState();
+      render();
+    });
+  });
+
   const addBtn = root.querySelector('#sunoAddPrompt');
   const form = root.querySelector('#sunoPromptForm');
   if (addBtn && form) {

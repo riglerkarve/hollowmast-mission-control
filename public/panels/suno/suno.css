@@ -113,3 +113,51 @@
   .suno-panel { max-width: 100%; }
   .suno-summary { flex-wrap: wrap; }
 }
+
+/* First-batch walkthrough (kanban t_7888fb1b) — one step visible at a time.
+   Reuses --accent/--card/--border/--mono etc. from shell.css, same discipline as
+   the rest of this file; no new custom properties introduced. */
+.suno-walk { margin-bottom: 22px; }
+.suno-walk h2 { font-size: 13px; text-transform: uppercase; letter-spacing: .07em;
+  color: var(--muted); margin: 0 0 10px; }
+
+.suno-walk-steps { display: flex; flex-direction: column; gap: 10px; }
+.suno-walk-step { border: 1px solid var(--border); border-radius: var(--r-card); background: var(--card);
+  overflow: hidden; }
+.suno-walk-step-open { border-color: var(--border-strong); }
+
+.suno-walk-step-head { width: 100%; display: flex; align-items: center; gap: 10px; text-align: left;
+  font: inherit; padding: 12px 14px; background: transparent; border: none; cursor: pointer; color: var(--ink); }
+.suno-walk-step-head:hover { background: var(--bg); }
+.suno-walk-step-num { font-family: var(--mono); font-size: 11px; color: var(--accent-text); font-weight: 700;
+  flex-shrink: 0; }
+.suno-walk-step-title { font-size: 13px; font-weight: 600; flex: 1 1 auto; }
+.suno-walk-step-chevron { font-family: var(--mono); font-size: 15px; color: var(--muted); flex-shrink: 0; }
+
+.suno-walk-step-body { padding: 0 14px 14px; border-top: 1px solid var(--border); }
+.suno-walk-p { color: var(--ink); font-size: 13px; line-height: 1.6; margin: 12px 0 0; max-width: 78ch; }
+
+.suno-walk-track { border: 1px solid var(--border); border-radius: var(--r-card); background: var(--bg);
+  padding: 12px 14px; margin-top: 12px; }
+.suno-walk-track:first-child { margin-top: 12px; }
+.suno-walk-track-head { display: flex; align-items: baseline; justify-content: space-between; gap: 10px;
+  flex-wrap: wrap; margin-bottom: 8px; }
+.suno-walk-track-title { font-weight: 600; font-size: 13px; color: var(--ink); }
+.suno-walk-track-mood { font-size: 11px; color: var(--muted); }
+
+.suno-walk-track-field { margin-top: 8px; }
+.suno-walk-track-field-head { display: flex; align-items: center; justify-content: space-between;
+  font-size: 11px; text-transform: uppercase; letter-spacing: .06em; color: var(--muted); margin-bottom: 4px; }
+.suno-walk-track-text { white-space: pre-wrap; font-family: var(--mono); font-size: 12px; color: var(--ink);
+  background: var(--card); border: 1px solid var(--border); border-radius: var(--r-btn); padding: 8px 10px;
+  margin: 0; max-height: 140px; overflow-y: auto; }
+.suno-walk-track-lyrics { max-height: 220px; }
+
+.suno-walk-checklist { list-style: none; margin: 12px 0 0; padding: 0; display: flex; flex-direction: column;
+  gap: 8px; }
+.suno-walk-checklist-item label { display: flex; align-items: flex-start; gap: 8px; font-size: 13px;
+  color: var(--ink); cursor: pointer; }
+.suno-walk-checklist-item input[type="checkbox"] { margin-top: 2px; flex-shrink: 0; }
+.suno-walk-checklist-done label span { color: var(--muted); text-decoration: line-through; }
+.suno-walk-checklist-note { font-size: 11px; color: var(--muted); margin: 10px 0 0; }
+

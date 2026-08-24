@@ -1,0 +1,58 @@
+/* weekly-synthesis — one weekly view: what deserves attention, not four signals to
+   check separately. Every custom property here is defined in shell.css, same as
+   weekly-metrics.css and ventures.css: --accent, --accent-soft, --accent-text,
+   --short-text, --card, --bg, --ink, --muted, --border, --mono, --r-card. */
+
+.ws-panel { max-width: 720px; }
+
+.ws-lede { color: var(--muted); font-size: 13px; max-width: 60ch; margin: 4px 0 20px; }
+.ws-loading { color: var(--muted); font-size: 13px; }
+.ws-alarm { color: var(--ink); font-size: 13px; margin: 0; }
+.ws-empty { color: var(--muted); font-size: 13px; padding: 6px 0; }
+
+.ws-h2 { font-size: 13px; text-transform: uppercase; letter-spacing: .07em; color: var(--muted);
+  margin: 0 0 10px; }
+.ws-h3 { font-size: 13px; text-transform: uppercase; letter-spacing: .07em; color: var(--muted);
+  margin: 0 0 10px; padding-bottom: 6px; border-bottom: 1px solid var(--border); }
+
+.ws-n { font-variant-numeric: tabular-nums; color: var(--accent-text); background: var(--accent-soft);
+  border-radius: 10px; padding: 1px 8px; font-size: 13px; margin-left: 6px; }
+
+/* ---- headline --------------------------------------------------------------- */
+
+.ws-headline { background: var(--card); border: 1px solid var(--border-strong, var(--border));
+  border-radius: var(--r-card); padding: 18px 20px; margin-bottom: 24px; }
+.ws-headline-text { font-size: 16px; color: var(--ink); line-height: 1.5; margin: 0; }
+.ws-headline-quiet .ws-quiet { color: var(--muted); font-size: 13px; margin: 0; line-height: 1.5; }
+
+/* ---- sections ----------------------------------------------------------------- */
+
+.ws-section { margin-bottom: 24px; }
+
+.ws-mom-stats { display: flex; gap: 16px; margin-bottom: 10px; font-size: 13px; color: var(--muted); }
+.ws-mom-stat b { color: var(--ink); font-variant-numeric: tabular-nums; }
+.ws-mom-bad b { color: var(--accent-text); }
+
+.ws-vn-row { display: flex; align-items: baseline; gap: 12px; padding: 6px 14px;
+  background: var(--card); border: 1px solid var(--border); border-radius: var(--r-card);
+  margin-bottom: 4px; font-size: 13px; }
+.ws-vn-name { color: var(--ink); flex: 1; }
+.ws-vn-days { font-family: var(--mono); color: var(--accent-text); font-variant-numeric: tabular-nums; }
+.ws-vn-open { color: var(--muted); }
+
+.ws-time-row { display: flex; justify-content: space-between; align-items: baseline;
+  padding: 6px 14px; background: var(--card); border: 1px solid var(--border);
+  border-radius: var(--r-card); margin-bottom: 4px; font-size: 13px; }
+.ws-time-label { color: var(--ink); }
+.ws-time-val { font-family: var(--mono); color: var(--muted); font-variant-numeric: tabular-nums; }
+
+/* ---- failed sources ------------------------------------------------------------ */
+
+.ws-failed { border-top: 1px solid var(--border); padding-top: 12px; margin-top: 12px; }
+.ws-failed-lede { color: var(--muted); font-size: 12px; margin: 0 0 6px; }
+.ws-failed-list { color: var(--muted); font-size: 12px; margin: 0; padding-left: 18px; }
+
+@media (max-width: 560px) {
+  .ws-panel { max-width: 100%; }
+  .ws-mom-stats { flex-wrap: wrap; gap: 8px; }
+}

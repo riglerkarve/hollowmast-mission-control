@@ -205,3 +205,37 @@
   line-height: 1.5;
   user-select: text;
 }
+
+/* ---- 24 Aug 2026 (t_f615065c): assign-from-panel form -----------------------
+   Reuses ft-modal-* structure above (same overlay/dialog pattern, second instance
+   #agAssignOverlay). Fields follow the owner's formatting standard in TEAM.md
+   (Output formatting standard) -- clear labels above each field, generous spacing,
+   never dense. */
+
+.ag-assign-form { display: flex; flex-direction: column; gap: 4px; }
+
+.ag-form-label { font-family: var(--mono); font-size: 11px; text-transform: uppercase;
+  letter-spacing: .06em; color: var(--muted); margin: 14px 0 6px; }
+.ag-assign-form .ag-form-label:first-child { margin-top: 0; }
+
+.ag-form-optional { text-transform: none; letter-spacing: 0; opacity: .7; }
+
+.ag-form-input { width: 100%; box-sizing: border-box; font: inherit; font-size: 14px;
+  color: var(--ink); background: var(--bg); border: 1px solid var(--border);
+  border-radius: 6px; padding: 8px 10px; }
+.ag-form-input:focus { outline: none; border-color: var(--accent); }
+
+.ag-form-textarea { resize: vertical; font-family: var(--mono); font-size: 13px; line-height: 1.5; }
+
+.ag-form-error { color: #c66; font-size: 13px; margin: 12px 0 0; }
+.ag-form-success { color: #2a7; font-size: 13px; margin: 12px 0 0; }
+
+.ag-form-actions { display: flex; justify-content: flex-end; gap: 10px; margin-top: 18px; }
+.ag-form-cancel { background: transparent; border: 1px solid var(--border); color: var(--muted); }
+.ag-form-submit { background: var(--accent-soft); color: var(--accent-text); border: 1px solid var(--accent); }
+.ag-form-submit:disabled { opacity: .6; cursor: default; }
+
+/* ---- 24 Aug 2026 (t_f615065c): cross-team loan tag --------------------------- */
+
+.ag-loan-tag { color: var(--accent-text); }
+.ag-loan-tag .ag-field-label { color: var(--accent-text); }

@@ -35,9 +35,90 @@
 // touch team_sessions, does not rename anyone into a TEAM.md role, and the reconciliation
 // question is flagged back on the task rather than decided here.
 const express = require('express');
+const fs = require('node:fs');
+const path = require('node:path');
 const hermes = require('../hermes-cli');
 
 const router = express.Router();
+
+// ---------------------------------------------------------------------- team grouping
+//
+// EXTENDED 24 Aug 2026 (t_f615065c), owner's ask: group the roster into Suno crew /
+// MindVirus Studio crew / Core company. `hermes profile describe <name>` was set via
+// `hermes profile describe` when each of these was hired (see profile.yaml's
+// `description` field, e.g. nadia = "Suno prompt-writer: ..."), so the team is DERIVED
+// from that text rather than a hardcoded name list — a name list goes stale the moment
+// a new hire joins a crew and nobody remembers to add it here. Suno and MindVirus Studio
+// descriptions both name their crew verbatim in the first few words; anything that does
+// not match either is Core company, which is also literally what the owner asked for
+// ("everyone else"). A missing/unreadable description falls into Core the same way —
+// the safe default, not a guess.
+function teamFromDescription(description) {
+  const d = String(description || '');
+  if (/\bSuno\b/i.test(d)) return 'Suno crew';
+  if (/\bMindVirus Studio\b/i.test(d)) return 'MindVirus Studio crew';
+  return 'Core company';
+}
+
+// Read a profile's description straight from its profile.yaml rather than shelling out
+// to `hermes profile describe <name>` once per profile (26 profiles = 26 subprocess
+// spawns per /api/agents hit, exactly the event-loop-blocking pattern the ASYNC header
+// comment above already fixed for kanban calls). This reads the same field that command
+// reads/writes — verified live against `hermes profile describe <name>` output.
+function readDescription(profileName) {
+  if (!process.env.LOCALAPPDATA) return null;
+  const yamlPath = path.join(process.env.LOCALAPPDATA, 'hermes', 'profiles', profileName, 'profile.yaml');
+  try {
+    const raw = fs.readFileSync(yamlPath, 'utf8');
+    const m = raw.match(/^description:\s*(.*)$/m);
+    if (!m) return null;
+    let val = m[1].trim();
+    // profile.yaml quotes a description that starts with a folded block ('...' style);
+    // strip a single layer of surrounding quotes if present, no full YAML parse needed
+    // for one scalar field.
+    if ((val.startsWith("'") && val.endsWith("'")) || (val.startsWith('"') && val.endsWith('"'))) {
+      val = val.slice(1, -1);
+    }
+    return val || null;
+  } catch {
+    return null; // unreadable/missing description — Core company, not a guess
+  }
+}
+
+// ---------------------------------------------------------------------- cross-team loans
+//
+// ADDED 24 Aug 2026 (t_f615065c, owner note mid-task). Gaffer can temporarily reassign an
+// idle agent from their home crew to help a backed-up one. `reports/cross-team-loans.md`
+// is the running log (owner's own words) — a markdown table, documented in the file
+// itself. Parsed here rather than reinvented as a database table: it is a log a human
+// (or Gaffer) edits directly, and the file says so.
+const LOANS_PATH = path.join(__dirname, '..', '..', 'reports', 'cross-team-loans.md');
+
+function readActiveLoans() {
+  let raw;
+  try {
+    raw = fs.readFileSync(LOANS_PATH, 'utf8');
+  } catch {
+    return { loans: new Map(), ok: true }; // no file yet = no loans, not a failure to look
+  }
+  const loans = new Map();
+  const lines = raw.split(/\r?\n/);
+  let inActive = false;
+  for (const line of lines) {
+    if (/^##\s+Active/i.test(line)) { inActive = true; continue; }
+    if (/^##\s+/.test(line)) { inActive = false; continue; } // left the Active section
+    if (!inActive) continue;
+    if (!line.trim().startsWith('|')) continue;
+    const cells = line.split('|').map((c) => c.trim()).filter((c, i, arr) => !(i === 0 && c === '') && !(i === arr.length - 1 && c === ''));
+    if (!cells.length) continue;
+    if (/^agent$/i.test(cells[0])) continue; // header row
+    if (/^-+$/.test(cells[0].replace(/\s/g, ''))) continue; // separator row
+    const [agent, , loanedTo, since, task] = cells;
+    if (!agent || !loanedTo) continue;
+    loans.set(agent.trim(), { loanedTo: loanedTo.trim(), since: since ? since.trim() : null, task: task ? task.trim() : null });
+  }
+  return { loans, ok: true };
+}
 
 // `hermes profile list` prints a fixed-width table with a `\u25c6` marking the active
 // profile in the first column. Parsed by column count, not position — the table has been
@@ -176,10 +257,18 @@ router.get('/', async (req, res) => {
     };
   }
 
+  const { loans } = readActiveLoans();
+
   const agents = parseProfileList(profileList.out).map((p) => {
     const task = runningByAssignee[p.name] || blockedByAssignee[p.name] || readyByAssignee[p.name] || null;
     const lastDone = lastDoneByAssignee[p.name] || null;
     const status = task ? task.status : 'idle';
+    const description = readDescription(p.name);
+    const homeTeam = teamFromDescription(description);
+    const loan = loans.get(p.name) || null;
+    // Displayed team is where the agent is CURRENTLY working: the loaned-to team while a
+    // loan is active, home team otherwise (owner's ask, mid-task note on t_f615065c).
+    const team = loan ? loan.loanedTo : homeTeam;
     return {
       name: p.name,
       model: p.model,
@@ -190,6 +279,11 @@ router.get('/', async (req, res) => {
         ? toIso(heartbeatByTaskId[task.id])
         : (lastDone ? toIso(lastDone.completed_at) : null),
       doneCount: doneCountByAssignee[p.name] || 0,
+      team,
+      homeTeam,
+      onLoan: !!loan,
+      loanedFrom: loan ? homeTeam : null,
+      loanTask: loan ? loan.task : null,
     };
   });
 
@@ -205,6 +299,42 @@ router.get('/', async (req, res) => {
       heartbeats_ok,
     },
   });
+});
+
+// POST /api/agents/assign — dispatch a real kanban task to an idle agent from the panel.
+//
+// ADDED 24 Aug 2026 (t_f615065c), owner's ask #1: clicking an idle agent's card opens a
+// mini task-creation form that dispatches a real kanban task on submit. Reuses exactly
+// what `hermes kanban create` already validates — a title is the only hard requirement,
+// same as the CLI — rather than inventing a second, possibly-stricter validation layer
+// here. `--assignee` is fixed to the agent the form was opened for; the panel never lets
+// you pick a different one, because the whole point of "assign from THIS agent's card"
+// is that the target is already decided by which card you clicked.
+router.post('/assign', express.json(), async (req, res) => {
+  if (!hermes.available) {
+    return res.status(502).json({ error: 'hermes CLI not found', reason: 'no-hermes' });
+  }
+  const { assignee, title, body } = req.body || {};
+  if (!assignee || !String(assignee).trim()) {
+    return res.status(400).json({ error: 'assignee is required' });
+  }
+  if (!title || !String(title).trim()) {
+    return res.status(400).json({ error: 'title is required' });
+  }
+  const args = ['kanban', 'create', String(title).trim(), '--assignee', String(assignee).trim(), '--json'];
+  if (body && String(body).trim()) args.push('--body', String(body).trim());
+  const result = await hermes.runAsync(args);
+  if (!result.ok) {
+    return res.status(502).json({ error: result.error || 'hermes kanban create failed', reason: result.reason });
+  }
+  try {
+    const created = JSON.parse(result.out);
+    return res.json({ ok: true, task: created });
+  } catch {
+    // Created but the CLI's JSON did not parse — say so distinctly from a failed create,
+    // the same absence-vs-failure rule as everywhere else in this file.
+    return res.status(502).json({ error: 'task may have been created but the response could not be parsed', reason: 'bad-json', raw: result.out });
+  }
 });
 
 module.exports = router;

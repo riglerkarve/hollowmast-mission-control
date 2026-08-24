@@ -18,12 +18,30 @@
 // auto-refreshes on an interval so it stays a live view without a page reload; a manual
 // refresh button covers the moment right after you expect a status to have changed.
 //
+// AGENTS PANEL V2 (24 Aug 2026, t_f615065c), three more owner asks on top of the above:
+//   1. Clicking an IDLE agent's card opens a mini assign-from-panel form (title + body)
+//      that POSTs a real kanban task to /api/agents/assign. Running/blocked/ready agents
+//      keep the existing read-only detail modal — the assign form is specifically for
+//      idle agents, where there is nothing else to show.
+//   2. Live refresh was already built (t_137df3fc, REFRESH_MS below) — kept at 20s, inside
+//      the owner's 10-30s window, nothing to change here.
+//   3. TEAM GROUPING: the roster route now derives each agent's team from its
+//      `hermes profile describe` text (server/routes/agents.js) rather than this panel
+//      guessing, and returns `team`/`homeTeam`/`onLoan`/`loanedFrom` per agent. This panel
+//      only renders the three sections the route's `team` field already sorts into —
+//      Suno crew / MindVirus Studio crew / Core company — same "don't recompute what the
+//      route already decided" rule as the status field above.
+//   Cross-team loans (owner note mid-task): an agent on loan renders under its CURRENT
+//   (loaned-to) team, tagged "on loan from <home team>" — `onLoan`/`loanedFrom`/`loanTask`
+//   come straight from the route, sourced from reports/cross-team-loans.md.
+//
 // REBUILT 23 Aug 2026 (t_e0d4f4cb) alongside server/routes/agents.js. The old shape was
 // {name, role, engine, model, owns, status: active|available|idle, lastSeen}. The shape
 // since is {name, model, status: running|ready|blocked|idle, currentTask, lastHeartbeat,
 // lastSeen, doneCount} — there is no `role`/`owns`/`engine` any more because the Hermes
 // profile roster does not carry that TEAM.md-role concept; see agents.js (server route)
-// header comment for why the two rosters are not merged here.
+// header comment for why the two rosters are not merged here. `team` was added back in
+// t_f615065c, but it is a derived DISPLAY grouping, not that TEAM.md-role concept either.
 import { renderLede } from '/panels/lede/lede.js';
 
 const esc = (s) => String(s == null ? '' : s)
@@ -34,10 +52,16 @@ let state = null;
 let refreshTimer = null;
 let loadToken = 0;
 let agentsByName = new Map();
+let assignBusy = false;
 
-const REFRESH_MS = 20000; // live view, not a page-load snapshot
+const REFRESH_MS = 20000; // live view, not a page-load snapshot — inside the owner's 10-30s window
 
 const STATUS_ORDER = { running: 0, blocked: 1, ready: 2, idle: 3 };
+
+// Fixed display order for the three sections. Any team value the route did not expect
+// (there shouldn't be one — see agents.js's teamFromDescription) still renders, just after
+// these three, rather than silently dropping an agent off the panel.
+const TEAM_ORDER = ['Suno crew', 'MindVirus Studio crew', 'Core company'];
 
 function sortAgents(agents) {
   return agents.slice().sort((a, b) => {
@@ -46,6 +70,22 @@ function sortAgents(agents) {
     if (sa !== sb) return sa - sb;
     return String(a.name || '').localeCompare(String(b.name || ''));
   });
+}
+
+function groupByTeam(agents) {
+  const groups = new Map();
+  for (const a of agents) {
+    const team = a.team || 'Core company';
+    if (!groups.has(team)) groups.set(team, []);
+    groups.get(team).push(a);
+  }
+  const ordered = [];
+  for (const t of TEAM_ORDER) {
+    if (groups.has(t)) { ordered.push([t, groups.get(t)]); groups.delete(t); }
+  }
+  // Anything left over (a team name the panel did not expect) still shows, appended.
+  for (const [t, list] of groups) ordered.push([t, list]);
+  return ordered;
 }
 
 function relTime(iso) {
@@ -93,8 +133,15 @@ function cardHTML(a) {
     ? `<span class="ag-seen">${esc(relTime(a.lastSeen))}</span>`
     : '<span class="ag-seen ag-seen-none">never seen</span>';
 
+  const loanTag = a.onLoan
+    ? `<p class="ag-owns ag-loan-tag"><span class="ag-field-label">On loan from</span> ${esc(a.loanedFrom || 'unknown team')}${a.loanTask ? ` <span class="ag-role">${esc(a.loanTask)}</span>` : ''}</p>`
+    : '';
+
   const t = a.currentTask;
-  const clickable = !!t;
+  const isIdle = a.status === 'idle';
+  // Idle agents are clickable too now — into the assign form, not the read-only detail
+  // modal (there is no task to detail). Running/blocked/ready keep the existing behavior.
+  const clickable = !!t || isIdle;
   const task = t
     ? `<p class="ag-owns"><span class="ag-field-label">${esc(t.status === 'ready' ? 'Waiting' : t.status === 'blocked' ? 'Blocked on' : 'Task')}</span> ${esc(t.title)}
         <span class="ag-role">${esc(t.id)}</span></p>
@@ -103,10 +150,12 @@ function cardHTML(a) {
   const heartbeat = a.status === 'running'
     ? `<p class="ag-owns"><span class="ag-field-label">Last heartbeat</span> ${esc(relTime(a.lastHeartbeat))}</p>`
     : '';
-  const hint = clickable ? '<p class="ag-click-hint">Click for full task detail</p>' : '';
+  const hint = t
+    ? '<p class="ag-click-hint">Click for full task detail</p>'
+    : (isIdle ? '<p class="ag-click-hint">Click to assign a task</p>' : '');
 
   return `<article class="ag-card ${stCls}${clickable ? ' ag-clickable' : ''}"
-      ${clickable ? `data-task-id="${esc(t.id)}" tabindex="0" role="button" aria-haspopup="dialog"` : ''}>
+      ${clickable ? `data-agent="${esc(a.name)}" ${t ? `data-task-id="${esc(t.id)}"` : ''} data-idle="${isIdle ? '1' : '0'}" tabindex="0" role="button" aria-haspopup="dialog"` : ''}>
     <div class="ag-head">
       <h3 class="ag-name">${esc(a.name || 'unnamed')}</h3>
       <span class="ag-status">${stLabel}</span>
@@ -116,10 +165,17 @@ function cardHTML(a) {
       ${doneCount}
       ${lastSeen}
     </div>
+    ${loanTag}
     ${task}
     ${heartbeat}
     ${hint}
   </article>`;
+}
+
+function teamSectionHTML(team, agents) {
+  const sorted = sortAgents(agents);
+  return `<h2 class="ag-h2">${esc(team)} <span class="ag-n">${sorted.length}</span></h2>
+    ${sorted.map(cardHTML).join('')}`;
 }
 
 function residueNote(residue) {
@@ -158,11 +214,12 @@ function render() {
     return;
   }
 
-  const agents = sortAgents(state.data.agents || []);
+  const agents = state.data.agents || [];
   agentsByName = new Map(agents.map((a) => [a.name, a]));
+  const teams = groupByTeam(agents);
 
   const listHTML = agents.length
-    ? agents.map(cardHTML).join('')
+    ? teams.map(([team, list]) => teamSectionHTML(team, list)).join('')
     : '<p class="ag-empty">No agents registered.</p>';
 
   root.innerHTML = `<section class="panel ag-panel">
@@ -170,12 +227,12 @@ function render() {
       <h1>Agents</h1>
       <button type="button" class="btn ag-refresh-btn" id="agRefreshBtn">Refresh</button>
     </div>
-    <p class="ag-lede">The Hermes profile roster — every profile, and whether it is running,
-      blocked, or waiting on a kanban task right now. Working profiles are surfaced first so
-      you can see who is actually doing something at a glance. Click a card for the full
-      task. Source: the kanban board, not a session heartbeat. Refreshes automatically.</p>
+    <p class="ag-lede">The Hermes profile roster, grouped by team — Suno crew, MindVirus
+      Studio crew, Core company. Working profiles are surfaced first within each group so
+      you can see who is actually doing something at a glance. Click a card with a task
+      for the full detail; click an idle card to assign one. Source: the kanban board, not
+      a session heartbeat. Refreshes automatically every 20 seconds.</p>
     ${residueNote(state.data.residue)}
-    <h2 class="ag-h2">Roster <span class="ag-n">${agents.length}</span></h2>
     ${listHTML}
   </section>
 
@@ -191,6 +248,31 @@ function render() {
         </div>
         <pre class="ft-modal-body" id="agModalBody"></pre>
       </div>
+    </div>
+  </div>
+
+  <div class="ft-modal-overlay" id="agAssignOverlay">
+    <div class="ft-modal" role="dialog" aria-modal="true" aria-labelledby="agAssignTitle">
+      <button class="ft-modal-close" id="agAssignClose" aria-label="Close">&times;</button>
+      <h2 id="agAssignTitle">Assign a task</h2>
+      <div class="ft-modal-meta" id="agAssignMeta"></div>
+      <form id="agAssignForm" class="ag-assign-form">
+        <label class="ag-form-label" for="agAssignTitleInput">Title</label>
+        <input class="ag-form-input" id="agAssignTitleInput" type="text" maxlength="200" required
+          placeholder="What should this agent do?" />
+
+        <label class="ag-form-label" for="agAssignBodyInput">Body <span class="ag-form-optional">(optional)</span></label>
+        <textarea class="ag-form-input ag-form-textarea" id="agAssignBodyInput" rows="5"
+          placeholder="Details, links, acceptance criteria…"></textarea>
+
+        <p class="ag-form-error" id="agAssignError" hidden></p>
+        <p class="ag-form-success" id="agAssignSuccess" hidden></p>
+
+        <div class="ag-form-actions">
+          <button type="button" class="btn ag-form-cancel" id="agAssignCancel">Cancel</button>
+          <button type="submit" class="btn ag-form-submit" id="agAssignSubmit">Create task</button>
+        </div>
+      </form>
     </div>
   </div>`;
 
@@ -209,6 +291,16 @@ function render() {
   const closeBtn = root.querySelector('#agModalClose');
   if (closeBtn) closeBtn.addEventListener('click', closeModal);
   if (overlay) overlay.addEventListener('click', (ev) => { if (ev.target === overlay) closeModal(); });
+
+  const assignOverlay = root.querySelector('#agAssignOverlay');
+  const assignCloseBtn = root.querySelector('#agAssignClose');
+  const assignCancelBtn = root.querySelector('#agAssignCancel');
+  if (assignCloseBtn) assignCloseBtn.addEventListener('click', closeAssignModal);
+  if (assignCancelBtn) assignCancelBtn.addEventListener('click', closeAssignModal);
+  if (assignOverlay) assignOverlay.addEventListener('click', (ev) => { if (ev.target === assignOverlay) closeAssignModal(); });
+  const assignForm = root.querySelector('#agAssignForm');
+  if (assignForm) assignForm.addEventListener('submit', onAssignSubmit);
+
   document.addEventListener('keydown', onEscKey);
 
   const copyBtn = root.querySelector('#agCopyBtn');
@@ -218,11 +310,15 @@ function render() {
 function onCardActivate(ev) {
   const card = ev.currentTarget;
   if (!card) return;
-  openModal(card.dataset.taskId);
+  if (card.dataset.idle === '1') {
+    openAssignModal(card.dataset.agent);
+  } else {
+    openModal(card.dataset.taskId);
+  }
 }
 
 function onEscKey(ev) {
-  if (ev.key === 'Escape') closeModal();
+  if (ev.key === 'Escape') { closeModal(); closeAssignModal(); }
 }
 
 function findTaskById(id) {
@@ -262,6 +358,101 @@ function closeModal() {
   if (!root) return;
   const overlay = root.querySelector('#agModalOverlay');
   if (overlay) overlay.classList.remove('show');
+}
+
+// ---------------------------------------------------------------------- assign-from-panel
+
+function openAssignModal(agentName) {
+  if (!root || !agentName) return;
+  const agent = agentsByName.get(agentName);
+  const overlay = root.querySelector('#agAssignOverlay');
+  const metaEl = root.querySelector('#agAssignMeta');
+  const titleInput = root.querySelector('#agAssignTitleInput');
+  const bodyInput = root.querySelector('#agAssignBodyInput');
+  const errorEl = root.querySelector('#agAssignError');
+  const successEl = root.querySelector('#agAssignSuccess');
+  const submitBtn = root.querySelector('#agAssignSubmit');
+  if (!overlay || !metaEl || !titleInput) return;
+
+  overlay.dataset.agent = agentName;
+  metaEl.innerHTML = `<span class="ft-modal-meta-item">Agent: ${esc(agentName)}</span>
+    <span class="ft-modal-meta-item">Team: ${esc((agent && agent.team) || 'unknown')}</span>`;
+  titleInput.value = '';
+  if (bodyInput) bodyInput.value = '';
+  if (errorEl) { errorEl.hidden = true; errorEl.textContent = ''; }
+  if (successEl) { successEl.hidden = true; successEl.textContent = ''; }
+  if (submitBtn) { submitBtn.disabled = false; submitBtn.textContent = 'Create task'; }
+  assignBusy = false;
+
+  overlay.classList.add('show');
+  titleInput.focus();
+}
+
+function closeAssignModal() {
+  if (!root) return;
+  const overlay = root.querySelector('#agAssignOverlay');
+  if (overlay) overlay.classList.remove('show');
+}
+
+async function onAssignSubmit(ev) {
+  ev.preventDefault();
+  if (!root || assignBusy) return;
+  const overlay = root.querySelector('#agAssignOverlay');
+  const titleInput = root.querySelector('#agAssignTitleInput');
+  const bodyInput = root.querySelector('#agAssignBodyInput');
+  const errorEl = root.querySelector('#agAssignError');
+  const successEl = root.querySelector('#agAssignSuccess');
+  const submitBtn = root.querySelector('#agAssignSubmit');
+  if (!overlay || !titleInput) return;
+
+  const agent = overlay.dataset.agent;
+  const title = titleInput.value.trim();
+  const body = bodyInput ? bodyInput.value.trim() : '';
+
+  if (errorEl) { errorEl.hidden = true; errorEl.textContent = ''; }
+  if (successEl) { successEl.hidden = true; successEl.textContent = ''; }
+
+  if (!agent) {
+    if (errorEl) { errorEl.hidden = false; errorEl.textContent = 'No agent selected — close and try again.'; }
+    return;
+  }
+  if (!title) {
+    if (errorEl) { errorEl.hidden = false; errorEl.textContent = 'A title is required.'; }
+    return;
+  }
+
+  assignBusy = true;
+  if (submitBtn) { submitBtn.disabled = true; submitBtn.textContent = 'Creating…'; }
+
+  try {
+    const r = await fetch('/api/agents/assign', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ assignee: agent, title, body }),
+    });
+    const responseBody = await r.json().catch(() => ({}));
+    if (!r.ok) {
+      throw new Error(responseBody.error || `HTTP ${r.status}`);
+    }
+    const taskId = responseBody.task && responseBody.task.id ? responseBody.task.id : null;
+    if (successEl) {
+      successEl.hidden = false;
+      successEl.textContent = taskId
+        ? `Task created: ${taskId}. Visible via hermes kanban list.`
+        : 'Task created. Visible via hermes kanban list.';
+    }
+    if (submitBtn) { submitBtn.textContent = 'Created'; }
+    // Close the form after the success message has had a moment to be read, THEN refresh
+    // the roster — render() rebuilds the whole panel including this modal, so refreshing
+    // first would blow away the "show" state and the message would never be seen.
+    setTimeout(() => { closeAssignModal(); load(); }, 1200);
+  } catch (e) {
+    if (errorEl) { errorEl.hidden = false; errorEl.textContent = e.message || 'Could not create the task.'; }
+    if (submitBtn) { submitBtn.disabled = false; submitBtn.textContent = 'Create task'; }
+    assignBusy = false;
+    return;
+  }
+  assignBusy = false;
 }
 
 async function onCopyClick() {

@@ -14,6 +14,7 @@ const SUB_PANELS = [
   { name: 'finance', label: 'Money' },
   { name: 'budget', label: 'Budget' },
   { name: 'income', label: 'Income' },
+  { name: 'crm', label: 'Clients' },
 ];
 
 let root = null;

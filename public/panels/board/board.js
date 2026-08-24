@@ -68,8 +68,13 @@ function sourceCard(s) {
   </div>`;
 }
 
+// A raw "P1"/"P2"/"P3" is a label the owner has to decode every time. The class name keeps
+// the raw code for styling and sorting; the text the owner reads is the plain word.
+const SEV_WORD = { P1: 'Urgent', P2: 'Normal', P3: 'Minor' };
+function sevWord(sev) { return SEV_WORD[sev] || sev; }
+
 function itemRow(i) {
-  const sev = i.severity ? `<span class="bd-sev bd-${esc(i.severity)}">${esc(i.severity)}</span>` : '';
+  const sev = i.severity ? `<span class="bd-sev bd-${esc(i.severity)}">${esc(sevWord(i.severity))}</span>` : '';
   // The BASIS is shown on every row, because "the tracker says open" and "nothing said
   // otherwise so we assumed open" are different claims and the board must not merge them.
   const basis = {
@@ -92,7 +97,7 @@ function itemRow(i) {
 function backlogRow(b) {
   return `<tr>
     <td class="bd-ref">${esc(b.id)}</td>
-    <td><span class="bd-sev bd-${esc(b.priority)}">${esc(b.priority)}</span>
+    <td><span class="bd-sev bd-${esc(b.priority)}">${esc(sevWord(b.priority))}</span>
         <span class="bd-kind">${esc(b.kind || 'untriaged')}</span>${b.dispatch ? `<span class="bd-kind" title="${esc(b.dispatch.why)}">${esc(b.dispatch.model)} · ${esc(b.dispatch.effort)}</span>` : ''}</td>
     <td class="bd-title">${esc(b.title)}
       <span class="bd-basis">${esc(b.owner === 'YOU' ? 'waiting on you' : `for ${b.owner}`)}${b.cluster ? ` · ${esc(b.cluster)}` : ''}</span></td>

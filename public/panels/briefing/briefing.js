@@ -31,8 +31,9 @@ function relTime(iso) {
 
 function needsYouItem(item) {
   const p1 = item.urgency === 'P1';
+  const word = p1 ? 'Urgent' : 'Normal';
   return `<li class="bf-item${p1 ? ' bf-p1' : ''}">
-    <span class="bf-urgency ${p1 ? 'bf-p1-badge' : 'bf-p2-badge'}">${esc(item.urgency || 'P2')}</span>
+    <span class="bf-urgency ${p1 ? 'bf-p1-badge' : 'bf-p2-badge'}">${esc(word)}</span>
     <span class="bf-text">${esc(item.text)}</span>
     <span class="bf-source">${esc(item.source)}</span>
   </li>`;
@@ -165,4 +166,4 @@ export default {
     root = null;
     audioEl = null;
   },
-};
+};

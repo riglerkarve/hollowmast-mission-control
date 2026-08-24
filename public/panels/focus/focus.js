@@ -390,7 +390,7 @@ function createPanel() {
     el.ring.style.stroke = modeColors[mode];
     if (el.focusSessionActor) el.focusSessionActor.disabled = running;
     if (el.focusWorkLength) el.focusWorkLength.disabled = running || mode !== 'work';
-    document.title = running ? `${formatTime(secondsLeft)} · Focus Flow` : 'Mission Control';
+    document.title = running ? `${formatTime(secondsLeft)} · Focus Flow` : 'Ground Control';
   }
 
   // The list lives in the embedded backlog panel now. This panel keeps only the ONE fact
@@ -1010,7 +1010,7 @@ function createPanel() {
       if (el.focusLedger) el.focusLedger.removeEventListener('click', onLedgerClick);
       onBacklogFocus = onBacklogChanged = null;
       container = null;
-      document.title = 'Mission Control';
+      document.title = 'Ground Control';
     },
   };
 }

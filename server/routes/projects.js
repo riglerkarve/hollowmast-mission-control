@@ -49,7 +49,7 @@ const PROJECTS = [
   { id: 'print-shop', name: 'Print Shop', dir: 'print-shop', dash: null, entry: null,
     track: 'Print Shop', note: 'Registered 20 Aug 2026 as its own track, explicitly not a PrintProfit replacement. Nothing built: equipment, niche, storefront and budget ceiling are all undecided; own cost model waits on M125 research validation.',
     registeredAt: '2026-08-20', pendingDecisions: ['equipment', 'niche', 'storefront', 'budget ceiling'] },
-  { id: 'mission-control', name: 'Mission Control', dir: 'mission-control', dash: null, entry: null,
+  { id: 'mission-control', name: 'Ground Control', dir: 'mission-control', dash: null, entry: null,
     track: 'Ops', note: 'This. Its control centre is the thing you are looking at.' },
   { id: 'garage', name: 'The Garage', dir: '.garage', dash: null, entry: null,
     track: 'Ops', note: 'Folded in 17 Aug — served at /garage, not from here.', href: '/garage/' },

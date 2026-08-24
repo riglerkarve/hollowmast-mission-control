@@ -29,9 +29,11 @@ let state = null;
 // dropped — an unknown priority is still a priority the owner should see.
 function priBadgeHTML(pri) {
   const p = String(pri || '').toUpperCase();
-  if (p === 'P1') return '<span class="pz-badge pz-p1">P1</span>';
-  if (p === 'P2') return '<span class="pz-badge pz-p2">P2</span>';
-  if (p === 'P3') return '<span class="pz-badge pz-p3">P3</span>';
+  // A raw "P1"/"P2"/"P3" is a label the owner has to decode every time. The class name
+  // keeps the raw code for styling; the text the owner reads is the plain word.
+  if (p === 'P1') return '<span class="pz-badge pz-p1">Urgent</span>';
+  if (p === 'P2') return '<span class="pz-badge pz-p2">Normal</span>';
+  if (p === 'P3') return '<span class="pz-badge pz-p3">Minor</span>';
   return p ? `<span class="pz-badge pz-pother">${esc(p)}</span>` : '';
 }
 

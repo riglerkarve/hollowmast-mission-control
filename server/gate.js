@@ -48,6 +48,11 @@ const db = require('./db');
 const COOKIE = 'mc_device';
 const KEY_FILE = path.join(__dirname, '..', 'data', 'gate-key.txt');
 
+// Query-string name for the break-glass key, kept deliberately neutral (not tied to any
+// product name) so it survives a rebrand unmodified. See the ACCESS_KEY_PARAM path in
+// gate() below for the security tradeoff this exists to accept.
+const ACCESS_KEY_PARAM = 'access_key';
+
 // Sliding idle window. There is no data here to derive a number from -- no history of how
 // long a device stays in use -- so this is a chosen default rather than a measurement, and
 // it is named as one. The principle behind the choice: a credential should not outlive your
@@ -396,6 +401,24 @@ function gate(req, res, next) {
   if (headerKey && keyMatches(headerKey)) {
     req.viaEnrolmentKey = true;
     return next();
+  }
+
+  // SECOND BREAK-GLASS PATH, added for phone automation (MacroDroid geofence -> Open URL):
+  // the free tier of that app can fire a URL but cannot set a custom header, so the header
+  // path above is unreachable from it. This accepts the same shared secret as a query
+  // parameter instead. The tradeoff, stated rather than hidden: a key in a URL can end up
+  // in browser history, proxy logs and Referer headers, none of which apply to a header.
+  // To keep that tradeoff narrow it is honoured for GET requests only -- by HTTP convention
+  // a read, not a mutation -- so a leaked URL can open a panel but cannot revoke a device,
+  // delete data, or mint anything; every route that changes state in this app is POST/PUT
+  // and never even reaches this branch. Like the header path it gets no session: it proves
+  // the request for this one GET and nothing more.
+  if (req.method === 'GET') {
+    const queryKey = typeof req.query[ACCESS_KEY_PARAM] === 'string' ? req.query[ACCESS_KEY_PARAM] : '';
+    if (queryKey && keyMatches(queryKey)) {
+      req.viaEnrolmentKey = true;
+      return next();
+    }
   }
 
   if (req.path.startsWith('/api/')) {

@@ -9,6 +9,8 @@
 .ag-lede { color: var(--muted); font-size: 13px; line-height: 1.5; margin: 0 0 18px; max-width: 72ch; }
 .ag-loading { color: var(--muted); font-size: 13px; }
 .ag-alarm { color: var(--ink); font-size: 13px; margin: 0; }
+.ag-alarm-list { margin: .35rem 0 .35rem 1.1rem; padding: 0; }
+.ag-alarm-list li { margin: .15rem 0; }
 .ag-empty { color: var(--muted); font-size: 13px; padding: 8px 0; line-height: 1.5; max-width: 72ch; }
 
 .ag-h2 { font-size: 13px; text-transform: uppercase; letter-spacing: .07em; color: var(--muted);
@@ -76,4 +78,130 @@
 @media (max-width: 560px) {
   .ag-panel { max-width: 100%; }
   .ag-status { margin-left: 0; }
+}
+
+/* ---- 24 Aug 2026 (t_137df3fc): interactive live view -----------------------
+   Header row with a manual refresh button, blocked/ready status colors, and a
+   clickable-card + detail-modal pattern reusing the same visual language as
+   t_3ab3bfae's Focus panel (focus-tasks.css) — the class names are duplicated
+   here (ft- prefix kept) rather than shared across panel stylesheets, because
+   panelStyles() in shell.js loads exactly one CSS file per mounted panel; a
+   panel that assumed another panel's sheet was already on the page would
+   render unstyled the moment it is opened first. See shell.js's panelStyles
+   comment (M72) for why that must never be silent. */
+
+.ag-header-row { display: flex; align-items: center; justify-content: space-between; gap: 12px; margin-bottom: 4px; }
+.ag-header-row h1 { margin: 0; }
+
+.ag-refresh-btn { font-size: 12px; padding: 5px 12px; }
+
+.ag-st-blocked { border-left-color: #c66; }
+.ag-st-blocked .ag-status { color: #c66; background: rgba(204, 102, 102, .1); border-color: #c66; }
+
+.ag-st-ready { border-left-color: #c9a227; }
+.ag-st-ready .ag-status { color: #c9a227; background: rgba(201, 162, 39, .1); border-color: #c9a227; }
+
+.ag-owns-elapsed { color: var(--muted); font-size: 12px; margin-top: 2px; }
+
+.ag-clickable { cursor: pointer; transition: border-color var(--t-fast, .15s) var(--ease, ease), box-shadow var(--t-fast, .15s) var(--ease, ease); }
+.ag-clickable:hover, .ag-clickable:focus-visible { border-color: var(--accent); box-shadow: var(--shadow-lift); outline: none; }
+
+.ag-click-hint { margin: 8px 0 0; font-size: 11px; color: var(--muted); opacity: .75; }
+
+/* ---- detail modal (same structure/classes as focus-tasks.css's ft-modal-*) --- */
+
+.ft-modal-overlay {
+  position: fixed;
+  inset: 0;
+  display: none;
+  align-items: flex-start;
+  justify-content: center;
+  padding: 6vh 16px;
+  background: rgba(0, 0, 0, .5);
+  z-index: 60;
+  overflow-y: auto;
+}
+
+.ft-modal-overlay.show { display: flex; }
+
+.ft-modal {
+  position: relative;
+  width: 100%;
+  max-width: 640px;
+  background: var(--card);
+  border: 1px solid var(--border);
+  border-radius: var(--r-card);
+  box-shadow: var(--shadow-lift);
+  padding: 28px 28px 24px;
+}
+
+.ft-modal-close {
+  position: absolute;
+  top: 10px;
+  right: 12px;
+  background: transparent;
+  border: none;
+  font-size: 1.4rem;
+  line-height: 1;
+  color: var(--muted);
+  cursor: pointer;
+  padding: 4px 8px;
+}
+
+.ft-modal-close:hover { color: var(--ink); }
+
+.ft-modal h2 {
+  margin: 0 24px 12px 0;
+  font-size: 1.1rem;
+  overflow-wrap: anywhere;
+}
+
+.ft-modal-meta {
+  display: flex;
+  flex-wrap: wrap;
+  gap: .5rem;
+  margin-bottom: 18px;
+}
+
+.ft-modal-meta-item {
+  font-size: .78rem;
+  color: var(--muted);
+  padding: .2rem .5rem;
+  border: 1px solid var(--border);
+  border-radius: 6px;
+}
+
+.ft-modal-body-wrap {
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  overflow: hidden;
+}
+
+.ft-modal-body-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: .5rem .75rem;
+  background: var(--bg);
+  border-bottom: 1px solid var(--border);
+  font-size: .78rem;
+  color: var(--muted);
+}
+
+.ft-copy-btn {
+  padding: .2rem .55rem;
+  font-size: .75rem;
+}
+
+.ft-modal-body {
+  margin: 0;
+  padding: 14px 16px;
+  max-height: 48vh;
+  overflow: auto;
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+  font-family: var(--mono);
+  font-size: .82rem;
+  line-height: 1.5;
+  user-select: text;
 }

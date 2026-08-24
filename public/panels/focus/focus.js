@@ -608,10 +608,13 @@ function createPanel() {
       missing.unprojectedMinutes ? `${formatMinutes(missing.unprojectedMinutes)} links to an item without a project` : null,
       missing.unattributedMinutes ? `${formatMinutes(missing.unattributedMinutes)} has no contributor attribution` : null,
     ].filter(Boolean);
+    const gapsBlock = gaps.length
+      ? `<div class="focus-ledger-note"><b>Not allocated by evidence</b><ul class="focus-ledger-gaps">${gaps.map((g) => `<li>${escapeHtml(g)}</li>`).join('')}</ul></div>`
+      : `<p class="focus-ledger-note">Every recorded work session in this window has a contributor and a linked project.</p>`;
     el.focusLedger.innerHTML = `
       <div class="focus-ledger-quality"><h3>Evidence coverage</h3><ul>${qualityRows.map(([label, value]) => `<li><b>${label}</b><span>${value}</span></li>`).join('')}</ul></div>
       <h3>People and models</h3>${actorRows}${timeline}${projectRows}${targetManager}${projectTrends}${modelRows}${queueRows}<div id="focusLedgerDrilldown"></div>
-      <p class="focus-ledger-note">${gaps.length ? `Not allocated by evidence: ${escapeHtml(gaps.join('; '))}.` : 'Every recorded work session in this window has a contributor and a linked project.'}</p>
+      ${gapsBlock}
       <p class="focus-ledger-basis">${escapeHtml(data.note || '')}</p>`;
     populateLinkTargets();
   }

@@ -49,15 +49,20 @@ function toIso(unixSeconds) {
   return unixSeconds ? new Date(unixSeconds * 1000).toISOString() : null;
 }
 
-router.get('/', (req, res) => {
+router.get('/', async (req, res) => {
   if (!hermes.available) {
     // Absence and failure must not look the same: no hermes binary is a 502 with a
     // reason, never a silently empty task list that reads as "nothing waiting".
     return res.status(502).json({ error: 'hermes CLI not found', reason: 'no-hermes' });
   }
 
-  const runningRaw = hermes.run(['kanban', 'list', '--status', 'running', '--json']);
-  const readyRaw = hermes.run(['kanban', 'list', '--status', 'ready', '--json']);
+  // ASYNC, in parallel (t_137df3fc): runAsync does not block the event loop the way the
+  // old execFileSync-backed `run` did, and these two calls do not depend on each other,
+  // so they run concurrently rather than one after another.
+  const [runningRaw, readyRaw] = await Promise.all([
+    hermes.runAsync(['kanban', 'list', '--status', 'running', '--json']),
+    hermes.runAsync(['kanban', 'list', '--status', 'ready', '--json']),
+  ]);
 
   if (!runningRaw.ok && !readyRaw.ok) {
     return res.status(502).json({

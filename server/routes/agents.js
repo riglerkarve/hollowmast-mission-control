@@ -14,6 +14,15 @@
 // profile is running exactly when it holds a running task, and idle otherwise. There is no
 // guessing here — `hermes kanban list --status running` IS the claim.
 //
+// EXTENDED 24 Aug 2026 (t_137df3fc), owner's explicit ask: "make this panel show an
+// interactive view of the agents and what they're working on". Ready and blocked tasks
+// are now surfaced too (not just running), each with its full body text, so the panel can
+// open a real detail view on click instead of just a name + a status word. Reused, not
+// reinvented: `hermes kanban list --status <x> --json` already returns id/title/body/
+// assignee/status/priority/timestamps for every status, the same shape open-tasks.js
+// already reads for the Focus panel — this route does not compute anything the CLI does
+// not already expose.
+//
 // TWO ROSTERS EXIST IN THIS WORKSPACE AND THIS FILE DOES NOT RECONCILE THEM. TEAM.md
 // defines a five-ROLE shift cycle (worker/supervisor/manager/architect/scribe) tracked in
 // `team_sessions` — that is a role structure, not a name list, and Codex/Claude/Ollama
@@ -50,6 +59,21 @@ function parseProfileList(out) {
   return profiles;
 }
 
+// Same elapsed-time rule as open-tasks.js (M131's stuck-longest logic) — not
+// reimplemented differently here, just the same label shape for the same fact.
+function elapsedLabel(seconds) {
+  if (seconds == null || seconds < 0) return null;
+  const days = Math.floor(seconds / 86400);
+  const hours = Math.floor((seconds % 86400) / 3600);
+  const minutes = Math.floor((seconds % 3600) / 60);
+  if (days > 0) return `${days}d ${hours}h`;
+  if (hours > 0) return `${hours}h ${minutes}m`;
+  if (minutes > 0) return `${minutes}m`;
+  return '<1m';
+}
+
+const toIso = (unixSeconds) => (unixSeconds ? new Date(unixSeconds * 1000).toISOString() : null);
+
 router.get('/', async (req, res) => {
   if (!hermes.available) {
     // Absence and failure must not look the same: no roster is an empty array, "could not
@@ -57,24 +81,31 @@ router.get('/', async (req, res) => {
     return res.status(502).json({ error: 'hermes CLI not found', reason: 'no-hermes' });
   }
 
-  const profileList = hermes.run(['profile', 'list']);
+  const profileList = await hermes.runAsync(['profile', 'list']);
   if (!profileList.ok) {
     return res.status(502).json({ error: profileList.error || 'hermes profile list failed', reason: profileList.reason });
   }
 
-  const runningRaw = hermes.run(['kanban', 'list', '--status', 'running', '--json']);
-  const doneRaw = hermes.run(['kanban', 'list', '--status', 'done', '--json']);
+  // ASYNC, in parallel (t_137df3fc): these four calls do not depend on each other, and
+  // runAsync does not block the event loop the way execFileSync did — sequential sync
+  // calls here were freezing the whole server for 10+ seconds per /api/agents request
+  // (see hermes-cli.js's ASYNC header comment for the measured cause).
+  const [runningRaw, readyRaw, blockedRaw, doneRaw] = await Promise.all([
+    hermes.runAsync(['kanban', 'list', '--status', 'running', '--json']),
+    hermes.runAsync(['kanban', 'list', '--status', 'ready', '--json']),
+    hermes.runAsync(['kanban', 'list', '--status', 'blocked', '--json']),
+    hermes.runAsync(['kanban', 'list', '--status', 'done', '--json']),
+  ]);
 
-  let running = [];
-  let running_ok = runningRaw.ok;
-  if (runningRaw.ok) {
-    try { running = JSON.parse(runningRaw.out); } catch { running_ok = false; }
+  function parseList(raw) {
+    if (!raw.ok) return { list: [], ok: false };
+    try { return { list: JSON.parse(raw.out), ok: true }; } catch { return { list: [], ok: false }; }
   }
-  let done = [];
-  let done_ok = doneRaw.ok;
-  if (doneRaw.ok) {
-    try { done = JSON.parse(doneRaw.out); } catch { done_ok = false; }
-  }
+
+  const { list: running, ok: running_ok } = parseList(runningRaw);
+  const { list: ready, ok: ready_ok } = parseList(readyRaw);
+  const { list: blocked, ok: blocked_ok } = parseList(blockedRaw);
+  const { list: done, ok: done_ok } = parseList(doneRaw);
 
   // Last completed task per assignee, so an idle profile can show when it was last seen
   // doing anything, not just "idle" with nothing behind it.
@@ -86,42 +117,78 @@ router.get('/', async (req, res) => {
   const doneCountByAssignee = {};
   for (const t of done) doneCountByAssignee[t.assignee] = (doneCountByAssignee[t.assignee] || 0) + 1;
 
-  const runningByAssignee = {};
-  for (const t of running) {
-    // A profile can in principle hold more than one running task; surface the one with the
-    // most recent start so "current task" means something even if that happens.
-    const prev = runningByAssignee[t.assignee];
-    if (!prev || (t.started_at || 0) > (prev.started_at || 0)) runningByAssignee[t.assignee] = t;
+  // One "current task" per assignee, in priority order running > blocked > ready — a
+  // profile actually executing something outranks one merely waiting on a claim or stuck
+  // on a blocker for the purposes of "what is this agent doing right now". Within a status,
+  // most-recently-started/created wins, same tie-break agents.js always used.
+  function byAssignee(list, sinceField) {
+    const map = {};
+    for (const t of list) {
+      const prev = map[t.assignee];
+      if (!prev || (t[sinceField] || 0) > (prev[sinceField] || 0)) map[t.assignee] = t;
+    }
+    return map;
   }
+  const runningByAssignee = byAssignee(running, 'started_at');
+  const blockedByAssignee = byAssignee(blocked, 'started_at');
+  const readyByAssignee = byAssignee(ready, 'created_at');
 
   // Heartbeat is per-task (kanban events), not per-profile — fetch it only for the tasks
   // that are actually running, one `show` per running task. Bounded by how many profiles
-  // can be running at once, never by the whole roster.
+  // can be running at once, never by the whole roster. Run all lookups concurrently
+  // (Promise.all over runAsync) rather than one-at-a-time — sequential sync `show` calls
+  // were part of the same event-loop-blocking bug fixed above.
   const heartbeatByTaskId = {};
   let heartbeats_ok = true;
-  for (const t of Object.values(runningByAssignee)) {
-    const shown = hermes.run(['kanban', 'show', t.id, '--json']);
-    if (!shown.ok) { heartbeats_ok = false; continue; }
+  const runningTasks = Object.values(runningByAssignee);
+  const heartbeatResults = await Promise.all(
+    runningTasks.map((t) => hermes.runAsync(['kanban', 'show', t.id, '--json'])),
+  );
+  runningTasks.forEach((t, i) => {
+    const shown = heartbeatResults[i];
+    if (!shown.ok) { heartbeats_ok = false; return; }
     try {
       const parsed = JSON.parse(shown.out);
       const hbEvents = (parsed.events || []).filter((e) => e.kind === 'heartbeat');
       const latest = hbEvents.length ? hbEvents[hbEvents.length - 1] : null;
       heartbeatByTaskId[t.id] = latest ? latest.created_at : (t.started_at || null);
     } catch { heartbeats_ok = false; }
+  });
+
+  const now = Math.floor(Date.now() / 1000);
+
+  // Build the currentTask payload for a raw kanban task record. `since` is "how long has
+  // this agent been on it" — started_at for running/blocked (it was claimed and began),
+  // created_at for ready (it has been waiting since creation, nothing has begun yet).
+  function taskPayload(t) {
+    const since = t.started_at || t.created_at || null;
+    const elapsedSeconds = since ? Math.max(0, now - since) : null;
+    return {
+      id: t.id,
+      title: t.title,
+      body: t.body || '',
+      status: t.status,
+      priority: t.priority ?? null,
+      startedAt: toIso(t.started_at),
+      createdAt: toIso(t.created_at),
+      elapsedSeconds,
+      elapsedLabel: elapsedLabel(elapsedSeconds),
+    };
   }
 
-  const toIso = (unixSeconds) => (unixSeconds ? new Date(unixSeconds * 1000).toISOString() : null);
-
   const agents = parseProfileList(profileList.out).map((p) => {
-    const task = runningByAssignee[p.name] || null;
+    const task = runningByAssignee[p.name] || blockedByAssignee[p.name] || readyByAssignee[p.name] || null;
     const lastDone = lastDoneByAssignee[p.name] || null;
+    const status = task ? task.status : 'idle';
     return {
       name: p.name,
       model: p.model,
-      status: task ? 'running' : 'idle',
-      currentTask: task ? { id: task.id, title: task.title, startedAt: toIso(task.started_at) } : null,
-      lastHeartbeat: task ? toIso(heartbeatByTaskId[task.id]) : null,
-      lastSeen: task ? toIso(heartbeatByTaskId[task.id]) : (lastDone ? toIso(lastDone.completed_at) : null),
+      status,
+      currentTask: task ? taskPayload(task) : null,
+      lastHeartbeat: task && task.status === 'running' ? toIso(heartbeatByTaskId[task.id]) : null,
+      lastSeen: task && task.status === 'running'
+        ? toIso(heartbeatByTaskId[task.id])
+        : (lastDone ? toIso(lastDone.completed_at) : null),
       doneCount: doneCountByAssignee[p.name] || 0,
     };
   });
@@ -132,6 +199,8 @@ router.get('/', async (req, res) => {
     generatedAt: new Date().toISOString(),
     residue: {
       running_list_ok: running_ok,
+      ready_list_ok: ready_ok,
+      blocked_list_ok: blocked_ok,
       done_list_ok: done_ok,
       heartbeats_ok,
     },

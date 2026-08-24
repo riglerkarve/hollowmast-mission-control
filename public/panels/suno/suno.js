@@ -136,13 +136,13 @@ function render() {
 
       <div class="suno-col-queue">
         <h2>Queue — one row per take</h2>
-        ${items.length ? `<table class="suno-table">
+        ${items.length ? `<div class="suno-table-wrap"><table class="suno-table">
           <thead><tr>
             <th>Prompt</th><th>Status</th><th>Outcome</th><th class="suno-q-num">Credits</th>
             <th>Notes</th><th>Published URL</th><th>Actions</th><th>Added</th>
           </tr></thead>
           <tbody>${items.map(queueRowHTML).join('')}</tbody>
-        </table>` : '<p class="suno-empty">No queue items yet. Generate on suno.com, then log each take here.</p>'}
+        </table></div>` : '<p class="suno-empty">No queue items yet. Generate on suno.com, then log each take here.</p>'}
       </div>
     </div>
   </section>`;

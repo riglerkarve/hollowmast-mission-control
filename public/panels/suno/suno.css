@@ -3,7 +3,7 @@
    used by recurring-costs.css and crm.css: --accent, --accent-soft, --accent-text,
    --card, --bg, --ink, --muted, --border, --border-strong, --mono, --r-card, --r-btn. */
 
-.suno-panel { max-width: 1100px; }
+.suno-panel { width: min(100%, 1280px); max-width: 1280px; }
 
 .suno-lede { color: var(--muted); font-size: 13px; line-height: 1.5; margin: 0 0 18px; max-width: 78ch; }
 .suno-loading { color: var(--muted); font-size: 13px; }
@@ -24,19 +24,33 @@
 .suno-summary-over .suno-summary-bar-fill { background: #c0392b; }
 .suno-summary-note { font-size: 11px; color: var(--muted); width: 100%; }
 
-.suno-cols { display: grid; grid-template-columns: 1fr 1.3fr; gap: 24px; align-items: start; }
+/* minmax(0, …) matters here, not just 1fr/1.3fr: a bare 1fr track's minimum
+   width is auto (min-content), so the queue table's unbreakable cell content
+   (dates, selects, stacked action buttons) was winning a min-content fight
+   against the prompt column and squeezing it to ~135px regardless of the
+   1:1.3 ratio — collapsing the "+ New prompt" button into the h2 and wrapping
+   prompt names across 4-5 lines. minmax(0, …) lets both tracks actually
+   shrink to the fr ratio; the queue table gets its own overflow-x scroll
+   below instead of fighting the grid for space. */
+.suno-cols { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1.3fr); gap: 24px; align-items: start; }
 @media (max-width: 900px) {
   .suno-cols { grid-template-columns: 1fr; }
 }
 
-.suno-col-head { display: flex; align-items: center; justify-content: space-between; margin-bottom: 10px; }
+.suno-col-head { display: flex; align-items: center; justify-content: space-between; gap: 10px; margin-bottom: 10px; }
 .suno-col-prompts h2, .suno-col-queue h2 { font-size: 13px; text-transform: uppercase; letter-spacing: .07em;
-  color: var(--muted); margin: 0 0 10px; }
+  color: var(--muted); margin: 0; }
 
 .suno-btn { font: inherit; font-size: 12px; padding: 5px 10px; border-radius: var(--r-btn);
-  border: 1px solid var(--border-strong); background: var(--card); color: var(--ink); cursor: pointer; }
+  border: 1px solid var(--border-strong); background: var(--card); color: var(--ink); cursor: pointer;
+  white-space: nowrap; flex-shrink: 0; }
 .suno-btn:hover { border-color: var(--accent); }
-.suno-btn-add, .suno-btn-save { background: var(--accent); color: var(--accent-text-bg, #fff); border-color: var(--accent); }
+/* --accent-text-bg and --accent are the SAME colour in this theme (both #d4ff38,
+   see shell.css) — that pairing measured 1.00 contrast, an invisible label on a
+   solid block, exactly the bug social.css's .soc-open note already describes.
+   --accent-fill / --accent-fill-ink is the pair built to carry white-on-accent
+   text (17.24:1) and is what .btn.primary / .nav-item.active use for the same job. */
+.suno-btn-add, .suno-btn-save { background: var(--accent-fill); color: var(--accent-fill-ink); border-color: var(--accent-fill); }
 
 .suno-form { display: flex; flex-direction: column; gap: 8px; margin-bottom: 14px; padding: 12px;
   border: 1px solid var(--border); border-radius: var(--r-card); background: var(--card); }
@@ -58,16 +72,18 @@
 .suno-prompt-stats { font-size: 11px; color: var(--muted); margin-bottom: 8px; font-family: var(--mono); }
 .suno-prompt-actions { display: flex; gap: 6px; flex-wrap: wrap; }
 
-.suno-table { width: 100%; border-collapse: collapse; font-size: 12px; }
+.suno-table-wrap { overflow-x: auto; }
+.suno-table { width: 100%; min-width: 640px; border-collapse: collapse; font-size: 12px; }
 .suno-table th { text-align: left; font-size: 10px; text-transform: uppercase; letter-spacing: .08em;
-  color: var(--muted); padding: 6px 8px 6px 0; border-bottom: 1px solid var(--border); }
+  color: var(--muted); padding: 6px 10px 6px 0; border-bottom: 1px solid var(--border); white-space: nowrap; }
 .suno-q-row { border-bottom: 1px solid var(--border); }
-.suno-q-row td { padding: 6px 8px 6px 0; color: var(--ink); vertical-align: middle; }
+.suno-q-row td { padding: 8px 10px 8px 0; color: var(--ink); vertical-align: middle; }
 .suno-q-num { text-align: right; font-variant-numeric: tabular-nums; }
 .suno-q-prompt { max-width: 16ch; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-.suno-q-date { font-family: var(--mono); font-size: 11px; color: var(--muted); white-space: nowrap; }
+.suno-q-date { font-family: var(--mono); font-size: 11px; color: var(--muted); white-space: nowrap; padding-left: 14px; }
 .suno-q-url-dim { color: var(--muted); }
-.suno-q-actions { display: flex; gap: 6px; flex-wrap: wrap; white-space: nowrap; }
+.suno-q-actions { display: flex; flex-direction: column; gap: 6px; align-items: flex-start; min-width: 110px;
+  padding-right: 14px; }
 .suno-btn-open { text-decoration: none; display: inline-block; }
 
 .suno-status-select, .suno-outcome-select, .suno-credits-input, .suno-notes-input, .suno-url-input {

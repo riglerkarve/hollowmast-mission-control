@@ -68,6 +68,10 @@ function queueRowHTML(item) {
              data-item-id="${item.id}" data-field="published_url" />`
         : '<span class="suno-q-url-dim">—</span>'}
     </td>
+    <td class="suno-q-actions">
+      <button class="suno-btn suno-btn-copy" data-copy="${esc(item.prompt_style_text || '')}">Copy prompt</button>
+      <a class="suno-btn suno-btn-open" href="https://suno.com" target="_blank" rel="noopener">Open suno.com</a>
+    </td>
     <td class="suno-q-date">${esc(String(item.created_at || '').slice(0, 10))}</td>
   </tr>`;
 }
@@ -135,7 +139,7 @@ function render() {
         ${items.length ? `<table class="suno-table">
           <thead><tr>
             <th>Prompt</th><th>Status</th><th>Outcome</th><th class="suno-q-num">Credits</th>
-            <th>Notes</th><th>Published URL</th><th>Added</th>
+            <th>Notes</th><th>Published URL</th><th>Actions</th><th>Added</th>
           </tr></thead>
           <tbody>${items.map(queueRowHTML).join('')}</tbody>
         </table>` : '<p class="suno-empty">No queue items yet. Generate on suno.com, then log each take here.</p>'}

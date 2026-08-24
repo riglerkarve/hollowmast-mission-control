@@ -189,7 +189,7 @@ router.delete('/prompts/:id', (req, res) => {
 router.get('/queue', (req, res) => {
   try {
     const rows = db.prepare(`
-      SELECT q.*, p.name AS prompt_name
+      SELECT q.*, p.name AS prompt_name, p.style_text AS prompt_style_text
         FROM suno_queue_items q
         JOIN suno_prompts p ON p.id = q.prompt_id
        ORDER BY q.created_at DESC
@@ -229,7 +229,7 @@ router.post('/queue', express.json(), (req, res) => {
   ).run(prompt.id, status, outcome, creditsSpent, b.notes ? String(b.notes) : null,
         b.published_url ? String(b.published_url) : null, ts, ts);
   const row = db.prepare(`
-    SELECT q.*, p.name AS prompt_name FROM suno_queue_items q
+    SELECT q.*, p.name AS prompt_name, p.style_text AS prompt_style_text FROM suno_queue_items q
       JOIN suno_prompts p ON p.id = q.prompt_id WHERE q.id = ?
   `).get(info.lastInsertRowid);
   res.json({ ok: true, item: row });
@@ -272,7 +272,7 @@ router.patch('/queue/:id', express.json(), (req, res) => {
   vals.push(row.id);
   db.prepare(`UPDATE suno_queue_items SET ${set.join(', ')} WHERE id = ?`).run(...vals);
   const updated = db.prepare(`
-    SELECT q.*, p.name AS prompt_name FROM suno_queue_items q
+    SELECT q.*, p.name AS prompt_name, p.style_text AS prompt_style_text FROM suno_queue_items q
       JOIN suno_prompts p ON p.id = q.prompt_id WHERE q.id = ?
   `).get(row.id);
   res.json({ ok: true, item: updated });

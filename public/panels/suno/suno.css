@@ -67,6 +67,8 @@
 .suno-q-prompt { max-width: 16ch; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .suno-q-date { font-family: var(--mono); font-size: 11px; color: var(--muted); white-space: nowrap; }
 .suno-q-url-dim { color: var(--muted); }
+.suno-q-actions { display: flex; gap: 6px; flex-wrap: wrap; white-space: nowrap; }
+.suno-btn-open { text-decoration: none; display: inline-block; }
 
 .suno-status-select, .suno-outcome-select, .suno-credits-input, .suno-notes-input, .suno-url-input {
   font: inherit; font-size: 12px; padding: 4px 6px; border: 1px solid var(--border); border-radius: var(--r-btn);

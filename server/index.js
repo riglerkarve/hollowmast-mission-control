@@ -77,6 +77,7 @@ const claudeTimelineRouter = require('./routes/claude-timeline');
 const socialRouter = require('./routes/social');
 const weeklySynthesisRouter = require('./routes/weekly-synthesis');
 const sunoRouter = require('./routes/suno');
+const openTasksRouter = require('./routes/open-tasks');
 const heartbeat = require('./heartbeat');
 const gate = require('./gate');
 const provenance = require('./provenance');
@@ -187,6 +188,7 @@ app.use('/api/claude-timeline', claudeTimelineRouter);
 app.use('/api/social', socialRouter);
 app.use('/api/weekly-synthesis', weeklySynthesisRouter);
 app.use('/api/suno', sunoRouter);
+app.use('/api/open-tasks', openTasksRouter);
 app.use('/garage', garageRouter);
 
 app.use(express.static(path.join(__dirname, '..', 'public')));

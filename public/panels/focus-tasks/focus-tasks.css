@@ -1,0 +1,176 @@
+.ft-lede {
+  margin: 0 0 16px;
+  color: var(--muted);
+  font-size: .88rem;
+}
+
+.ft-empty {
+  color: var(--muted);
+  font-size: .9rem;
+}
+
+.ft-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.ft-row {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  padding: 12px 14px;
+  border-radius: 10px;
+  background: var(--bg);
+  border: 1px solid var(--border);
+  cursor: pointer;
+  transition: border-color var(--t-fast) var(--ease), box-shadow var(--t-fast) var(--ease);
+}
+
+.ft-row:hover,
+.ft-row:focus-visible {
+  border-color: var(--accent);
+  box-shadow: var(--shadow-lift);
+  outline: none;
+}
+
+.ft-row-main {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.ft-status {
+  font-size: .7rem;
+  text-transform: uppercase;
+  letter-spacing: .05em;
+  padding: .15rem .4rem;
+  border-radius: 4px;
+  border: 1px solid var(--border);
+  color: var(--muted);
+  white-space: nowrap;
+}
+
+.ft-status-running {
+  color: var(--accent-text);
+  border-color: var(--accent);
+}
+
+.ft-title {
+  font-size: .95rem;
+  font-weight: 600;
+  flex: 1;
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+
+.ft-row-meta {
+  display: flex;
+  flex-wrap: wrap;
+  gap: .6rem;
+  font-size: .78rem;
+  color: var(--muted);
+}
+
+.ft-priority { font-weight: 600; }
+
+/* --- detail modal --- */
+
+.ft-modal-overlay {
+  position: fixed;
+  inset: 0;
+  display: none;
+  align-items: flex-start;
+  justify-content: center;
+  padding: 6vh 16px;
+  background: rgba(0, 0, 0, .5);
+  z-index: 60;
+  overflow-y: auto;
+}
+
+.ft-modal-overlay.show { display: flex; }
+
+.ft-modal {
+  position: relative;
+  width: 100%;
+  max-width: 640px;
+  background: var(--card);
+  border: 1px solid var(--border);
+  border-radius: var(--r-card);
+  box-shadow: var(--shadow-lift);
+  padding: 28px 28px 24px;
+}
+
+.ft-modal-close {
+  position: absolute;
+  top: 10px;
+  right: 12px;
+  background: transparent;
+  border: none;
+  font-size: 1.4rem;
+  line-height: 1;
+  color: var(--muted);
+  cursor: pointer;
+  padding: 4px 8px;
+}
+
+.ft-modal-close:hover { color: var(--ink); }
+
+.ft-modal h2 {
+  margin: 0 24px 12px 0;
+  font-size: 1.1rem;
+  overflow-wrap: anywhere;
+}
+
+.ft-modal-meta {
+  display: flex;
+  flex-wrap: wrap;
+  gap: .5rem;
+  margin-bottom: 18px;
+}
+
+.ft-modal-meta-item {
+  font-size: .78rem;
+  color: var(--muted);
+  padding: .2rem .5rem;
+  border: 1px solid var(--border);
+  border-radius: 6px;
+}
+
+.ft-modal-body-wrap {
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  overflow: hidden;
+}
+
+.ft-modal-body-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: .5rem .75rem;
+  background: var(--bg);
+  border-bottom: 1px solid var(--border);
+  font-size: .78rem;
+  color: var(--muted);
+}
+
+.ft-copy-btn {
+  padding: .2rem .55rem;
+  font-size: .75rem;
+}
+
+.ft-modal-body {
+  margin: 0;
+  padding: 14px 16px;
+  max-height: 48vh;
+  overflow: auto;
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+  font-family: var(--mono);
+  font-size: .82rem;
+  line-height: 1.5;
+  user-select: text;
+}

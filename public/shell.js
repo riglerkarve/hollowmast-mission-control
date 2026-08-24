@@ -10,6 +10,7 @@ const PANELS = {
   crm: () => import('/panels/crm/crm.js'),
   inventory: () => import('/panels/inventory/inventory.js'),
   focus: () => import('/panels/focus/focus.js'),
+  'focus-tasks': () => import('/panels/focus-tasks/focus-tasks.js'),
   reports: () => import('/panels/reports/reports.js'),
   finance: () => import('/panels/finance/finance.js'),
   budget: () => import('/panels/budget/budget.js'),

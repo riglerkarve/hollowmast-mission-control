@@ -92,6 +92,24 @@
     border-radius: var(--r-btn); padding: 7px 12px; font-size: 13px;
     cursor: pointer; color: var(--ink); }
   .m-qa:active { background: var(--accent-soft); }
+
+  /* Idea capture — floating, reachable from every tab. Ideas happen away from
+     a desk, at unpredictable times, not only when the Voice tab happens to be
+     open (M137: phone-first, not browser-only; matches M126's own design
+     fact that this owner thinks out loud, not by sitting down to type). */
+  .m-idea-fab { position: fixed; right: 14px; bottom: 72px; z-index: 11;
+    display: flex; flex-direction: column; align-items: flex-end; gap: 6px; }
+  .m-idea-btn { display: flex; align-items: center; gap: 8px;
+    background: var(--accent-soft); color: var(--accent-text);
+    border: 2px solid var(--accent); border-radius: 999px;
+    padding: 12px 18px; font: inherit; font-size: 13px; font-weight: 600;
+    box-shadow: 0 2px 10px rgba(0,0,0,.25); cursor: pointer; }
+  .m-idea-btn.recording { background: var(--accent); color: var(--sidebar-ink); }
+  .m-idea-btn svg { width: 18px; height: 18px; fill: currentColor; flex: none; }
+  .m-idea-status { background: var(--card); border: 1px solid var(--border-strong);
+    border-radius: var(--r-btn); padding: 6px 10px; font-size: 12px; color: var(--ink);
+    max-width: 220px; text-align: right; box-shadow: 0 2px 8px rgba(0,0,0,.2); }
+  .m-idea-status.err { color: var(--accent-text); }
 </style>
 </head>
 <body>
@@ -163,6 +181,21 @@
   <div class="m-input-row" id="mInputRow" style="display:none">
     <input class="m-input" id="mMsgInput" placeholder="Send a message..." />
     <button class="m-send" id="mMsgSend">Send</button>
+  </div>
+
+  <!-- Idea capture — floating, present on every tab. One tap to start talking,
+       one tap to stop; the transcript is saved straight to Creative, no typing,
+       no navigating away from whatever tab the owner had open. -->
+  <div class="m-idea-fab" id="mIdeaFab">
+    <div class="m-idea-status" id="mIdeaStatus" style="display:none"></div>
+    <button class="m-idea-btn" id="mIdeaBtn" type="button">
+      <svg viewBox="0 0 24 24" aria-hidden="true">
+        <path d="M12 2a3 3 0 0 0-3 3v6a3 3 0 0 0 6 0V5a3 3 0 0 0-3-3z"/>
+        <path d="M19 11a7 7 0 0 1-14 0M12 18v4M8 22h8" fill="none"
+          stroke="currentColor" stroke-width="2" stroke-linecap="round"/>
+      </svg>
+      <span id="mIdeaBtnLabel">Idea</span>
+    </button>
   </div>
 
   <audio id="mAudio" style="display:none"></audio>
@@ -415,6 +448,73 @@
       if (cmd) mCommand(cmd);
     });
   });
+
+  // --- idea capture (M137: phone-first, not browser-only) ---
+  // Floating mic button, present on every tab. Tap to talk, tap again to stop;
+  // the transcript is saved straight to /api/creative/ideas with no typing and
+  // no leaving whatever tab was open. Reuses the same STT route as the Voice
+  // tab (getUserMedia + MediaRecorder + /api/voice/stt) but a separate
+  // recorder/stream pair so recording an idea can't collide with a voice
+  // command recording in flight.
+  let ideaRecorder = null, ideaChunks = [], ideaRecording = false, ideaStream = null;
+  const ideaBtn = document.getElementById('mIdeaBtn');
+  const ideaLabel = document.getElementById('mIdeaBtnLabel');
+  const ideaStatus = document.getElementById('mIdeaStatus');
+
+  function showIdeaStatus(text, isErr) {
+    ideaStatus.textContent = text;
+    ideaStatus.style.display = text ? 'block' : 'none';
+    ideaStatus.classList.toggle('err', !!isErr);
+  }
+
+  ideaBtn.addEventListener('click', async () => {
+    if (ideaRecording) { stopIdeaRec(); return; }
+    // A voice-command recording in progress owns the microphone; don't fight it.
+    if (recording) { showIdeaStatus('Finish the voice command first.', true); return; }
+    try { ideaStream = await navigator.mediaDevices.getUserMedia({ audio: true }); }
+    catch { showIdeaStatus('Microphone unavailable.', true); return; }
+    ideaChunks = [];
+    ideaRecorder = new MediaRecorder(ideaStream);
+    ideaRecorder.ondataavailable = (e) => { if (e.data.size) ideaChunks.push(e.data); };
+    ideaRecorder.onstop = captureIdea;
+    ideaRecorder.start();
+    ideaRecording = true;
+    ideaBtn.classList.add('recording');
+    ideaLabel.textContent = 'Stop';
+    showIdeaStatus('Listening...');
+  });
+
+  function stopIdeaRec() {
+    if (!ideaRecording) return;
+    ideaRecorder.stop();
+    ideaStream.getTracks().forEach((t) => t.stop());
+    ideaRecording = false;
+    ideaBtn.classList.remove('recording');
+    ideaLabel.textContent = 'Idea';
+  }
+
+  async function captureIdea() {
+    if (!ideaChunks.length) { showIdeaStatus(''); return; }
+    const blob = new Blob(ideaChunks, { type: 'audio/webm' });
+    showIdeaStatus('Transcribing...');
+    try {
+      const r = await fetch('/api/voice/stt', { method: 'POST',
+        headers: { 'Content-Type': 'audio/webm' }, body: blob });
+      if (!r.ok) { const e = await r.json().catch(() => ({}));
+        showIdeaStatus(e.error || 'Transcription failed.', true); return; }
+      const d = await r.json();
+      const text = (d.text || '').trim();
+      if (!text) { showIdeaStatus('No speech detected.', true); return; }
+      showIdeaStatus('Saving idea...');
+      const save = await fetch('/api/creative/ideas', {
+        method: 'POST', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ text, tags: [], source: 'voice-mobile' }),
+      });
+      if (!save.ok) { showIdeaStatus('Could not save.', true); return; }
+      showIdeaStatus('Saved: "' + (text.length > 60 ? text.slice(0, 60) + '…' : text) + '"');
+      setTimeout(() => showIdeaStatus(''), 4000);
+    } catch { showIdeaStatus('Server unreachable.', true); }
+  }
 
   // Load briefing on first open
   loadBriefing();

@@ -86,12 +86,28 @@
   padding-right: 14px; }
 .suno-btn-open { text-decoration: none; display: inline-block; }
 
-.suno-status-select, .suno-outcome-select, .suno-credits-input, .suno-notes-input, .suno-url-input {
+.suno-status-select, .suno-outcome-select, .suno-credits-input, .suno-notes-input, .suno-url-input, .suno-revenue-input {
   font: inherit; font-size: 12px; padding: 4px 6px; border: 1px solid var(--border); border-radius: var(--r-btn);
   background: var(--bg); color: var(--ink); }
 .suno-credits-input { width: 56px; text-align: right; }
 .suno-notes-input { width: 120px; }
 .suno-url-input { width: 140px; }
+.suno-revenue-input { width: 70px; text-align: right; }
+
+/* Focus timer — a running row gets a quiet accent-left rule (same language as
+   .suno-summary's headline treatment) so the one active timer is obvious at a glance
+   without shouting. The Stop button reuses --accent-fill like the other primary actions
+   so "there is a decision to make here" reads the same everywhere in this panel. */
+.suno-q-row-running { border-left: 2px solid var(--accent); }
+.suno-q-focus { display: flex; align-items: center; gap: 6px; white-space: nowrap; }
+.suno-btn-focus { min-width: 46px; }
+.suno-btn-focus-running { background: var(--accent-fill); color: var(--accent-fill-ink); border-color: var(--accent-fill); }
+.suno-q-focus-time { font-family: var(--mono); font-size: 11px; color: var(--muted); font-variant-numeric: tabular-nums; }
+.suno-q-row-running .suno-q-focus-time { color: var(--accent-text); }
+
+/* "Generate →" replaces the old copy+open button pair — one click does both, since the
+   nightly workflow always does them together. */
+.suno-btn-generate { background: var(--accent-fill); color: var(--accent-fill-ink); border-color: var(--accent-fill); }
 
 @media (max-width: 560px) {
   .suno-panel { max-width: 100%; }

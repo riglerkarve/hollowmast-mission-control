@@ -36,9 +36,37 @@
 //   DELETE /api/suno/prompts/:id        — refused (409) if queue_items reference it
 //   GET    /api/suno/queue              — all queue items, newest first, joined to prompt name
 //   POST   /api/suno/queue              — add a take { prompt_id, status?, credits_spent?, notes? }
-//   PATCH  /api/suno/queue/:id          — update status/outcome/credits/notes/published_url
+//   PATCH  /api/suno/queue/:id          — update status/outcome/credits/notes/published_url/
+//                                          published_revenue_pence
+//   POST   /api/suno/queue/:id/focus/start — start the focus timer on this take, auto-stopping
+//                                             any other take's running timer first (see v2 below)
+//   POST   /api/suno/queue/:id/focus/stop  — stop this take's running timer, banking elapsed seconds
 //   DELETE /api/suno/queue/:id          — remove a queue item
 //   GET    /api/suno/summary            — credits used today vs. the daily cap, plus totals
+//
+// v2 ADDITIONS (kanban t_2b8e1657) — focus_seconds and published_revenue_pence.
+//
+// focus_seconds/focus_started_at: a take is the unit of effort, same reasoning as
+// credits_spent above — one row, one unit. Only ONE timer may run across the whole panel
+// at a time (the owner works on one thing at a time); starting a new one stops whichever
+// other row is running first, so totals never silently double-count from a forgotten open
+// timer. focus_started_at is the ONLY "is a timer running" state — there is no separate
+// in-memory flag, so a server restart mid-timer just means the elapsed-so-far is computed
+// from the stored timestamp next time start/stop runs, not lost. Tab-close accuracy is
+// explicitly best-effort (see suno.js beforeunload comment) — this module does not attempt
+// idle detection or background tracking, by design (see task body).
+//
+// published_revenue_pence: nullable, INTEGER minor units, matching the house convention in
+// income.js ("Money is INTEGER pence, always. The unit is in the column name."). Same
+// only-settable-when-published gate as published_url, for the same reason: it isn't
+// meaningful before then.
+//
+// THE BOUNDARY THAT MATTERS MOST: this module stores focus_seconds and
+// published_revenue_pence as raw numbers and nothing else. It must never compute or
+// display a per-hour rate, a total earned, or any effort-to-income ratio — that
+// calculation belongs exclusively to the Mission Control Scribe profile (finance/wellbeing
+// custody rule, see mission-control/TEAM.md and CLAUDE.md). If you are tempted to add a
+// "£/hr" badge here, it belongs on the Scribe's side, not this one.
 //
 const express = require('express');
 const db = require('../db.js');
@@ -78,6 +106,17 @@ db.migrate('suno', [
       );
       CREATE INDEX IF NOT EXISTS idx_suno_queue_prompt ON suno_queue_items(prompt_id);
       CREATE INDEX IF NOT EXISTS idx_suno_queue_created ON suno_queue_items(created_at);
+    `);
+  },
+  (d) => {
+    // v2 — focus timer + manual revenue (kanban t_2b8e1657). focus_started_at is nullable:
+    // NULL means no timer running on this row, a timestamp means it is running since then.
+    // Only one row in the whole table should ever have a non-NULL focus_started_at at once;
+    // the /focus/start route enforces that by stopping any other running row first.
+    d.exec(`
+      ALTER TABLE suno_queue_items ADD COLUMN focus_seconds INTEGER NOT NULL DEFAULT 0;
+      ALTER TABLE suno_queue_items ADD COLUMN focus_started_at TEXT;
+      ALTER TABLE suno_queue_items ADD COLUMN published_revenue_pence INTEGER;
     `);
   },
 ]);
@@ -246,11 +285,15 @@ router.patch('/queue/:id', express.json(), (req, res) => {
   if (b.outcome !== undefined && !OUTCOMES.includes(String(b.outcome))) {
     return res.status(400).json({ error: `outcome must be one of: ${OUTCOMES.join(', ')}` });
   }
-  // published_url is only meaningful once status is (or becomes) 'published' —
-  // this is intentionally the ONLY publish-tracking behaviour in v1, not a system.
+  // published_url and published_revenue_pence are only meaningful once status is (or
+  // becomes) 'published' — intentionally the only publish-tracking behaviour in v1/v2,
+  // not a system.
   const nextStatus = b.status !== undefined ? String(b.status) : row.status;
   if (b.published_url !== undefined && b.published_url && nextStatus !== 'published') {
     return res.status(400).json({ error: "published_url can only be set when status is 'published'" });
+  }
+  if (b.published_revenue_pence !== undefined && b.published_revenue_pence !== null && nextStatus !== 'published') {
+    return res.status(400).json({ error: "published_revenue_pence can only be set when status is 'published'" });
   }
 
   const set = [];
@@ -267,6 +310,17 @@ router.patch('/queue/:id', express.json(), (req, res) => {
   }
   if (b.notes !== undefined) { set.push('notes = ?'); vals.push(b.notes === null ? null : String(b.notes)); }
   if (b.published_url !== undefined) { set.push('published_url = ?'); vals.push(b.published_url === null ? null : String(b.published_url)); }
+  if (b.published_revenue_pence !== undefined) {
+    if (b.published_revenue_pence === null) {
+      set.push('published_revenue_pence = ?'); vals.push(null);
+    } else {
+      const rev = Number(b.published_revenue_pence);
+      if (!Number.isFinite(rev) || rev < 0) {
+        return res.status(400).json({ error: 'published_revenue_pence must be a non-negative number' });
+      }
+      set.push('published_revenue_pence = ?'); vals.push(Math.trunc(rev));
+    }
+  }
 
   if (!set.length) return res.status(400).json({ error: 'nothing to update' });
   vals.push(row.id);
@@ -283,6 +337,58 @@ router.delete('/queue/:id', (req, res) => {
   if (!row) return res.status(404).json({ error: 'no such queue item' });
   db.prepare('DELETE FROM suno_queue_items WHERE id = ?').run(row.id);
   res.json({ ok: true });
+});
+
+// FOCUS TIMER — v2 (kanban t_2b8e1657). Only one row across the whole table may have a
+// running timer (non-NULL focus_started_at) at once. /start therefore does two things in
+// one place, not two round trips from the client: bank-and-stop whatever else is running,
+// then start this row. That ordering is what stops a forgotten-open timer from silently
+// double-counting into a second take.
+function bankElapsed(row) {
+  if (!row.focus_started_at) return row.focus_seconds;
+  const startedMs = Date.parse(row.focus_started_at);
+  const elapsedSec = Number.isFinite(startedMs) ? Math.max(0, Math.round((Date.now() - startedMs) / 1000)) : 0;
+  return row.focus_seconds + elapsedSec;
+}
+
+router.post('/queue/:id/focus/start', (req, res) => {
+  const row = db.prepare('SELECT * FROM suno_queue_items WHERE id = ?').get(req.params.id);
+  if (!row) return res.status(404).json({ error: 'no such queue item' });
+
+  // Stop any OTHER row currently running, banking its elapsed time, before starting this
+  // one. Deliberately not wrapped with the new start in a single transaction: each write is
+  // independently valid and idempotent, and withTransaction refuses nested async work — this
+  // stays plain sequential synchronous calls.
+  const others = db.prepare('SELECT * FROM suno_queue_items WHERE focus_started_at IS NOT NULL AND id != ?').all(row.id);
+  for (const other of others) {
+    db.prepare('UPDATE suno_queue_items SET focus_seconds = ?, focus_started_at = NULL WHERE id = ?')
+      .run(bankElapsed(other), other.id);
+  }
+
+  // Starting an already-running row is a no-op on the timestamp (don't reset progress),
+  // but still bank+restart nothing extra since it's the sole runner already.
+  if (!row.focus_started_at) {
+    db.prepare('UPDATE suno_queue_items SET focus_started_at = ? WHERE id = ?').run(now(), row.id);
+  }
+  const updated = db.prepare(`
+    SELECT q.*, p.name AS prompt_name, p.style_text AS prompt_style_text FROM suno_queue_items q
+      JOIN suno_prompts p ON p.id = q.prompt_id WHERE q.id = ?
+  `).get(row.id);
+  res.json({ ok: true, item: updated, stopped: others.map((o) => o.id) });
+});
+
+router.post('/queue/:id/focus/stop', (req, res) => {
+  const row = db.prepare('SELECT * FROM suno_queue_items WHERE id = ?').get(req.params.id);
+  if (!row) return res.status(404).json({ error: 'no such queue item' });
+  if (row.focus_started_at) {
+    db.prepare('UPDATE suno_queue_items SET focus_seconds = ?, focus_started_at = NULL WHERE id = ?')
+      .run(bankElapsed(row), row.id);
+  }
+  const updated = db.prepare(`
+    SELECT q.*, p.name AS prompt_name, p.style_text AS prompt_style_text FROM suno_queue_items q
+      JOIN suno_prompts p ON p.id = q.prompt_id WHERE q.id = ?
+  `).get(row.id);
+  res.json({ ok: true, item: updated });
 });
 
 // The one line of "should I keep going today" — no live polling, no scraping,

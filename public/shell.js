@@ -73,6 +73,7 @@ const PANELS = {
   'safety-retro': () => import('/panels/safety-retro/safety-retro.js'),
   'claude-timeline': () => import('/panels/claude-timeline/claude-timeline.js'),
   'weekly-synthesis': () => import('/panels/weekly-synthesis/weekly-synthesis.js'),
+  suno: () => import('/panels/suno/suno.js'),
 };
 
 const panelRoot = document.getElementById('panelRoot');

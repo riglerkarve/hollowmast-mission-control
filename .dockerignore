@@ -1,0 +1,38 @@
+.git
+.gitignore
+node_modules
+npm-debug.log
+Dockerfile*
+docker-compose*.yml
+
+# Runtime/private state: restored separately into the Docker volume, never baked into an image.
+data/*.db
+data/*.db-shm
+data/*.db-wal
+data/gate-key.txt
+data/google-client.json
+data/google-token.json
+data/google-tokens.json
+data/oauth-*.json
+data/uc-statements.jsonl
+data/heartbeat.json
+data/watchdog-state.json
+data/honeygain-token.txt
+data/*-token.txt
+data/dash-password.txt
+data/reports-admin-key.txt
+data/ga-service-account.json
+data/backup-key.txt
+data/telemetry
+
+# Generated/private output.
+logs
+reports
+backups
+*.log
+
+# Local editor/OS noise.
+.DS_Store
+Thumbs.db
+.vscode
+.idea

@@ -1,0 +1,92 @@
+Mission Control VPS migration — Docker pre-flight checklist
+Provider: Hostinger KVM 2 VPS, owner-provisioned, Docker Manager enabled
+Server known from task context: 2.57.90.95
+
+Corrected scope, 25 Aug
+- The VPS is now intended for the wider AI Agents / desktop-OS system, not just the Mission Control web dashboard.
+- This Docker checklist deploys the Mission Control dashboard container only. It does not migrate Hermes profiles, the kanban dispatcher/runtime, gateway delivery, desktop/browser automation host requirements, or Ollama/local-model custody.
+- Do not describe the VPS migration as complete after this container works. Treat it as the dashboard service inside the wider agent-system deployment.
+- Recommended build path: commit these Docker/deploy files, clone/pull the remote repo on the VPS, and build the image there with Hostinger's Docker runtime. Do not build/push from this shared dirty Windows checkout.
+
+Stop line
+- Do not create the Hostinger account, enter payment details, accept terms, or complete identity/verification steps as an agent.
+- Do not ask for or store the root password in chat, comments, docs, shell history, or files.
+- Continue only after the owner has provisioned the VPS and can type the SSH password directly where needed.
+
+Owner-only provisioning
+- Hostinger KVM 2 server exists under the owner's account.
+- Docker Manager is enabled in Hostinger.
+- Temporary root password auth is available; owner will switch to key-based SSH later.
+- Firewall/exposure decision is explicit: SSH 22 for administration, TCP 3000 for pre-DNS verification only if intentionally opened, HTTP 80/HTTPS 443 when a reverse proxy/TLS step is added.
+
+Local source checks before deploy
+- Run from C:\Users\jcwhi\Claude Outputs.
+- Run mission-control's push preflight before any private repo push: node mission-control/tools/preflight.cjs
+- Confirm the Docker files exist:
+  C:\Users\jcwhi\Claude Outputs\mission-control\Dockerfile
+  C:\Users\jcwhi\Claude Outputs\mission-control\docker-compose.yml
+  C:\Users\jcwhi\Claude Outputs\mission-control\.dockerignore
+- Confirm the Docker deploy helper exists:
+  C:\Users\jcwhi\Claude Outputs\mission-control\tools\vps-deploy.cjs
+- Confirm the rollback guidance exists:
+  C:/Users/jcwhi/Claude Outputs/reports/rollback-guidance.md
+- Confirm no sensitive data is tracked: git -C mission-control status --short and git -C mission-control ls-files data/dashboard.db should not show the live DB.
+- Confirm .dockerignore excludes runtime/private state so dashboard.db, WAL/SHM files, gate keys, OAuth tokens, backup keys, reports, logs, and backups are not baked into the image.
+
+Backup and data custody
+- Create or identify the newest encrypted Mission Control database backup before touching the VPS.
+- The live database remains private data. Do not copy data/dashboard.db through chat, issue text, public repos, Docker images, or unencrypted channels.
+- Restore database state into the Docker volume mission-control-data mounted at /app/data, not into the image layer.
+- Expected database path inside the running container: /app/data/dashboard.db via MC_DB_PATH=/app/data/dashboard.db.
+- Preserve data/dashboard.db-wal, data/dashboard.db-shm, and gate-key.txt with the database when restoring a live instance.
+- Prefer the existing backup-crypt/restore flow over ad hoc copying.
+
+Remote readiness checks
+- SSH works: ssh root@2.57.90.95 uname -a
+- Disk and memory are visible: ssh root@2.57.90.95 'df -h / && free -h'
+- Docker is present or can be installed by the deploy helper: ssh root@2.57.90.95 'docker --version'
+- Docker Compose is present: ssh root@2.57.90.95 'docker compose version || docker-compose --version'
+- Persistent Docker volume can be inspected or created: docker volume inspect mission-control-data || docker volume create mission-control-data
+
+Dry-run deployment plan
+- Print commands without changing the server:
+  node mission-control/tools/vps-deploy.cjs plan --host 2.57.90.95 --repo <private-repo-url> --domain <domain>
+- Read the printed target directory, image name, container name, and volume before executing:
+  /opt/mission-control
+  mission-control:<timestamp-or-tag>
+  mission-control container
+  mission-control-data volume mounted at /app/data
+
+Execute only after checks pass
+- Deploy image and container only after owner provisioning/SSH access is complete and these Docker files are committed/pushed to the repo the VPS will clone:
+  node mission-control/tools/vps-deploy.cjs deploy --host 2.57.90.95 --repo <private-repo-url> --domain <domain> --execute
+- The deploy helper installs Docker if missing, clones/updates the committed remote repo on the VPS, builds the image on the VPS, creates mission-control-data, and runs docker compose up -d --build.
+- Verify on the VPS:
+  docker ps --filter name=mission-control --format 'container={{.Names}} image={{.Image}} status={{.Status}} ports={{.Ports}}'
+  docker inspect mission-control --format 'health={{if .State.Health}}{{.State.Health.Status}}{{else}}none{{end}} restart={{.HostConfig.RestartPolicy.Name}}'
+  docker volume inspect mission-control-data --format 'volume={{.Name}} mountpoint={{.Mountpoint}}'
+  curl http://127.0.0.1:3000/api/status
+- Verify from this machine only after the firewall/exposure choice permits it:
+  curl http://2.57.90.95:3000/api/status or curl http://<domain>/api/status depending on exposure choice.
+
+DNS and TLS
+- DNS A record points to the new VPS only after the container answers http://127.0.0.1:3000/api/status locally on the VPS.
+- If HTTPS is required, configure nginx/Caddy/Hostinger proxy and Let's Encrypt after DNS resolves to the VPS.
+- Do not turn off the local Mission Control path until remote health, data persistence, and rollback are all proven.
+
+Rollback readiness
+- Record the image tag printed by every successful deploy.
+- Confirm at least one previous image exists before cutover:
+  docker images 'mission-control' --format '{{.Repository}}:{{.Tag}} {{.CreatedSince}}'
+- Rollback mechanism is image tag reversion, not reinstalling bare Node or editing a systemd service:
+  node mission-control/tools/vps-deploy.cjs rollback --host 2.57.90.95 --tag <previous-image-tag> --execute
+- Rollback must preserve mission-control-data. Never delete the volume as part of an image rollback.
+
+Evidence to record
+- Server IP/hostname, not credentials.
+- Deployment command run and image tag built.
+- Docker container status, image tag, restart policy, and port mapping.
+- Docker volume name/mountpoint and confirmation that SQLite is under /app/data.
+- HTTP status/body from /api/status.
+- Backup file name and timestamp, not passphrase.
+- Any residue: skipped checks, inaccessible source, owner-only step not completed, or a looked/could-not-look distinction.

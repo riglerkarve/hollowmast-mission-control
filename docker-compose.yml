@@ -1,0 +1,29 @@
+services:
+  mission-control:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    image: mission-control:${MC_IMAGE_TAG:-latest}
+    container_name: mission-control
+    restart: unless-stopped
+    ports:
+      - "3000:3000"
+    environment:
+      NODE_ENV: production
+      PORT: "3000"
+      MC_DB_PATH: /app/data/dashboard.db
+    volumes:
+      # Persistent SQLite state. This volume stores dashboard.db, dashboard.db-wal,
+      # dashboard.db-shm, gate-key.txt, and other runtime data. Do not remove it
+      # during image rollback or container recreation.
+      - mission-control-data:/app/data
+    healthcheck:
+      test: ["CMD", "node", "-e", "fetch('http://127.0.0.1:' + (process.env.PORT || 3000) + '/api/status').then(r => process.exit(r.ok ? 0 : 1)).catch(() => process.exit(1))"]
+      interval: 30s
+      timeout: 5s
+      start_period: 20s
+      retries: 3
+
+volumes:
+  mission-control-data:
+    name: mission-control-data

@@ -1,0 +1,48 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Ground Control — Desktop</title>
+<!--
+  STAGE 1 ONLY (t_8513f316). This document is deliberately isolated from the existing
+  shell: no shell.css, no shared.css, no nav bars, and shell.js's PANELS registry is never
+  imported or touched. See reports/ground-control-desktop-plan.md Section 2 — the plan's
+  own recommendation was a second HTML document precisely because it is the only option
+  that gives an unconditional guarantee the old shell (index.html + 75 panels) cannot be
+  affected by anything built here. Do not add a shell.css/shared.css <link> to this file;
+  that would be the one change able to leak tokens back into the old shell's cascade if
+  this document were ever merged into it, and it would also defeat the point of Section 2.
+-->
+<link rel="stylesheet" href="/desktop/desktop.css">
+</head>
+<body>
+  <div class="dt-root" id="dtRoot">
+    <header class="dt-header">
+      <span class="dt-title">GROUND CONTROL</span>
+      <span class="dt-clock" id="dtClock">--:--:--</span>
+    </header>
+
+    <main class="dt-grid" id="dtGrid">
+      <!-- Widgets are rendered by desktop.js from /api/machine and /api/agents.
+           Nothing here is placeholder markup; the widget shells are built at runtime so an
+           API failure and an API success cannot be confused with each other (see the
+           dt-note / is-down styling driven from desktop.js, matching this workspace's own
+           absence-vs-failure rule). -->
+    </main>
+
+    <!-- Stage 1 proof-of-mechanism only: opens a panel module UNSTYLED (no shell.css) in
+         a bare overlay, per the task's item 4. This is not a preview of Stage 2's window
+         chrome or redesign — it exists only to show a panel CAN open from this route. -->
+    <div class="dt-overlay" id="dtOverlay" hidden>
+      <div class="dt-overlay-bar">
+        <span id="dtOverlayTitle"></span>
+        <button id="dtOverlayClose" type="button">close ×</button>
+      </div>
+      <div class="dt-overlay-body" id="dtOverlayBody"></div>
+    </div>
+  </div>
+
+  <script type="module" src="/desktop/desktop.js"></script>
+</body>
+</html>

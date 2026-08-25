@@ -1,0 +1,207 @@
+/*
+  desktop.css — Stage 1 (t_8513f316). A genuinely separate visual language.
+
+  DOES NOT extend or @import shell.css. Every custom property here is prefixed --dt- and
+  none of them are shell.css's names, so there is nothing to collide even if both
+  stylesheets were ever loaded on the same page (they never are: desktop.html loads only
+  this file — see its own header comment). Font, colour language and base unit are all
+  deliberately different from the panel look: monospace HUD/terminal feel with a glow
+  accent, instead of shell.css's system-font card layout.
+
+  No navigation bars anywhere in this file — Stage 1's brief explicitly asked for none.
+*/
+
+:root {
+  --dt-bg: #04070a;
+  --dt-bg-panel: #0a1118;
+  --dt-line: #16232c;
+  --dt-accent: #35f2c8;
+  --dt-accent-dim: #1a8a72;
+  --dt-warn: #ffb454;
+  --dt-bad: #ff5470;
+  --dt-text: #c9e8e0;
+  --dt-text-dim: #5f8078;
+  --dt-mono: 'Cascadia Code', 'Consolas', 'SFMono-Regular', ui-monospace, monospace;
+  --dt-unit: 6px;
+}
+
+* { box-sizing: border-box; }
+
+html, body {
+  margin: 0;
+  padding: 0;
+  background: var(--dt-bg);
+  color: var(--dt-text);
+  font-family: var(--dt-mono);
+  min-height: 100%;
+}
+
+/* A faint scanline wash — texture, not decoration that fights the data. */
+body {
+  background-image:
+    repeating-linear-gradient(0deg, rgba(53, 242, 200, 0.02) 0px, rgba(53, 242, 200, 0.02) 1px, transparent 1px, transparent 3px),
+    radial-gradient(ellipse at 50% -10%, rgba(53, 242, 200, 0.08), transparent 60%);
+}
+
+.dt-root {
+  min-height: 100vh;
+  padding: calc(var(--dt-unit) * 4);
+}
+
+.dt-header {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  padding-bottom: calc(var(--dt-unit) * 3);
+  margin-bottom: calc(var(--dt-unit) * 4);
+  border-bottom: 1px solid var(--dt-line);
+}
+
+.dt-title {
+  font-size: 1.4rem;
+  font-weight: 600;
+  letter-spacing: 0.35em;
+  color: var(--dt-accent);
+  text-shadow: 0 0 12px rgba(53, 242, 200, 0.45);
+}
+
+.dt-clock {
+  font-size: 0.95rem;
+  color: var(--dt-text-dim);
+  letter-spacing: 0.15em;
+}
+
+.dt-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(260px, 1fr));
+  gap: calc(var(--dt-unit) * 3);
+}
+
+.dt-widget {
+  background: var(--dt-bg-panel);
+  border: 1px solid var(--dt-line);
+  border-radius: 4px;
+  padding: calc(var(--dt-unit) * 3);
+  position: relative;
+  overflow: hidden;
+}
+
+.dt-widget::before {
+  content: '';
+  position: absolute;
+  inset: 0 0 auto 0;
+  height: 2px;
+  background: linear-gradient(90deg, var(--dt-accent), transparent 70%);
+  opacity: 0.7;
+}
+
+.dt-widget-title {
+  font-size: 0.72rem;
+  letter-spacing: 0.2em;
+  text-transform: uppercase;
+  color: var(--dt-text-dim);
+  margin-bottom: calc(var(--dt-unit) * 2);
+}
+
+.dt-metric-row {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  padding: 3px 0;
+  font-size: 0.85rem;
+  border-bottom: 1px dashed rgba(255, 255, 255, 0.04);
+}
+.dt-metric-row:last-child { border-bottom: none; }
+
+.dt-metric-label { color: var(--dt-text-dim); }
+.dt-metric-value { color: var(--dt-text); font-variant-numeric: tabular-nums; }
+.dt-metric-value.is-warn { color: var(--dt-warn); }
+.dt-metric-value.is-bad { color: var(--dt-bad); }
+.dt-metric-value.is-absent { color: var(--dt-text-dim); font-style: italic; }
+
+.dt-bar {
+  height: 6px;
+  border-radius: 3px;
+  background: rgba(255, 255, 255, 0.05);
+  overflow: hidden;
+  margin: 4px 0 8px;
+}
+.dt-bar > i {
+  display: block;
+  height: 100%;
+  background: var(--dt-accent);
+  box-shadow: 0 0 8px rgba(53, 242, 200, 0.6);
+}
+.dt-bar.is-warn > i { background: var(--dt-warn); }
+.dt-bar.is-bad > i { background: var(--dt-bad); }
+
+.dt-note {
+  font-size: 0.75rem;
+  color: var(--dt-text-dim);
+  margin-top: calc(var(--dt-unit) * 2);
+}
+.dt-note.is-down { color: var(--dt-bad); }
+
+.dt-agent-row {
+  display: flex;
+  justify-content: space-between;
+  gap: 8px;
+  font-size: 0.8rem;
+  padding: 3px 0;
+}
+.dt-agent-name { color: var(--dt-accent); }
+.dt-agent-task { color: var(--dt-text-dim); flex: 1; text-align: right; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+
+.dt-open-btn {
+  font-family: var(--dt-mono);
+  font-size: 0.75rem;
+  letter-spacing: 0.08em;
+  background: transparent;
+  border: 1px solid var(--dt-accent-dim);
+  color: var(--dt-accent);
+  padding: 6px 10px;
+  border-radius: 3px;
+  cursor: pointer;
+  margin-right: 8px;
+  margin-top: 8px;
+}
+.dt-open-btn:hover { background: rgba(53, 242, 200, 0.08); }
+
+/* Stage 1 proof-of-mechanism overlay: bare, unstyled-beyond-this shell. Deliberately does
+   NOT attempt window chrome/drag/resize — that is explicitly Stage 2 (Section 3 of the
+   plan), not this task. */
+.dt-overlay {
+  position: fixed;
+  inset: 5vh 5vw;
+  background: #000;
+  border: 1px solid var(--dt-accent-dim);
+  z-index: 50;
+  display: flex;
+  flex-direction: column;
+}
+.dt-overlay-bar {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 8px 12px;
+  border-bottom: 1px solid var(--dt-line);
+  font-size: 0.8rem;
+  color: var(--dt-text-dim);
+}
+.dt-overlay-bar button {
+  font-family: var(--dt-mono);
+  background: transparent;
+  border: 1px solid var(--dt-line);
+  color: var(--dt-text);
+  cursor: pointer;
+  padding: 4px 8px;
+}
+.dt-overlay-body {
+  flex: 1;
+  overflow: auto;
+  /* Intentionally unstyled beyond scroll/overflow handling: the mounted panel brings
+     its own DOM but not shell.css, so it will look plain. That is the honest point of
+     Stage 1's mechanism proof, not a bug to fix here. */
+  background: #fff;
+  color: #111;
+}

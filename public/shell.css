@@ -371,6 +371,25 @@ body {
 }
 .brand-dot { padding: 0 5px; opacity: 0.6; }
 
+/* Model usage badge -- every page, one figure, plain number per the formatting standard.
+   Sits beside the brand mark in the sidebar header, so it survives every panel switch
+   without any panel having to render it itself. See public/index.html + server/routes/
+   account-usage.js. Warn colour only past 90% -- this is a glance, not a dashboard. */
+.usage-badge {
+  flex-shrink: 0;
+  margin-left: 6px;
+  padding: 4px 8px;
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  background: transparent;
+  color: var(--muted);
+  font: 600 11px/1 var(--mono, ui-monospace, monospace);
+  letter-spacing: 0.02em;
+  white-space: nowrap;
+  font-variant-numeric: tabular-nums;
+}
+.usage-badge-warn { border-color: var(--accent, #d97706); color: var(--accent-text, #d97706); }
+
 .nav-list {
   list-style: none;
   margin: 0;

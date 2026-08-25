@@ -27,6 +27,16 @@
           <span class="brand-sub"><span id="sideDate"></span><span class="brand-dot" aria-hidden="true">·</span><span id="sideClock">--:--</span></span>
         </span>
       </a>
+      <!--
+        Owner requirement, 25 Aug: model usage % visible on EVERY page, not a dedicated
+        panel. Lives in the shared shell (this file), not per-panel markup, so it survives
+        every panel switch for free. Backed by /api/account-usage, which is the one owner
+        for this figure (reads Hermes's own account_usage.py rather than inventing a
+        second tracker) — see server/routes/account-usage.js.
+      -->
+      <div class="usage-badge" id="usageBadge" title="Model usage this week" aria-live="polite">
+        <span id="usageBadgeText">usage —</span>
+      </div>
       <button id="mvosTrigger" class="mvos-trigger" aria-label="Open MindVirus OS command bar (Ctrl+K)" title="Ctrl+K">
         <span aria-hidden="true">⌘K</span>
       </button>
@@ -260,6 +270,49 @@
       // Re-align to the minute boundary once, then every 60 s, so the readout never sits a
       // stale 59 s behind the taskbar clock.
       setTimeout(function () { tick(); setInterval(tick, 60000); }, 60000 - (Date.now() % 60000));
+    })();
+  </script>
+  <script>
+    // Model usage badge — every page, one source (server/routes/account-usage.js), which
+    // itself defers to Hermes's own account_usage.py. Plain number, not a chart, per the
+    // formatting standard. Polls every 5 minutes: the server already caches for 3, so this
+    // just keeps a long-open tab from showing a figure that is hours stale.
+    (function () {
+      var el = document.getElementById('usageBadgeText');
+      var badge = document.getElementById('usageBadge');
+      if (!el || !badge) return;
+
+      function render(d) {
+        if (d.state === 'ok') {
+          // The week window is the one that matters day-to-day; fall back to whatever
+          // window is present if a differently-labelled account is ever wired in.
+          var w = d.windows.find(function (x) { return /week/i.test(x.label); }) || d.windows[0];
+          var pct = Math.round(w.usedPercent);
+          el.textContent = w.label + ' ' + pct + '%';
+          badge.title = 'Model usage — ' + w.label + ': ' + pct + '% used'
+            + (w.resetAt ? ' · resets ' + new Date(w.resetAt).toLocaleString([], { month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' }) : '');
+          badge.classList.toggle('usage-badge-warn', pct >= 90);
+        } else if (d.state === 'unavailable') {
+          el.textContent = 'usage n/a';
+          badge.title = d.why || 'No usage figure available for this account.';
+          badge.classList.remove('usage-badge-warn');
+        } else {
+          // could-not-look must never read like 0% used.
+          el.textContent = 'usage —';
+          badge.title = 'Could not check usage: ' + (d.why || 'unknown error');
+          badge.classList.remove('usage-badge-warn');
+        }
+      }
+
+      function poll() {
+        fetch('/api/account-usage').then(function (r) { return r.json(); }).then(render).catch(function () {
+          el.textContent = 'usage —';
+          badge.title = 'Could not reach the server to check usage.';
+        });
+      }
+
+      poll();
+      setInterval(poll, 5 * 60 * 1000);
     })();
   </script>
 </body>

@@ -6,9 +6,9 @@
 // provisioned the VPS and SSH is available.
 //
 // Examples:
-//   node tools/vps-deploy.cjs plan --host 2.57.90.95 --repo https://github.com/riglerkarve/hollowmast-mission-control.git --ref ea3489d37cb9d233a3b762a436eb3d84bb9997c1 --domain mission.example.com
+//   node tools/vps-deploy.cjs plan --host 2.57.90.95 --repo https://github.com/riglerkarve/hollowmast-mission-control.git --ref 0de4662306d42a2dc8046b292203dee2caf1a509 --domain mission.example.com
 //   node tools/vps-deploy.cjs remote-check --host 2.57.90.95
-//   node tools/vps-deploy.cjs deploy --host 2.57.90.95 --repo https://github.com/riglerkarve/hollowmast-mission-control.git --ref ea3489d37cb9d233a3b762a436eb3d84bb9997c1 --domain mission.example.com --execute
+//   node tools/vps-deploy.cjs deploy --host 2.57.90.95 --repo https://github.com/riglerkarve/hollowmast-mission-control.git --ref 0de4662306d42a2dc8046b292203dee2caf1a509 --domain mission.example.com --execute
 //   node tools/vps-deploy.cjs rollback --host 2.57.90.95 --tag deploy-20260825-150000 --execute
 //
 // Scope shape:

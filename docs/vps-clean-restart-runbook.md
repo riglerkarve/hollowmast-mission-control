@@ -8,14 +8,14 @@
 - SSH user: `root`.
 - Password: owner types it interactively. Do not paste it into chat, files, shell history, or kanban comments.
 - Repo: `https://github.com/riglerkarve/hollowmast-mission-control.git`.
-- Mission Control deployment commit prepared locally: `ea3489d37cb9d233a3b762a436eb3d84bb9997c1`.
+- Mission Control deployment commit prepared locally: `0de4662306d42a2dc8046b292203dee2caf1a509`.
 
 ## Stop condition before copy-paste deploy
 
 Run this from `C:\Users\jcwhi\Claude Outputs` before telling the VPS to check out the commit:
 
 ```bash
-git -C mission-control ls-remote origin ea3489d37cb9d233a3b762a436eb3d84bb9997c1
+git -C mission-control ls-remote origin 0de4662306d42a2dc8046b292203dee2caf1a509
 ```
 
 Expected:
@@ -73,13 +73,13 @@ This opens SSH and asks the owner for the root password in the terminal. It shou
 From `C:\Users\jcwhi\Claude Outputs`:
 
 ```bash
-node mission-control/tools/vps-deploy.cjs plan --host 2.57.90.95 --repo https://github.com/riglerkarve/hollowmast-mission-control.git --ref ea3489d37cb9d233a3b762a436eb3d84bb9997c1 --domain 2.57.90.95
+node mission-control/tools/vps-deploy.cjs plan --host 2.57.90.95 --repo https://github.com/riglerkarve/hollowmast-mission-control.git --ref 0de4662306d42a2dc8046b292203dee2caf1a509 --domain 2.57.90.95
 ```
 
 Read the output before executing. It must show:
 
 - clone/update path: `/opt/mission-control`;
-- checkout ref: `ea3489d37cb9d233a3b762a436eb3d84bb9997c1`;
+- checkout ref: `0de4662306d42a2dc8046b292203dee2caf1a509`;
 - Docker image: `mission-control:<timestamp>`;
 - container: `mission-control`;
 - port mapping: `3000:3000`;
@@ -91,14 +91,14 @@ Read the output before executing. It must show:
 Only run this after the remote commit visibility check passes:
 
 ```bash
-node mission-control/tools/vps-deploy.cjs deploy --host 2.57.90.95 --repo https://github.com/riglerkarve/hollowmast-mission-control.git --ref ea3489d37cb9d233a3b762a436eb3d84bb9997c1 --domain 2.57.90.95 --execute
+node mission-control/tools/vps-deploy.cjs deploy --host 2.57.90.95 --repo https://github.com/riglerkarve/hollowmast-mission-control.git --ref 0de4662306d42a2dc8046b292203dee2caf1a509 --domain 2.57.90.95 --execute
 ```
 
 The helper will:
 
 - install Docker/Git support if missing;
 - clone or update `https://github.com/riglerkarve/hollowmast-mission-control.git` into `/opt/mission-control`;
-- check out `ea3489d37cb9d233a3b762a436eb3d84bb9997c1`;
+- check out `0de4662306d42a2dc8046b292203dee2caf1a509`;
 - find `mission-control/package.json` if the repo root is the full workspace;
 - build the image directly on the VPS;
 - create or reuse Docker volume `mission-control-data`;
@@ -120,7 +120,7 @@ set -euo pipefail
 export DEBIAN_FRONTEND=noninteractive
 APP=/opt/mission-control
 REPO=https://github.com/riglerkarve/hollowmast-mission-control.git
-REF=ea3489d37cb9d233a3b762a436eb3d84bb9997c1
+REF=0de4662306d42a2dc8046b292203dee2caf1a509
 IMAGE_TAG=deploy-$(date -u +%Y%m%d-%H%M%S)
 
 apt-get update

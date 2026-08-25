@@ -6,9 +6,9 @@
 // provisioned the VPS and SSH is available.
 //
 // Examples:
-//   node tools/vps-deploy.cjs plan --host 2.57.90.95 --repo https://github.com/OWNER/REPO.git --domain mission.example.com
+//   node tools/vps-deploy.cjs plan --host 2.57.90.95 --repo https://github.com/riglerkarve/hollowmast-mission-control.git --ref ea3489d37cb9d233a3b762a436eb3d84bb9997c1 --domain mission.example.com
 //   node tools/vps-deploy.cjs remote-check --host 2.57.90.95
-//   node tools/vps-deploy.cjs deploy --host 2.57.90.95 --repo https://github.com/OWNER/REPO.git --domain mission.example.com --execute
+//   node tools/vps-deploy.cjs deploy --host 2.57.90.95 --repo https://github.com/riglerkarve/hollowmast-mission-control.git --ref ea3489d37cb9d233a3b762a436eb3d84bb9997c1 --domain mission.example.com --execute
 //   node tools/vps-deploy.cjs rollback --host 2.57.90.95 --tag deploy-20260825-150000 --execute
 //
 // Scope shape:
@@ -29,15 +29,15 @@
 const { spawnSync } = require('node:child_process');
 
 const USAGE = `usage:
-  node tools/vps-deploy.cjs plan --host <ip-or-host> --repo <git-url> [--domain <name>] [--user root]
+  node tools/vps-deploy.cjs plan --host <ip-or-host> --repo <git-url> [--ref <branch-or-commit>] [--domain <name>] [--user root]
   node tools/vps-deploy.cjs remote-check --host <ip-or-host> [--user root]
-  node tools/vps-deploy.cjs deploy --host <ip-or-host> --repo <git-url> [--domain <name>] [--user root] [--tag <image-tag>] [--execute]
+  node tools/vps-deploy.cjs deploy --host <ip-or-host> --repo <git-url> [--ref <branch-or-commit>] [--domain <name>] [--user root] [--tag <image-tag>] [--execute]
   node tools/vps-deploy.cjs rollback --host <ip-or-host> --tag <previous-image-tag> [--user root] [--execute]
 
 Commands:
   plan          Print exact remote Docker deployment commands, no network required.
   remote-check  Read-only SSH probe: host, disk, memory, Docker/Compose availability.
-  deploy        Install Docker if missing, clone/update code, build image, run Compose.
+  deploy        Install Docker if missing, clone/update code, check out ref, build image, run Compose.
   rollback      Recreate the container from an existing previous mission-control:<tag> image.
 
 Notes:
@@ -119,10 +119,12 @@ function deployScript(opts) {
   requireOpt(opts, 'repo');
   const domain = opts.domain || '<domain-not-set-yet>';
   const tag = opts.tag ? q(opts.tag) : 'deploy-$(date -u +%Y%m%d-%H%M%S)';
+  const ref = opts.ref || 'HEAD';
   return `set -euo pipefail
 export DEBIAN_FRONTEND=noninteractive
 APP=/opt/mission-control
 REPO=${q(opts.repo)}
+REF=${q(ref)}
 DOMAIN=${q(domain)}
 PORT=3000
 IMAGE_TAG=${tag}
@@ -136,8 +138,9 @@ if [ ! -d "$APP/.git" ]; then
   git clone "$REPO" "$APP"
 else
   git -C "$APP" fetch --all --prune
-  git -C "$APP" pull --ff-only
 fi
+git -C "$APP" checkout "$REF"
+git -C "$APP" rev-parse --verify HEAD
 
 if [ -f "$APP/mission-control/package.json" ]; then
   APP_ROOT="$APP/mission-control"
@@ -184,7 +187,8 @@ echo "Image tag: mission-control:$IMAGE_TAG"
 echo "Container: mission-control"
 echo "Persistent volume: mission-control-data -> /app/data"
 echo "Port mapping: host 3000 -> container 3000"
-echo "Rollback: node tools/vps-deploy.cjs rollback --host ${opts.host} --tag $IMAGE_TAG --execute"
+echo "Record this deploy tag for future rollback source: mission-control:$IMAGE_TAG"
+echo "Rollback to the previous known-good image: node tools/vps-deploy.cjs rollback --host ${opts.host} --tag <previous-image-tag> --execute"
 `;
 }
 

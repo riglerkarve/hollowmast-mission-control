@@ -65,6 +65,15 @@ const TEMPLATE = `
       <h2 class="sc-h2">Posts to send</h2>
       <div id="scPosts"></div>
     </section>
+
+    <section class="card" id="scHoursCard">
+      <h2 class="sc-h2">Working hours</h2>
+      <p class="sc-hint">When you are actually working. This becomes the reference point for
+      "appropriate time" scheduling elsewhere — nothing else reads it yet. A day left off
+      is not assumed off; it is simply not set.</p>
+      <div id="scHours"></div>
+      <p class="sc-echo" id="scHoursEcho"></p>
+    </section>
   </div>
 `;
 
@@ -88,6 +97,13 @@ const dayLabel = (iso, weekday) => `${weekday} ${Number(iso.slice(8, 10))} ${MON
 
 async function api(p, opts) {
   const res = await fetch(`/api/schedule${p}`, opts);
+  const body = await res.json().catch(() => null);
+  if (!res.ok) throw new Error((body && body.error) || `HTTP ${res.status}`);
+  return body;
+}
+
+async function hoursApi(p, opts) {
+  const res = await fetch(`/api/working-hours${p}`, opts);
   const body = await res.json().catch(() => null);
   if (!res.ok) throw new Error((body && body.error) || `HTTP ${res.status}`);
   return body;
@@ -267,6 +283,84 @@ function renderPosts(d) {
     <p class="sc-hint sc-dim">${esc(sug.note)}</p>`;
 }
 
+// --------------------------------------------------------------------------- working hours
+// A simple day x hours list, not a calendar grid — matches the owner's stated preference
+// for "a clean grid/list, not a dense calendar UI" (task body). Every row edits in place;
+// nothing is invented for a day that has no value, and that state is shown, not hidden.
+function hoursEcho(text, kind) {
+  const el = root && root.querySelector('#scHoursEcho');
+  if (el) { el.textContent = text; el.className = `sc-echo ${kind || ''}`; }
+}
+
+function hoursRow(d) {
+  const dis = d.enabled ? '' : 'disabled';
+  return `
+    <li class="sc-hours-row" data-dow="${d.dayOfWeek}">
+      <label class="sc-hours-day">
+        <input type="checkbox" class="sc-hours-on" data-dow="${d.dayOfWeek}" ${d.enabled ? 'checked' : ''}>
+        ${esc(d.day)}
+      </label>
+      <input type="time" class="sc-in sc-hours-start" data-dow="${d.dayOfWeek}" value="${esc(d.startTime || '09:00')}" ${dis}>
+      <span class="sc-hours-to">to</span>
+      <input type="time" class="sc-in sc-hours-end" data-dow="${d.dayOfWeek}" value="${esc(d.endTime || '18:00')}" ${dis}>
+      <span class="sc-hours-state">${d.set ? (d.enabled ? '' : 'off') : 'not set'}</span>
+    </li>`;
+}
+
+function renderHours(d) {
+  const el = root.querySelector('#scHours');
+  el.innerHTML = `
+    <ul class="sc-hours-list">${d.days.map(hoursRow).join('')}</ul>
+    <button class="btn primary sc-hours-save" id="scHoursSave">Save working hours</button>
+    <p class="sc-hint sc-dim">${esc(d.note)}</p>
+  `;
+
+  el.querySelectorAll('.sc-hours-on').forEach((cb) => cb.addEventListener('change', () => {
+    const row = el.querySelector(`.sc-hours-row[data-dow="${cb.dataset.dow}"]`);
+    row.querySelectorAll('input[type="time"]').forEach((t) => { t.disabled = !cb.checked; });
+  }));
+
+  el.querySelector('#scHoursSave').addEventListener('click', async () => {
+    const mine = token;
+    const days = [...el.querySelectorAll('.sc-hours-row')].map((row) => ({
+      dayOfWeek: Number(row.dataset.dow),
+      enabled: row.querySelector('.sc-hours-on').checked,
+      startTime: row.querySelector('.sc-hours-start').value,
+      endTime: row.querySelector('.sc-hours-end').value,
+    }));
+    let msg;
+    try {
+      await hoursApi('/', {
+        method: 'PUT',
+        headers: { 'content-type': 'application/json', 'x-mc-by': 'you' },
+        body: JSON.stringify({ days }),
+      });
+      msg = ['Working hours saved.', 'ok'];
+    } catch (err) {
+      msg = [`Not saved: ${err.message}`, 'bad'];
+    }
+    if (mine !== token) return;
+    await loadHours();
+    if (mine !== token) return;
+    hoursEcho(msg[0], msg[1]);
+  });
+}
+
+async function loadHours() {
+  if (!root) return;
+  const mine = token;
+  let d;
+  try {
+    d = await hoursApi('/');
+  } catch (err) {
+    if (mine !== token) return;
+    root.querySelector('#scHours').innerHTML = `<p class="sc-error">Could not read working hours: ${esc(err.message)}</p>`;
+    return;
+  }
+  if (mine !== token) return;
+  renderHours(d);
+}
+
 // --------------------------------------------------------------------------- wiring
 function wire(el) {
   el.querySelectorAll('.sc-act').forEach((b) => b.addEventListener('click', async () => {
@@ -409,6 +503,7 @@ export default {
     }, 60000);
 
     load();
+    loadHours();
   },
 
   // Not optional. The interval would keep firing at a detached DOM every minute for the rest

@@ -1,0 +1,108 @@
+/* Viability panel. Tokens only, same set goals.css uses: --accent, --accent-soft, --ink,
+   --muted, --bg, --card, --border, --ring-bg, --short, --long — so both themes come out of
+   the sheet. --accent is orange, --short is the "good" green-ish tone, --long is blue. */
+
+.panel.panel-wide.vb-panel { max-width: 900px; }
+
+.vb-h2 { margin: 0 0 0.5rem; font-size: 0.95rem; }
+.vb-note { font-size: 0.82rem; color: var(--muted); line-height: 1.55; margin: 0.35rem 0 0.9rem; }
+.vb-note:last-child { margin-bottom: 0; }
+
+.vb-error {
+  margin: 0 0 0.9rem;
+  padding: 0.7rem 0.85rem;
+  border-radius: 10px;
+  border: 1px solid var(--accent);
+  background: var(--accent-soft);
+  color: var(--ink);
+  font-size: 0.85rem;
+  line-height: 1.5;
+}
+.vb-error b { font-weight: 700; }
+.vb-next-do { display: block; margin-top: 0.55rem; }
+
+/* --- header counts ---------------------------------------------------------------- */
+.vb-counts { display: flex; gap: 1.6rem; flex-wrap: wrap; margin-bottom: 0.5rem; }
+.vb-count { display: flex; flex-direction: column; }
+.vb-count-v { font-size: 1.5rem; font-weight: 700; letter-spacing: -0.02em; font-variant-numeric: tabular-nums; }
+.vb-count-l { font-size: 0.76rem; color: var(--muted); font-weight: 500; }
+
+/* --- venture groups ----------------------------------------------------------------- */
+.vb-venture { margin-bottom: 1rem; }
+.vb-venture-head { display: flex; justify-content: space-between; align-items: baseline; margin-bottom: 0.6rem; }
+.vb-venture-title { margin: 0; font-size: 1rem; font-weight: 700; }
+.vb-tally { font-size: 0.78rem; color: var(--muted); }
+
+.vb-scenarios { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 0.8rem; }
+
+/* --- one scenario --------------------------------------------------------------------- */
+.vb-scenario {
+  background: var(--bg);
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  padding: 0.85rem 1rem;
+}
+/* Loss and priced states differ by an edge marker and a line of text, same restraint
+   goals.js uses for blocked vs actionable — no red-flooded card for a number you typed. */
+.vb-scenario.is-loss { border-left: 3px solid var(--accent); }
+.vb-scenario.is-priced { border-left: 3px solid var(--short); }
+.vb-scenario.is-partial { border-left: 3px solid var(--long); }
+.vb-scenario.is-empty { border-left: 3px solid var(--border); }
+
+.vb-top { display: flex; justify-content: space-between; align-items: baseline; gap: 0.8rem; flex-wrap: wrap; }
+.vb-title { margin: 0; font-size: 0.95rem; font-weight: 700; }
+
+.vb-chip {
+  font-size: 0.66rem; text-transform: uppercase; letter-spacing: 0.05em; font-weight: 600;
+  padding: 0.16rem 0.45rem; border-radius: 5px;
+  border: 1px solid var(--border); color: var(--muted); background: var(--ring-bg);
+  white-space: nowrap;
+}
+.vb-chip.on-target { border-color: var(--short); color: var(--ink); }
+.vb-chip.loss { border-color: var(--accent); background: var(--accent-soft); color: var(--ink); }
+
+.vb-sentence {
+  margin: 0.5rem 0 0.6rem;
+  padding: 0.6rem 0.75rem;
+  border-radius: 10px;
+  background: var(--ring-bg);
+  color: var(--ink);
+  font-size: 0.86rem;
+  line-height: 1.5;
+}
+.vb-sentence.none { color: var(--muted); }
+
+.vb-facts { display: flex; gap: 1.1rem; flex-wrap: wrap; font-size: 0.8rem; color: var(--muted); }
+.vb-facts b { color: var(--ink); font-weight: 600; font-variant-numeric: tabular-nums; }
+
+.vb-scenario-note { font-size: 0.8rem; color: var(--muted); line-height: 1.5; margin: 0.5rem 0 0; }
+
+/* --- edit form ------------------------------------------------------------------------ */
+.vb-edit { margin-top: 0.5rem; }
+.vb-edit > summary { cursor: pointer; font-size: 0.78rem; color: var(--muted); padding: 0.2rem 0; list-style: revert; }
+.vb-edit > summary:hover { color: var(--ink); }
+
+/* --- controls --------------------------------------------------------------------- */
+.vb-in {
+  padding: 0.4rem 0.6rem; min-width: 0;
+  border: 1px solid var(--border); border-radius: 8px;
+  background: var(--ring-bg); color: var(--ink); font: inherit; font-size: 0.82rem;
+}
+.vb-in::placeholder { color: var(--muted); }
+.vb-in.wide { flex: 1 1 12rem; }
+.vb-in.money { flex: 0 0 6.5rem; width: 6.5rem; }
+
+.vb-mini { font-size: 0.74rem; padding: 0.25rem 0.55rem; border-radius: 8px; min-width: 0; }
+.vb-row { display: flex; gap: 0.45rem; flex-wrap: wrap; align-items: center; margin-top: 0.6rem; }
+
+.vb-x {
+  border: 0; background: transparent; color: var(--muted); cursor: pointer;
+  font-size: 0.95rem; line-height: 1; padding: 0 0.25rem;
+}
+.vb-x:hover { color: var(--accent); }
+
+.vb-add { display: flex; gap: 0.5rem; flex-wrap: wrap; align-items: center; }
+.vb-select {
+  padding: 0.35rem 0.5rem; border: 1px solid var(--border); border-radius: 8px;
+  background: var(--ring-bg); color: var(--ink); font: inherit; font-size: 0.78rem;
+}

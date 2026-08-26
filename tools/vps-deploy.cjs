@@ -140,6 +140,12 @@ else
   git -C "$APP" fetch --all --prune
 fi
 git -C "$APP" checkout "$REF"
+# If REF is a branch name (not a fixed commit), an already-checked-out local
+# branch does not fast-forward on a plain checkout -- force it to match the
+# remote exactly so a re-run always deploys the latest pushed commit.
+if git -C "$APP" show-ref --verify --quiet "refs/remotes/origin/$REF"; then
+  git -C "$APP" reset --hard "origin/$REF"
+fi
 git -C "$APP" rev-parse --verify HEAD
 
 if [ -f "$APP/mission-control/package.json" ]; then
